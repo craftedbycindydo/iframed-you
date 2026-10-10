@@ -43,7 +43,8 @@
     $('photo-source').value=source;
     $('photo-source-main').value=source;
     $('photo-mail-setup').hidden=source!=='email';
-    $('photo-mail-status').textContent=native?model.caption(state):'Email photo delivery is available in the Android frame app.';
+    const timezone=window.SkylitApp.calendarPreferences().timezone;
+    $('photo-mail-status').textContent=native?model.caption(state,timezone):'Email photo delivery is available in the Android frame app.';
     $('photo-check').disabled=!native||!state.connected||state.busy;
     if(document.activeElement!==$('photo-email'))$('photo-email').value=state.email;
     $('photo-age').value=String(state.days);
@@ -59,7 +60,7 @@
     headline.textContent=album?'YOUR SHARED GOOGLE PHOTOS ALBUM':'PICTURES SENT TO YOUR INBOX';
     title.textContent=album?'Shared album':'Recent photos';
     description.textContent=album?'Play your Google Photos album full screen.':'A private, on-frame slideshow of recent emailed pictures.';
-    heroStatus.textContent=album||state.photos.length?'':model.caption(state);
+    heroStatus.textContent=album||state.photos.length?'':model.caption(state,timezone);
     const action=album?'Start slideshow':state.photos.length?'Start slideshow':state.connected?'Check for photos':'Set up email photos';
     const actionButton=$('start-photos');Array.from(actionButton.childNodes).filter(n=>n.nodeType===3).forEach(n=>n.remove());actionButton.append(document.createTextNode(action));const playIcon=actionButton.querySelector('svg');if(playIcon)playIcon.style.display=action==='Start slideshow'?'':'none';
     page.querySelector('.photo-copy .quiet').textContent=album?'Album and timing settings →':'Delivery settings →';

@@ -32,6 +32,10 @@ public class PhotoPolicyTest {
     yes(PhotoPolicy.retain(now-30L*86400000L,now,30));
     yes(!PhotoPolicy.retain(now-31L*86400000L,now,30));
     yes(!PhotoPolicy.retain(now+2L*86400000L,now,30));
+    yes(PhotoPolicy.syncDue(0,now));
+    yes(!PhotoPolicy.syncDue(now-3600000L,now));
+    yes(PhotoPolicy.syncDue(now-86400000L,now));
+    yes(PhotoPolicy.syncDue(now+3600000L,now));
     yes(PhotoPolicy.photoId("a".repeat(64)));
     yes(!PhotoPolicy.photoId("../"+"a".repeat(64)));
   }

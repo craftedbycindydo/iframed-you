@@ -45,6 +45,8 @@ Tests exercise the packaging boundary with a private sentinel value.
 Record the release commit, build tools, APK hash and signature verification. Test a
 fresh install and an upgrade on intended hardware. Verify weather, settings persistence,
 photo return, remote-page isolation, video/Calendar behavior, HOME and recovery paths.
+On a fresh install the setup guide should open; an upgrade with existing settings
+must land on the previous dashboard, with the guide available from Settings.
 For email photo delivery, verify that a fresh install has no mailbox credential,
 that a dedicated test account can import and erase a picture, and that the normal
 APK contains no account address, app password or cache image. Verify inviter

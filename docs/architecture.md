@@ -4,6 +4,11 @@
 under `skylit.settings` in localStorage; Momo maintains its own preferences. A fresh
 install has no city, album, household identifier, calendar ID or account baked in.
 The clock uses the device timezone until a city is selected.
+`onboarding.js` opens the guide only when neither saved dashboard settings nor a
+private local configuration exists and no explicit route was requested. Dismissing
+it stores a small completion flag. Existing installations are not interrupted, and
+Settings can reopen the guide. The guide reads only coarse setup status (city,
+photo connection, calendar count), never a mail secret or calendar URL.
 
 `android/` serves reviewed bundled assets from a virtual HTTPS origin. Only that
 local, navigation-restricted WebView receives the small `Skylit` JavaScript bridge.

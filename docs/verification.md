@@ -1,4 +1,36 @@
-# Delivery verification — October 9, 2026
+# Delivery verification — October 10, 2026
+
+## Version 2.9 — First-run guide and live email-photo test
+
+- Added an on-frame setup guide for city, photos and calendar, with direct routes to
+  the existing controls and a Settings entry to reopen it. A saved settings record
+  suppresses auto-opening during upgrades. A fresh browser launch, dismissal and
+  reopening are covered by focused tests; a destructive fresh-install test was not
+  run on the configured household frame.
+- Two synthetic, generated images were emailed to the dedicated frame inbox. The
+  frame's manual IMAP check imported both, then showed **2 saved photos**. The
+  native slideshow displayed picture 1, advanced to picture 2 automatically, and
+  kept a saved picture visible during a brief Wi-Fi-off test. It also started
+  automatically after the configured two-minute idle period; one tap returned to
+  Photos. Wi-Fi was restored; IPv4, IPv6, router, internet and DNS checks then
+  passed. The images and private device captures are excluded from the public
+  repository and APK.
+- Signed 2.9.0 (version code 16) built with empty household defaults, passed
+  signature and public-data checks, and installed in place on the identified
+  Android 12 D156 frame over USB. The existing city, calendar, email connection,
+  two cached pictures and HOME behavior remained intact. The guide reopened from
+  Settings and its Photos action reached the connected photo tab. The upgraded
+  frame continued to open Overview rather than interrupting the household.
+- The guide was inspected at the frame's 1920×1080 physical resolution and at
+  1280×720, desktop and narrow browser viewports. 40 JavaScript tests and 13
+  Python tests passed. Gitleaks found no secrets in Git history or the proposed
+  source tree; the APK inspection found no household data.
+- The photo last-check label used Android's GMT timezone, four hours ahead of
+  the configured city. It now formats in that city's timezone. A
+  due-check guard also retries if the device clock ever moves backward.
+- Manual slideshow, idle entry/return and offline rendering are verified. Long-term
+  mail polling, age pruning and a fresh Android installation remain unverified. The earlier
+  2.8 entry records the state *before* the email-photo connection and test.
 
 ## Version 2.8 — Photos and inviter review
 

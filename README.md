@@ -32,6 +32,7 @@ These screenshots use **synthetic events and weather**, not a household account.
 | YouTube | Touch-friendly mobile site or standard website, with full-screen video support |
 | Momo | Procedural Canvas 2D character, reactions, accessory gallery, daily outfits, night snoozes and morning yawns |
 | Settings | Six palettes, Light/Dark/Automatic at sunset, location/time, album, private calendar feeds/home page, idle delay and motion preferences |
+| First-run guide | A three-step on-frame guide for city, photos and calendar; reopen it from Settings at any time |
 
 The dashboard is plain HTML, CSS and JavaScript. No npm install, hosted backend,
 Google API key, Play Store or Google Play services is required. The Android viewer
@@ -49,10 +50,19 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory web
 ```
 
 Open **http://127.0.0.1:8765**. A missing `local-config.js` is harmless in a fresh
-checkout. Settings save on that browser/device; a desktop preview opens external
+checkout. A fresh browser opens the setup guide. Settings save on that browser/device; a desktop preview opens external
 services in new tabs. Native idle switching is available in the Android app.
 
 ## Make it your household’s dashboard
+
+On a fresh install, Skylit opens **Set up your frame**. Its three cards lead to the
+existing city, Photos and calendar controls. You can choose **Use dashboard** at any
+time and reopen the guide from **Settings → Open setup guide**. An update over an
+existing installation does not interrupt the current dashboard. The guide never
+asks for a Google password or stores a private link in the public app bundle.
+
+Before setup, connect the frame to Wi-Fi and confirm its clock is correct. Use the
+on-frame controls for private information; a desktop preview is for layout only.
 
 1. In **Settings → Weather & time**, find and select your city.
 2. On **Photos**, choose a shared Google Photos album or pictures sent to a dedicated
@@ -73,6 +83,13 @@ services in new tabs. Native idle switching is available in the Android app.
    the other palettes use softer colours. Palette/mode choices are saved per browser
    origin or frame; they do not sync between your computer and the frame.
 7. Pick a Momo accessory or **New clothes every day**, and choose a motion level.
+
+To verify email photos, send a picture to the dedicated inbox, tap **Photos →
+Emailed pictures → Check now**, and wait for a saved-picture count. Start the
+slideshow and confirm it advances. To verify Calendar, add or change an event in
+Google Calendar, tap **Refresh**, and confirm the event changes here. A saved
+credential or a loaded page alone is not a completed setup. See [photo setup](docs/photos.md)
+and [calendar setup](docs/calendar.md) for troubleshooting and removal.
 
 Sessions live in Android WebView’s normal cookie store. Google pages share that
 store, so signing in may also sign you into other Google pages on this frame.
@@ -183,3 +200,9 @@ See [AGENTS.md](AGENTS.md) for agent setup, hardware boundaries and verification
 [release checklist](docs/releasing.md) for privacy, history and release checks.
 Source and APK publication are separate steps. Ignoring a file does not remove it
 from old commits, and an APK can contain data that was never committed.
+
+For an agent-led installation: read those guides first; use a normal, empty-config
+APK; verify the exact ADB device; install in place with the same signing key; then
+walk the owner through the on-frame guide. Keep private links and app passwords on
+the frame, test real refresh/playback, and record device changes and undo steps in
+the private setup record. Never copy a household screenshot or test email into Git.

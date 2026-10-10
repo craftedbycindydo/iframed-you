@@ -49,6 +49,9 @@ household mail identifiers or pictures in source, screenshots or a normal APK.
 - Run `python3 scripts/check_public.py --history`; scan with Gitleaks before publication.
 - For Android changes, build, verify the APK and test the actual frame when available.
 - Inspect every affected tab at the frame’s 1920×1080 resolution and desktop preview.
+- For a new install, verify the first-run guide opens; for an upgrade, verify it does
+  not interrupt existing settings. Reopen it from Settings and follow its direct
+  links. The guide must never prefill or reveal household credentials.
 - Distinguish a loaded website, successful sign-in and verified functionality. Never
   claim playback, calendar sync or home control based solely on a rendered shortcut.
 - Add focused tests for behavior and privacy boundaries; avoid snapshotting private data.

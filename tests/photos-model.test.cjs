@@ -16,3 +16,12 @@ test('malformed native status cannot provide external images or unsafe limits',(
   assert.equal(state.days,30);assert.equal(state.maximum,30);assert.equal(state.lastSync,0);
   assert.match(Photos.caption(state),/not yet verified|verify mail access/);
 });
+
+test('last check displays in the configured city time rather than Android timezone',()=>{
+  const checked=Date.UTC(2026,9,10,22,26,0);
+  const status={connected:true,busy:false,error:'',lastSync:checked,photos:[{},{}]};
+  const caption=Photos.caption(status,'America/Toronto');
+  assert.match(caption,/2 saved photos/);
+  assert.match(caption,/6:26/);
+  assert.doesNotMatch(caption,/10:26/);
+});

@@ -31,6 +31,8 @@ regression test ensures script/resource fetches pass through unchanged.
 - Photos: private local image URL validation, malformed native status, and the
   actual Java policy for account, age, count, dimensions and downsampling. A
   serialized multipart message tests the pinned mail library's image decoding.
+- Onboarding: fresh-install launch, upgrade and explicit-route preservation,
+  dismissal persistence, reopening and links to the existing setup controls.
 - Android: feed URL/size/redirect boundaries, native navigation allowlists, TLS-only
   device selection; packaging/privacy sentinels keep personal data outside APKs.
 - Momo: canvas geometry, rendering pause/resume, reduced motion, persistence,
@@ -48,6 +50,8 @@ household calendars. Unit tests supplement, rather than replace, device checks.
 2. Inspect 1280×720 CSS pixels (1920×1080 at the tested frame's 1.5 density), a normal
    desktop viewport and a narrow viewport. Check overflow, readable text, focus and
    touch targets. Public screenshots must come from the synthetic preview only.
+   Also check that a fresh browser opens the guide and an upgraded frame does not;
+   reopen the guide from Settings to inspect it without resetting household data.
 3. Build with `python3 scripts/build.py`; verify signature and inspect the final APK
    with `python3 scripts/check_public.py --history --apk dist/skylit.apk`.
 4. Identify exact model, Android and transport, then install in place with the same

@@ -103,3 +103,13 @@ with a clear frame-only scope, exact-address approval and a separate choice for
 events missing organizer information. This avoids implying that the UI changes
 Google Contacts or accepts events in Google Calendar. The detailed architecture,
 usability critique and remaining validation are in [feature review](feature-review.md).
+
+## First-run guide — 2.9
+
+A new owner previously landed on an empty Overview and had to discover setup forms
+across multiple tabs. The guide puts city, photos and calendar in a short sequence,
+with a direct action for each. It uses existing settings forms rather than copying
+credential fields into another screen. Calendar and Home can wait, so the guide is
+easy to leave and reopen. A previous settings record suppresses auto-opening on
+upgrade. Cards use the current palette, large buttons and plain status labels;
+no decorative slogan or personal example data is shown.
