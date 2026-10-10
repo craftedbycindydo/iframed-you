@@ -12,6 +12,9 @@ const sources=[{id:'demo',name:'Example calendar',color:'#833e2c',body,fetchedAt
 window.Skylit={configure(){},calendarList:()=>JSON.stringify(sources),calendarRefresh(){},calendarRemove:()=>false,calendarAdd:()=>'',calendarAccept:()=>true};
 const hour=3600,base=now/1000;
 const weather={fetchedAt:now,current:{temperature_2m:17,weather_code:2,is_day:1,apparent_temperature:16,relative_humidity_2m:62,wind_speed_10m:11},daily:{time:Array.from({length:5},(_,i)=>base+i*86400),temperature_2m_max:[19,18,17,16,18],temperature_2m_min:[11,10,9,10,11],weather_code:[2,3,61,2,0],precipitation_probability_max:[15,25,70,20,5],sunset:[base+9*hour]},hourly:{time:Array.from({length:24},(_,i)=>base+i*hour),temperature_2m:Array.from({length:24},(_,i)=>17+Math.round(Math.sin(i/4)*3)),weather_code:Array(24).fill(2),is_day:Array(24).fill(1),precipitation_probability:Array(24).fill(15)}};
+const preview=new URLSearchParams(location.search),previewCode=Number(preview.get('weather'));
+if(preview.has('weather')&&[0,1,2,3,45,48,51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86,95,96,99].includes(previewCode))weather.current.weather_code=previewCode;
+if(preview.get('night')==='1')weather.current.is_day=0;
 const realFetch=window.fetch.bind(window);
 window.fetch=(url,options)=>String(url).startsWith('https://api.open-meteo.com/v1/forecast?')?Promise.resolve({ok:true,json:async()=>weather}):realFetch(url,options);
 // A refresh is a no-op in the fixture; keep it from implying a real connection.

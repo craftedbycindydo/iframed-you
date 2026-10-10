@@ -87,6 +87,10 @@ keeps that exposure narrow. See [photo setup](photos.md) and [verification](veri
 
 `appearance.js` owns paired theme tokens, legacy preference migration, and solar
 mode decisions. SunCalc 1.9.0 runs locally: solar altitude below -0.833° is night.
+`weather-art.js` maps supported Open-Meteo codes to nine illustrated scene states;
+`weather-art.css` renders them from palette colours in both the Overview and Weather
+cards. The scene follows the forecast's current day/night flag, independently of
+the dashboard's manual palette mode. No fetched image assets are needed.
 The next sunrise/sunset label uses predicted times, formatted in the selected city
 zone. The clock checks every 15 seconds and on visibility/remote return. Manual
 Light/Dark overrides the sun; invalid/missing coordinates follow system appearance.

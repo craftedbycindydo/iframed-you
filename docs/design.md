@@ -131,3 +131,17 @@ Controls draw from the selected theme, fade during playback and reappear on inpu
 Reduced motion removes entrance/crossfade animation. A browser review at frame,
 desktop and narrow widths found no horizontal overflow. Synthetic photo fixtures
 exist only in the isolated preview and are excluded from normal APKs.
+
+## Weather scenes and looser prints — 2.11
+
+The single sun-and-cloud drawing made rain, fog, snow and storms look too similar.
+The current forecast now chooses one of nine small CSS scenes in both Weather and
+Overview. They reuse the warm palette and switch the sun to a moon when the forecast
+reports night. The scene adds a glanceable cue; the written condition remains the
+source of meaning. Synthetic previews check clear, fog, snow, showers and storms.
+
+The little label on the Overview photo stack competed with the prints. The whole
+stack remains a generous, named button to Photos, while the label is gone. Prints
+are larger and slightly spill over the Upcoming card edge. With only one or two
+saved pictures, collage changes to one or two frames instead of repeating a photo
+just to fill three slots.

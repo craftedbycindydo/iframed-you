@@ -100,7 +100,13 @@
     $('photo-counter').textContent=(index+1)+' / '+state.photos.length;
     if(overlay.dataset.style==='collage'){
       const positions=playback.collage(index,state.photos.length);
-      Array.from(collage.children).forEach((image,i)=>{image.src=state.photos[positions[i]].url;});
+      collage.dataset.count=String(positions.length);
+      Array.from(collage.children).forEach((image,i)=>{
+        const position=positions[i];
+        image.hidden=position===undefined;
+        if(image.hidden)image.removeAttribute('src');
+        else image.src=state.photos[position].url;
+      });
       collage.classList.remove('is-entering');void collage.offsetWidth;collage.classList.add('is-entering');
       return;
     }

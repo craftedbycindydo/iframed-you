@@ -28,7 +28,7 @@ regression test ensures script/resource fetches pass through unchanged.
 - Calendar parsing: recurrence, DST, exceptions, cancellation, moved occurrences,
   all-day/floating/overnight events, organizer inheritance, malformed data and
   expansion limits. Inviter approval/revocation is tested as an exact display rule.
-- Photos: slideshow style fallback and collage wraparound, private local image URL
+- Photos: slideshow style fallback and collage wraparound without duplicate images, private local image URL
   validation, malformed native status, and the
   actual Java policy for account, age, count, dimensions and downsampling. A
   serialized multipart message tests the pinned mail library's image decoding.

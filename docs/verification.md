@@ -1,5 +1,30 @@
 # Delivery verification — October 10, 2026
 
+## Version 2.11 — Weather scenes and duplicate-free collage
+
+- Nine scene states now cover the supported Open-Meteo current conditions: clear,
+  partly cloudy, cloudy, fog, rain, snow, rain showers, snow showers and storms.
+  The condition label remains visible. Both Overview and Weather use the same
+  mapping, with a moon/night variant when the forecast reports night. Synthetic
+  previews were visually checked for clear, fog, snow, storms and night showers;
+  the physical frame showed its live cloudy-night forecast. Other live conditions
+  will need to occur naturally for an on-device visual check.
+- The small Overview photo label is gone; the entire stack remains a named touch
+  target. Prints are larger and slightly extend past their grid area. Updated public
+  screenshots use only the synthetic preview. The 1280×720 frame viewport and a
+  390×844 narrow viewport had no horizontal page overflow.
+- A regression test first reproduced the collage's repeated index with one saved
+  picture. Collage now uses one, two or three unique images and clears unused
+  slots. The isolated two-photo preview showed distinct images; the actual frame
+  showed its two existing cached images once each, swapped them on automatic
+  advance, and faded the controls. The prior Soft fade preference was restored.
+- The signed 2.11.0 APK (version code 18) passed signature verification, public
+  source/history/APK inspection and Gitleaks history/source scans. It was installed
+  in place on the identified USB-connected Android 12 D156. The original Skylight
+  app and Skylit HOME role remained intact; the frame was left on Overview. The
+  final suite passed 44 JavaScript and 13 Python tests. No long-term unattended
+  slideshow test was run in this update.
+
 ## Version 2.10 — Photo library and slideshow presentation
 
 - Overview now fits a clock, illustrated weather, up to three upcoming events and

@@ -9,10 +9,10 @@ test('unknown slideshow settings fall back to a soft fade',()=>{
   assert.equal(playback.style('anything-else'),'fade');
 });
 
-test('collage fills its three positions even with one or two pictures',()=>{
+test('collage never repeats one picture in a single composition',()=>{
   assert.deepEqual(playback.collage(0,0),[]);
-  assert.deepEqual(playback.collage(0,1),[0,0,0]);
-  assert.deepEqual(playback.collage(1,2),[1,0,1]);
+  assert.deepEqual(playback.collage(0,1),[0]);
+  assert.deepEqual(playback.collage(1,2),[1,0]);
   assert.deepEqual(playback.collage(3,5),[3,4,0]);
   assert.ok(Math.abs(playback.angle(100))<=6);
 });

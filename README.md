@@ -17,6 +17,10 @@ not a household account. They demonstrate the interface, not a live service sign
 | --- | --- |
 | ![Overview with recent photos in Linen](docs/screenshots/overview-photos-linen.jpg) | ![Overview with recent photos in Ocean dark](docs/screenshots/overview-photos-ocean-dark.jpg) |
 
+| Weather · Clear | Weather · Fog |
+| --- | --- |
+| ![Clear-sky weather scene](docs/screenshots/weather-clear-linen.jpg) | ![Fog weather scene](docs/screenshots/weather-fog-linen.jpg) |
+
 | Photo library · Linen | Photo library · Ocean dark |
 | --- | --- |
 | ![Browsable photo library in Linen](docs/screenshots/photo-library-linen.jpg) | ![Browsable photo library in Ocean dark](docs/screenshots/photo-library-ocean-dark.jpg) |
@@ -34,7 +38,7 @@ not a household account. They demonstrate the interface, not a live service sign
 | Feature | How it works |
 | --- | --- |
 | Overview | One-screen clock/date, illustrated current weather, recent photos when available, and three upcoming events |
-| Weather | Live Open-Meteo forecast, city search, hourly and five-day outlook, saved forecast when offline |
+| Weather | Live Open-Meteo forecast, city search, hourly and five-day outlook, saved forecast when offline, nine illustrated condition scenes with day/night variants |
 | Photos | Google Photos shared album or browsable on-frame library of pictures sent to a dedicated Gmail inbox; zoom, three slideshow styles, configurable idle mode and bounded private cache |
 | Calendar | Themed month and agenda views, direct Google iCal feeds, recurring events, offline cache and on-frame inviter review |
 | Home | Google Home’s website, using its supported controls and your own session |

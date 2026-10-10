@@ -1,6 +1,8 @@
 /* Synthetic public preview only. This file is never included in an APK. */
 (() => {
-  const names=['marigolds','dog','cat','lake','orchard'];
+  const allNames=['marigolds','dog','cat','lake','orchard'];
+  const requested=Number(new URLSearchParams(location.search).get('count'));
+  const names=Number.isInteger(requested)&&requested>=1&&requested<=allNames.length?allNames.slice(0,requested):allNames;
   const photos=names.map((name,index)=>({url:'demo-photos/'+name+'.png',at:Date.now()-index*86400000}));
   const normalize=window.SkylitPhotoModel.normalize;
   window.SkylitPhotoModel.normalize=raw=>{
