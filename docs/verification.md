@@ -43,12 +43,11 @@
   point, frame driver or another link caused them. A later 24-sample probe showed
   stable IPv4, IPv6, router and DNS reachability. See [wireless setup](wireless.md)
   for the repeatable diagnostic check.
-- A fresh shared-album check opened a Google photo after Skylit tapped Google's
-  Slideshow control, but two private frame captures 20 seconds apart showed the
-  same photo. The frame still passed IPv4, IPv6, router and DNS checks. Automatic
-  slide advance is therefore **not verified on this run**; the album was closed
-  with Skylit's return control. Earlier successful checks below are historical,
-  not proof that this third-party slideshow remains reliable.
+- A first two-capture spot check showed the same photo and was inconclusive. A
+  repeated timed check captured five private frame images eight seconds apart;
+  each showed a different album photo. Automatic advance and Skylit's return
+  control worked in this run. The frame also passed IPv4, IPv6, router and DNS
+  checks. This verifies current playback, not long-term third-party reliability.
 - The clean public source export began at commit `5099cb11cef368112b79d976905de0108297a2d3`.
   Its sole commit used a GitHub noreply address; the earlier development repository
   was retained privately. No APK was uploaded as a GitHub release. The locally built
