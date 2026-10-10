@@ -12,8 +12,8 @@
   review policy, private image URLs, native retention/size limits and multipart
   image extraction with the pinned mail libraries. A signed
   2.8.0 APK built and passed Android signature verification. Source/history/APK
-  public-data scan found no file-content findings; historical commit author email
-  still needs review before changing repository visibility.
+  public-data scan found no file-content findings. A clean public export later
+  replaced the metadata-bearing development history.
 - A synthetic 1280×720 preview was inspected for the Photos empty state, Calendar
   month and inviter panel. No personal pictures or events were used.
 - On October 10, the signed 2.8.0 APK (version code 15) was installed in place over
@@ -26,10 +26,29 @@
   playback and idle return for the new email source are **not verified**. Inviter
   review remains off, with no approved addresses or real test invitation; its
   approval/removal flow is not verified against Google Calendar.
-- The household calendar is configured but its refresh failed during this check.
-  Wi-Fi was enabled without an IPv4 lease or default route. One Wi-Fi off/on cycle
-  did not restore a lease. No router settings or saved network credentials changed.
-  A saved empty calendar is not evidence of current sync.
+- The first household-calendar refresh failed. The initial claim that Wi-Fi had no
+  IPv4 lease or route was **incorrect**: Android 12 left the legacy
+  `dhcp.wlan0.ipaddress` property and main route table empty, while a later direct
+  check found an IPv4 address and a working policy route. One Wi-Fi off/on cycle
+  was performed, without changing router or saved-network settings. The earlier
+  snapshot alone does not establish when connectivity recovered.
+- Later, the frame reached the router, public IPv4 and IPv6 addresses, and Google
+  Calendar by DNS. A manual Calendar refresh succeeded. A temporary private,
+  reminder-free event added to the household account appeared in Skylit's month
+  and agenda views on refresh; after deletion in Google Calendar, it disappeared
+  from both on the next refresh. The test event was removed. This verifies live
+  add/remove sync for the configured household feed, not invitation approval.
+- Android's retained log showed repeated failed IPv6 link-local neighbor probes
+  during the earlier problem window. It does not prove whether the router, access
+  point, frame driver or another link caused them. A later 24-sample probe showed
+  stable IPv4, IPv6, router and DNS reachability. See [wireless setup](wireless.md)
+  for the repeatable diagnostic check.
+- A fresh shared-album check opened a Google photo after Skylit tapped Google's
+  Slideshow control, but two private frame captures 20 seconds apart showed the
+  same photo. The frame still passed IPv4, IPv6, router and DNS checks. Automatic
+  slide advance is therefore **not verified on this run**; the album was closed
+  with Skylit's return control. Earlier successful checks below are historical,
+  not proof that this third-party slideshow remains reliable.
 - The clean public source export began at commit `5099cb11cef368112b79d976905de0108297a2d3`.
   Its sole commit used a GitHub noreply address; the earlier development repository
   was retained privately. No APK was uploaded as a GitHub release. The locally built
@@ -68,11 +87,11 @@ archive. No personal APK or household setup record is published.
 
 ## Observed issues and limits
 
-The reboot exposed a network issue: Wi-Fi associated without an IPv4 address and
-weather/Photos could not load. A Wi-Fi off/on cycle restored DHCP and Android's
-validated internet connection. Live weather then refreshed successfully. No router
-setting, saved network, or credential was changed. This is a recovered occurrence,
-not proof that the underlying boot-time networking issue is permanently fixed.
+After the reboot, Wi-Fi reported a connection problem and weather/Photos could not
+load. A Wi-Fi off/on cycle was followed by Android's validated internet connection;
+live weather then refreshed. The old claim that this proved a missing IPv4 lease
+was based on legacy Android fields and is withdrawn. No router setting, saved
+network, or credential was changed. The cause remains undetermined.
 
 Weather now retries failed requests after one minute, retains cached data with an
 explicit saved-data message, and also refreshes on the browser online event.
@@ -88,8 +107,9 @@ Two-finger stock-app gesture and deliberate renderer-crash recovery not physical
 ## Follow-up
 
 Finish Google Home sign-in on the frame, verify supported controls, then investigate
-an authenticated shared Keep note for the voice shopping-list phase. If Wi-Fi again
-fails after boot, investigate the firmware/router DHCP interaction separately.
+an authenticated shared Keep note for the voice shopping-list phase. If connectivity
+fails again, run the route and reachability probe in docs/wireless.md while the
+failure is present before attributing it to DHCP or the router.
 
 ## Version 2.1 — October 10, 2026
 
@@ -100,7 +120,8 @@ fails after boot, investigate the firmware/router DHCP interaction separately.
 - Verified both Wi-Fi and developer-options shortcuts reached their intended activities.
 - Four discovery-helper tests passed: exact device match, TLS-only connect service,
   connected-transport reuse, and invalid-endpoint rejection.
-- Restart retained pairing but disabled wireless debugging. The Wi-Fi DHCP failure recurred.
+- Restart retained pairing but disabled wireless debugging. A Wi-Fi connection
+  problem was observed again; the older DHCP attribution was not established.
   Reconnecting Wi-Fi and allowing wireless debugging again restored the connection.
   A second install over Wi-Fi succeeded without re-pairing. See docs/wireless.md.
 - No system packages disabled. Original app remains present, and baseline disabled NFC unchanged.

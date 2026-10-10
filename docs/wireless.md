@@ -94,15 +94,42 @@ ignored `.local/device.json` holds `adb` (executable path) and `serial`.
 
 ## After restarting the frame
 
-The restart test preserved pairing but turned wireless debugging off, and the frame
-again joined Wi-Fi without an IPv4 lease. **Automatic cable-free reconnection after
-reboot is not established.** No cable is needed to recover it on the screen:
+The restart test preserved pairing but turned wireless debugging off. The frame's
+internet access was unavailable during that test. **Automatic cable-free
+reconnection after reboot is not established.** No cable is needed to recover it
+on the screen:
 
 1. Open Skylit Settings → Wi-Fi settings and toggle Wi-Fi off and on if internet is unavailable.
 2. Open Settings → Wireless connection settings, scroll to Wireless debugging, and turn it on.
 3. Run the helper again. Pairing should remain; if Android expires it, pair again from that screen.
 
 The settings shortcuts do not silently change network or debugging state.
+
+For a repeatable connectivity check, use the configured, authorized USB transport
+or paired TLS wireless transport:
+
+```sh
+python3 scripts/check_network.py --usb --samples 12 --interval 5
+python3 scripts/check_network.py --wireless --samples 12 --interval 5
+```
+
+The check selects and verifies the configured frame, then tests its actual WLAN
+address, Android policy route, router, public IPv4/IPv6 reachability and DNS. It
+prints only pass/fail results, never the serial, addresses, network name or feed
+URL. A failure exits nonzero. `--wireless` cannot diagnose a frame whose wireless
+debugging is off; use USB or the on-frame Wi-Fi settings in that case. A successful
+network check does not by itself verify a calendar or photo service: refresh that
+feature on the frame too.
+
+Do not infer a missing lease from `getprop dhcp.wlan0.ipaddress` or a missing
+default route from `ip route` on this Android 12 device. Both appeared empty during
+an October 10 check even though the WLAN had an address and Android's policy route
+worked. The frame's retained log also showed repeated failed IPv6 link-local
+neighbor probes in that period; the exact source of those failures remains
+unconfirmed. [Android's Wi-Fi documentation](https://source.android.com/docs/core/connect/wifi-network-selection)
+describes neighbor-unreachability detection as a gateway reachability check; the
+retained log alone does not prove a router or access-point fault. Preserve raw logs
+privately and avoid changing router settings based on this signal alone.
 
 If discovery fails, open **Skylit → Settings → Wireless connection settings**,
 scroll to **Wireless debugging**, and check it is on. Use the address on that page:
