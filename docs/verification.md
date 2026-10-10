@@ -30,6 +30,12 @@
   Wi-Fi was enabled without an IPv4 lease or default route. One Wi-Fi off/on cycle
   did not restore a lease. No router settings or saved network credentials changed.
   A saved empty calendar is not evidence of current sync.
+- The clean public source export began at commit `5099cb11cef368112b79d976905de0108297a2d3`.
+  Its sole commit used a GitHub noreply address; the earlier development repository
+  was retained privately. No APK was uploaded as a GitHub release. The locally built
+  normal APK has SHA-256
+  `8db92d2d1288bab1e7d1992fb1a52c8e2bb042ace6b36e3feacb300e3ae9fe70`;
+  Android SDK 34 `apksigner` verified its v1, v2 and v3 signatures.
 - See [photo setup](photos.md), [calendar setup](calendar.md) and the
   [feature review](feature-review.md) for activation, limits and acceptance tests.
 
