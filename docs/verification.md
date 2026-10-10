@@ -1,5 +1,35 @@
 # Delivery verification — October 10, 2026
 
+## Version 2.10 — Photo library and slideshow presentation
+
+- Overview now fits a clock, illustrated weather, up to three upcoming events and
+  loose local-photo prints at the tested 1920×1080 physical resolution. The photo
+  treatment is absent when no local email photos are selected. The actual frame
+  showed its two existing saved test pictures in Overview without exposing them in
+  the public screenshot set.
+- Photos now leads with a thumbnail library and direct browsing; the setup controls
+  remain in Photo settings. The physical frame displayed its two cached pictures,
+  opened the first picture, advanced to the second and zoomed it. An in-place
+  upgrade preserved the existing email connection and cache.
+- Soft fade, Falling prints and Photo collage are selectable for local pictures.
+  Falling prints and collage rendered on the physical frame using its two saved
+  pictures; collage repeated a picture to fill its third position as designed.
+  Themed controls disappeared after inactivity on the frame. The isolated browser
+  preview confirmed they remain hidden across automatic slide advance and return
+  after a manual Next action. The original Soft fade preference was restored after
+  the physical test, and the frame was left on Overview.
+- Public screenshots show generated sample pictures with synthetic events/weather in
+  Linen and Ocean dark. The preview was inspected at 1280×720 CSS pixels, 1440×900
+  desktop and 390×844 narrow viewports. No horizontal overflow was observed. The
+  full photo set was reviewed only in the isolated preview; the normal APK contains
+  no sample fixture or household photo.
+- The signed 2.10.0 APK (version code 17) passed signature verification and was
+  installed in place on the Android 12 D156 over identified USB. The final suite
+  passed 42 JavaScript and 13 Python tests; public-data inspection found zero
+  findings in source, history or APK. Gitleaks found no secrets in Git history or
+  a separate export of the proposed 95 source files. No fresh-install or long-term
+  unattended slideshow test was run on the household frame.
+
 ## Version 2.9 — First-run guide and live email-photo test
 
 - Added an on-frame setup guide for city, photos and calendar, with direct routes to

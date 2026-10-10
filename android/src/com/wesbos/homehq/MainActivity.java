@@ -101,6 +101,7 @@ public class MainActivity extends Activity {
     @JavascriptInterface public boolean photoConfigure(int days,int maximum){return photoMail.configure(days,maximum);}
     @JavascriptInterface public void photoRefresh(){photoMail.sync();}
     @JavascriptInterface public void photoOpen(boolean idle){runOnUiThread(()->openLocalPhotos(idle));}
+    @JavascriptInterface public void photoBrowse(int index){runOnUiThread(()->openLocalPhotos(false,index,false));}
     @JavascriptInterface public boolean photoDisconnect(){boolean removed=photoMail.disconnect();if(removed)runOnUiThread(()->{if(localPhotosOpen&&dashboard!=null)dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.close()",null);});return removed;}
     @JavascriptInterface public void photoSource(String source){if(!"email".equals(source)&&!"album".equals(source))return;prefs.edit().putString("photo_source",source).apply();runOnUiThread(()->resetIdle());}
     @JavascriptInterface public void localPhotoClosed(){runOnUiThread(()->{idlePhotos=false;localPhotosOpen=false;pauseMomo(false);resetIdle();});}
@@ -115,7 +116,8 @@ public class MainActivity extends Activity {
     @JavascriptInterface public void openStock(){runOnUiThread(()->openStockApp());}
   }
   private void resetIdle(){handler.removeCallbacks(idleTask);if(!foreground||remote!=null||localPhotosOpen)return;boolean hasSource="email".equals(prefs.getString("photo_source","album"))?photos.list().length()>0:validAlbum(prefs.getString("album",""));if(!hasSource)return;int seconds=prefs.getInt("idle",120);if(seconds>0)handler.postDelayed(idleTask,seconds*1000L);}
-  private void openLocalPhotos(boolean idle){if(dashboard==null||photos.list().length()==0)return;handler.removeCallbacks(idleTask);localPhotosOpen=true;idlePhotos=idle;pauseMomo(true);dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.open("+idle+")",null);}
+  private void openLocalPhotos(boolean idle){openLocalPhotos(idle,0,true);}
+  private void openLocalPhotos(boolean idle,int index,boolean autoplay){int count=photos.list().length();if(dashboard==null||count==0)return;int safeIndex=Math.max(0,Math.min(count-1,index));handler.removeCallbacks(idleTask);localPhotosOpen=true;idlePhotos=idle;pauseMomo(true);dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.open("+idle+","+safeIndex+","+autoplay+")",null);}
   private void openRemote(String url,boolean photos,boolean idle){
     final boolean youtube=validYouTube(url);
     if(photos&&!validAlbum(url)||!photos&&!validHome(url)&&!validCalendar(url)&&!youtube)return;

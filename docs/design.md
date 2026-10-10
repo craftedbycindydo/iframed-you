@@ -113,3 +113,21 @@ credential fields into another screen. Calendar and Home can wait, so the guide 
 easy to leave and reopen. A previous settings record suppresses auto-opening on
 upgrade. Cards use the current palette, large buttons and plain status labels;
 no decorative slogan or personal example data is shown.
+
+## Photo-first overview and library — 2.10
+
+The overview now uses a two-column grid at the frame's 1280×720 CSS viewport:
+clock and illustrated weather on the left, loose photo prints above a compact
+three-event agenda on the right. The prints appear only when local email photos are
+available. They are a contextual route to Photos, not another service shortcut.
+The fixed event limit keeps the normal state on one screen; longer detail remains in
+Calendar. Narrow screens stack the content and may scroll.
+
+Photos puts saved pictures first. The former setup-heavy page is a thumbnail library
+with direct browse and zoom; delivery and retention controls sit in a disclosure
+beside it. The shared-album layout remains available when selected. The built-in
+slideshow offers a quiet fade, animated falling prints and a three-picture collage.
+Controls draw from the selected theme, fade during playback and reappear on input.
+Reduced motion removes entrance/crossfade animation. A browser review at frame,
+desktop and narrow widths found no horizontal overflow. Synthetic photo fixtures
+exist only in the isolated preview and are excluded from normal APKs.

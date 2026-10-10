@@ -67,7 +67,7 @@ function paint(){
   status();settings();paintOverview();paintGate();
 }
 function paintOverview(){
- const host=$('overview-events');host.textContent='';const day=today(),list=SkylitOverview.upcoming(overviewEvents,day,Date.now(),5);let key=null,group;
+ const host=$('overview-events');host.textContent='';const day=today(),list=SkylitOverview.upcoming(overviewEvents,day,Date.now(),3);let key=null,group;
  for(const e of list){
   const groupKey=e.startDay<day?'ongoing':e.startDay;
   if(groupKey!==key){key=groupKey;group=node('section',undefined,'overview-event-group');group.append(node('h3',key==='ongoing'?'Ongoing':key===day?'Today':key===addDays(day,1)?'Tomorrow':label(key,{weekday:'short',month:'short',day:'numeric'})));host.append(group);}

@@ -73,8 +73,11 @@ The Android viewer intercepts only exact local HTTPS photo paths for the local
 dashboard; remote web content gets neither private photos nor the bridge.
 
 The Photos UI selects either the existing Google Photos website or Skylit's local
-slideshow. Manual playback has controls; idle playback hides them and returns on
-first touch. The source, speed and review presentation live locally; secrets stay
+photo library and slideshow. Thumbnail browse opens at a bounded index, and the
+native bridge serves only approved local photo URLs. Manual playback has three
+presentation styles and theme-bound controls that fade after inactivity; idle
+playback hides controls and returns on first touch. The source, speed and presentation
+live locally; secrets stay
 out of browser localStorage. No backend, Android account provider, Play services or
 email body cache is involved. The importer is bounded to recent inbox messages,
 and its app-password scope is broader than photo-only access; a dedicated account
@@ -91,7 +94,8 @@ Polar night/day works without inventing a sunrise. This changes dashboard colour
 not panel brightness or third-party websites. Legacy Cocoa becomes Linen + Dark;
 other old themes default to Automatic. Device time must be correct.
 
-The default Overview consumes the same forecast/cache as Weather. Its read-only
+The default Overview consumes the same forecast/cache as Weather and shows up to
+three private local photo thumbnails when available. Its read-only
 calendar summary uses a separate bounded current-date expansion when the visible
 calendar month is outside today's two weeks. Generation IDs discard stale worker
 completions. Removing a feed immediately removes its overview events. The overview reuses the

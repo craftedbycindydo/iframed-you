@@ -10,23 +10,32 @@ See [credits and third-party notices](docs/credits.md).
 
 ## Screenshots
 
-These screenshots use **synthetic events and weather**, not a household account.
+These screenshots use **synthetic events, weather and generated sample photos**,
+not a household account. They demonstrate the interface, not a live service sign-in.
 
-![Overview in Linen](docs/screenshots/overview-linen.jpg)
+| Overview · Linen | Overview · Ocean dark |
+| --- | --- |
+| ![Overview with recent photos in Linen](docs/screenshots/overview-photos-linen.jpg) | ![Overview with recent photos in Ocean dark](docs/screenshots/overview-photos-ocean-dark.jpg) |
 
-| Calendar | Dark Ocean | Appearance |
-| --- | --- | --- |
-| ![Calendar](docs/screenshots/calendar-linen.jpg) | ![Dark Ocean](docs/screenshots/overview-ocean-dark.jpg) | ![Appearance settings](docs/screenshots/appearance.jpg) |
+| Photo library · Linen | Photo library · Ocean dark |
+| --- | --- |
+| ![Browsable photo library in Linen](docs/screenshots/photo-library-linen.jpg) | ![Browsable photo library in Ocean dark](docs/screenshots/photo-library-ocean-dark.jpg) |
 
-![Email Photos setup, using synthetic preview data](docs/screenshots/photos-email-setup.png)
+| Falling prints | Photo collage |
+| --- | --- |
+| ![Falling-print slideshow](docs/screenshots/slideshow-falling-prints.jpg) | ![Three-picture collage slideshow](docs/screenshots/slideshow-collage.jpg) |
+
+| Calendar | Appearance |
+| --- | --- |
+| ![Calendar](docs/screenshots/calendar-linen.jpg) | ![Appearance settings](docs/screenshots/appearance.jpg) |
 
 ## What works
 
 | Feature | How it works |
 | --- | --- |
-| Overview | Large clock/date, illustrated current weather with rain/wind/sunset, and five upcoming events over the next two weeks |
+| Overview | One-screen clock/date, illustrated current weather, recent photos when available, and three upcoming events |
 | Weather | Live Open-Meteo forecast, city search, hourly and five-day outlook, saved forecast when offline |
-| Photos | Google Photos shared album or an on-frame slideshow of pictures sent to a dedicated Gmail inbox; configurable idle mode and bounded private cache |
+| Photos | Google Photos shared album or browsable on-frame library of pictures sent to a dedicated Gmail inbox; zoom, three slideshow styles, configurable idle mode and bounded private cache |
 | Calendar | Themed month and agenda views, direct Google iCal feeds, recurring events, offline cache and on-frame inviter review |
 | Home | Google Home’s website, using its supported controls and your own session |
 | YouTube | Touch-friendly mobile site or standard website, with full-screen video support |
@@ -68,7 +77,9 @@ on-frame controls for private information; a desktop preview is for layout only.
 2. On **Photos**, choose a shared Google Photos album or pictures sent to a dedicated
    Gmail inbox. For an album, paste its sharing link in **Photos & idle mode**; keep
    that link out of source control. For email delivery, follow the [photo setup](docs/photos.md)
-   and enter an app password only on the frame.
+   and enter an app password only on the frame. Email photos can be browsed, zoomed,
+   and played with Soft fade, Falling prints or Photo collage; choose a style in
+   **Photos → Photo settings**. The shared album uses Google's own slideshow.
 3. Open **Calendar → Manage calendars**. On your computer, copy the calendar’s
    **Secret address in iCal format** from Google Calendar settings. Enter it on the
    frame with a name and colour. Repeat for each calendar (up to six). See the
@@ -188,9 +199,9 @@ python3 -m unittest discover -s tests
 python3 scripts/check_public.py --history
 ```
 
-For a safe demo with made-up events and forecast, run `python3 scripts/preview.py`
+For a safe demo with made-up events, forecast and generated photos, run `python3 scripts/preview.py`
 and open **http://127.0.0.1:8767**. It stages only public assets, never reads household
-config, and mocks the forecast and calendar in that preview only. Stop with Ctrl-C;
+config, and mocks the forecast, calendar and local photo status in that preview only. Stop with Ctrl-C;
 restart after code changes. Demo preferences are isolated by the browser origin.
 Do not enter real credentials into the demo. See [testing](docs/testing.md) and
 [design decisions](docs/design.md) for review criteria and screenshot reproduction.

@@ -28,7 +28,8 @@ regression test ensures script/resource fetches pass through unchanged.
 - Calendar parsing: recurrence, DST, exceptions, cancellation, moved occurrences,
   all-day/floating/overnight events, organizer inheritance, malformed data and
   expansion limits. Inviter approval/revocation is tested as an exact display rule.
-- Photos: private local image URL validation, malformed native status, and the
+- Photos: slideshow style fallback and collage wraparound, private local image URL
+  validation, malformed native status, and the
   actual Java policy for account, age, count, dimensions and downsampling. A
   serialized multipart message tests the pinned mail library's image decoding.
 - Onboarding: fresh-install launch, upgrade and explicit-route preservation,
@@ -62,7 +63,9 @@ household calendars. Unit tests supplement, rather than replace, device checks.
    docs/calendar.md. A loaded grid or synthetic screenshot does not prove syncing.
    Test an unapproved organizer, approval, revocation and cancellation separately.
    For email Photos, follow docs/photos.md and verify a real image import, manual
-   playback, idle entry/return and cache removal on the physical frame.
+   browsing/zoom, all three slideshow styles, control fade, idle entry/return and
+   cache removal on the physical frame. Do not erase household cache solely for a
+   release check unless a separate replacement source is ready.
 6. Record results, limitations and rollback in the private setup record and its
    device Downloads copy. Run Gitleaks against history and a source export before
    publication. Follow docs/releasing.md for publication and metadata checks.

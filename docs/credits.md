@@ -38,6 +38,9 @@ and the bundled third-party license notices below when distributing the project.
   this pinned version uses radians, unlike newer API revisions.
 - Momo: original procedural Canvas 2D art. The design reference is AI-generated;
   the shipped character uses geometry, not an external image or font asset.
+- Public photo-preview fixtures: five AI-generated sample pictures under
+  `tests/fixtures/demo-photos/`. They appear only in the isolated synthetic preview
+  and README screenshots, never in a normal APK or the household photo cache.
 - Android SDK and JDK are development dependencies with their own license terms;
   their toolchains are not included in this repository.
 

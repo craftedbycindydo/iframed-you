@@ -12,15 +12,21 @@ shared-album route remains the default and requires no extra account setup.
 2. On a trusted phone or computer, enable [Google 2-Step Verification](https://support.google.com/accounts/answer/185839)
    and create an [app password](https://support.google.com/accounts/answer/185833).
    Google may not offer app passwords for every account or security configuration.
-3. On the frame, open **Photos → Emailed pictures → Set up email photos**. Enter the
-   Gmail address and 16-character app password in **Email photo delivery**. Never
+3. On the frame, open **Photos → Emailed pictures → Photo settings**. Enter the
+   Gmail address and 16-character app password there. Never
    put either credential in chat, source code, screenshots or the setup record.
 4. Tap **Connect and check mail**. The app stores the credential first, then checks
    Gmail via encrypted IMAP. A saved credential is not proof of successful sign-in:
    wait for a last-checked time, an error, or a received picture.
 5. Send a JPEG, PNG, WebP or HEIC image to the account. Tap **Check now** and confirm
-   the picture appears on Photos and advances in the full-screen slideshow. Set
+   the picture appears in the Photo library and advances in the full-screen slideshow.
+   Tap a thumbnail to browse, use Next/Previous, and tap Zoom to inspect it. Choose
+   **Soft fade**, **Falling prints**, or **Photo collage** in Photo settings. Set
    **Show photos after** to the desired idle time. The first touch exits idle mode.
+
+Slideshow controls use the current palette and fade after four seconds without
+interaction. Touch, pointer movement or a key brings them back. The three styles
+apply to emailed pictures; a Google Photos shared album uses Google's own player.
 
 Google says personal Gmail accounts have IMAP access enabled. Its ordinary account
 password is not accepted by this route; the app password requires 2-Step
@@ -61,5 +67,6 @@ support. The downloaded Android mail libraries are pinned and credited in
 [credits](credits.md).
 
 Before calling household email delivery verified, test sign-in, a real sent
-picture, deletion/age pruning, idle entry and return on the physical frame. A
+picture, browser/zoom and slideshow advance, offline playback, idle entry and return
+on the physical frame. Age pruning needs a separate aged-message test. A
 desktop preview only checks layout and browser logic. See [verification](verification.md).
