@@ -1,0 +1,8 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');
+const {at,idle}=require('../web/momo-routine.js');
+test('Toronto schedule boundaries use local time rather than UTC',()=>{
+ for(const [utc,expected] of [['2026-10-10T09:59Z','night'],['2026-10-10T10:00Z','morning'],['2026-10-10T12:59Z','morning'],['2026-10-10T13:00Z','day'],['2026-10-11T00:00Z','evening'],['2026-10-11T02:00Z','night']])assert.equal(at(Date.parse(utc)).period,expected,utc);
+});
+test('daily wardrobe follows selected timezone, not UTC midnight',()=>{const a=at(Date.parse('2026-10-11T00:01Z'));const b=at(Date.parse('2026-10-11T03:59Z'));const c=at(Date.parse('2026-10-11T04:00Z'));assert.equal(a.date,'2026-10-10');assert.equal(a.dailyHat,b.dailyHat);assert.notEqual(b.dailyHat,c.dailyHat);assert.equal(at(Date.parse('2026-10-11T00:01Z'),'Asia/Tokyo').date,'2026-10-11');});
+test('repeated hour at autumn DST does not change outfit',()=>{const a=at(Date.parse('2026-11-01T05:30Z'));const b=at(Date.parse('2026-11-01T06:30Z'));assert.equal(a.hour,1);assert.equal(b.hour,1);assert.equal(a.dailyHat,b.dailyHat);});
+test('night cannot randomly dance; morning/evening have appropriate pools',()=>{for(let i=0;i<=100;i++){const r=i/100;assert.equal(idle('night',0,r),'sleepy');assert.ok(['yawn','stretch','curious'].includes(idle('morning',0,r)));assert.ok(['yawn','sleepy','stretch'].includes(idle('evening',0,r)));}assert.equal(idle('day',46000),'sleepy');});

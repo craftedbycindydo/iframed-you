@@ -1,0 +1,44 @@
+# Credits and third-party notices
+
+Skylit was inspired by **Wes Bos’s photo-frame-dashboard**:
+https://github.com/wesbos/photo-frame-dashboard
+
+The original frame exploration and full-screen kiosk starting point came from that
+project, initially checked out at `adcbc38411ae0e653fbcdd078076eadaadacb313`.
+The web dashboard, Momo, settings, service integration and local build/deployment
+work were developed here. The Android activity and manifest were adapted from
+Wes’s kiosk, and the package ID remains compatible with our initial installation.
+This is an independent project, not an official Wes Bos or Skylight product.
+
+## Release direction
+
+The project owner confirmed on October 10, 2026 that public release should proceed
+without the previously recorded license-clarification gate. That gate is removed
+from the project's setup and release instructions. Preserve the attribution above
+and the bundled third-party license notices below when distributing the project.
+
+## Services and assets
+
+- Forecasts and geocoding: [Open-Meteo](https://open-meteo.com/), also credited in the UI.
+- Photos and Home: Google’s official websites; YouTube’s official mobile/web site.
+- Calendar data: owner-configured Google iCalendar feeds.
+- Email photo import: [Jakarta Mail for Android 1.6.7](https://central.sonatype.com/artifact/com.sun.mail/android-mail/1.6.7)
+  and [Jakarta Activation for Android 1.6.7](https://central.sonatype.com/artifact/com.sun.mail/android-activation/1.6.7),
+  EPL-2.0 OR GPL-2.0 with Classpath exception. Unmodified JARs are pinned in
+  `vendor/mail/` and checked by SHA-256 in `scripts/build.py`. Their embedded
+  `META-INF/LICENSE.md` and `NOTICE.md` are copied into every APK's assets.
+- iCalendar parsing: [ICAL.js 2.2.1](https://github.com/kewisch/ical.js/tree/v2.2.1),
+  MPL-2.0. The unmodified ES5 distribution is bundled as `web/ical.js` with its
+  license in `web/ical-LICENSE.txt`. Source is available at the linked tagged release.
+  npm package integrity was checked before vendoring. SHA-256 of the bundled file:
+  `02b0ab420c2b3af5bd0829b12b8becdffdc2311e62070c381cc0c60b52b0b365`.
+- Offline sunrise/sunset: [SunCalc 1.9.0](https://github.com/mourner/suncalc/tree/v1.9.0),
+  BSD-2-Clause. The unmodified classic browser bundle and license are included as
+  `web/suncalc.js` and `web/suncalc-LICENSE.txt`. npm SHA-512 integrity was verified;
+  this pinned version uses radians, unlike newer API revisions.
+- Momo: original procedural Canvas 2D art. The design reference is AI-generated;
+  the shipped character uses geometry, not an external image or font asset.
+- Android SDK and JDK are development dependencies with their own license terms;
+  their toolchains are not included in this repository.
+
+Product names belong to their respective owners. No affiliation or endorsement is implied.

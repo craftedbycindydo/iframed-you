@@ -1,0 +1,24 @@
+.local/
+build/
+dist/
+web/local-config.js
+*.keystore
+*.jks
+*.apk
+*.idsig
+*.bak
+.DS_Store
+__pycache__/
+
+# Household settings, credentials, diagnostics and generated output
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
+*.hprof
+*.db
+*.sqlite*

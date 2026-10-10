@@ -1,0 +1,67 @@
+# Testing Skylit
+
+Run from the repository root with Node 18+, Python 3.10+, and JDK 17 for Java tests:
+
+```sh
+node --test tests/*.test.cjs
+python3 -m unittest discover -s tests
+python3 scripts/check_public.py --history
+```
+
+The suite uses Node/Python standard test runners. No runtime framework or network
+service is needed. Test observable behavior and failure boundaries; avoid snapshots
+of household data, tests that only repeat constants, and broad mocks of unrelated
+APIs. For example the synthetic preview mocks only the forecast endpoint, and a
+regression test ensures script/resource fetches pass through unchanged.
+
+## Automated coverage
+
+- Appearance: sunrise/sunset boundaries, both DST transition dates, date line,
+  polar day/night, missing/invalid location, manual overrides, legacy settings.
+- Contrast: the optional High contrast palette in both modes, text surfaces,
+  accent/button text and control borders. Regular palettes are visually reviewed.
+- Overview: expired/ongoing/all-day events, exclusive all-day end dates, result limit,
+  stable sorting, weather validity/freshness.
+- Calendar controller: overlapping worker completion, stale errors, month-independent
+  upcoming list, removal during an in-flight parse without resurrecting events,
+  grouped overview dates, redundant metadata removal and offline warning visibility.
+- Calendar parsing: recurrence, DST, exceptions, cancellation, moved occurrences,
+  all-day/floating/overnight events, organizer inheritance, malformed data and
+  expansion limits. Inviter approval/revocation is tested as an exact display rule.
+- Photos: private local image URL validation, malformed native status, and the
+  actual Java policy for account, age, count, dimensions and downsampling. A
+  serialized multipart message tests the pinned mail library's image decoding.
+- Android: feed URL/size/redirect boundaries, native navigation allowlists, TLS-only
+  device selection; packaging/privacy sentinels keep personal data outside APKs.
+- Momo: canvas geometry, rendering pause/resume, reduced motion, persistence,
+  gallery, daily clothing and local-time/DST routines.
+
+`python3 scripts/test_calendar_device.py` runs isolated storage/failure tests on an
+explicitly selected paired frame using in-memory test data. It does not populate
+household calendars. Unit tests supplement, rather than replace, device checks.
+
+## Visual and device checks
+
+1. Run `python3 scripts/preview.py` for synthetic data at localhost:8767; restart
+   after edits. Check every tab, long titles/multiple events, details, month/Today
+   navigation, theme changes and persisted settings after reload.
+2. Inspect 1280×720 CSS pixels (1920×1080 at the tested frame's 1.5 density), a normal
+   desktop viewport and a narrow viewport. Check overflow, readable text, focus and
+   touch targets. Public screenshots must come from the synthetic preview only.
+3. Build with `python3 scripts/build.py`; verify signature and inspect the final APK
+   with `python3 scripts/check_public.py --history --apk dist/skylit.apk`.
+4. Identify exact model, Android and transport, then install in place with the same
+   signing key. Inspect all affected tabs and test settings persistence, HOME/back,
+   weather refresh, and appearance on actual hardware. Do not change system time
+   or Wi-Fi to simulate solar transitions; use deterministic unit cases.
+5. For household Calendar setup, verify an actual owner-made event refresh using
+   docs/calendar.md. A loaded grid or synthetic screenshot does not prove syncing.
+   Test an unapproved organizer, approval, revocation and cancellation separately.
+   For email Photos, follow docs/photos.md and verify a real image import, manual
+   playback, idle entry/return and cache removal on the physical frame.
+6. Record results, limitations and rollback in the private setup record and its
+   device Downloads copy. Run Gitleaks against history and a source export before
+   publication. Follow docs/releasing.md for publication and metadata checks.
+
+There is no claimed percentage coverage, full accessibility certification, or
+long-term unattended stability result. See docs/verification.md for checks actually run.
