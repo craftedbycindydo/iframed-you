@@ -24,8 +24,14 @@ import java.util.HashSet;
 final class PhotoStore {
   private final File directory;
   private final SharedPreferences preferences;
+  private static final int MAX_EXCLUDED=4096;
   private static final class Item {String id;long at;Item(String i,long t){id=i;at=t;}}
-  PhotoStore(Context context){directory=new File(context.getFilesDir(),"mail-photos");directory.mkdirs();preferences=context.getSharedPreferences("skylit-photo-index",Context.MODE_PRIVATE);}
+  PhotoStore(Context context){this(new File(context.getFilesDir(),"mail-photos"),context.getSharedPreferences("skylit-photo-index",Context.MODE_PRIVATE));}
+  PhotoStore(File files,SharedPreferences prefs){directory=files;directory.mkdirs();preferences=prefs;}
+  private HashSet<String> exclusions(){HashSet<String> ids=new HashSet<>();try{JSONArray rows=new JSONArray(preferences.getString("excluded","[]"));for(int i=0;i<rows.length()&&ids.size()<MAX_EXCLUDED;i++){String id=rows.optString(i);if(PhotoPolicy.photoId(id))ids.add(id);}}catch(Exception ignored){}return ids;}
+  synchronized JSONArray excluded(){return new JSONArray(exclusions());}
+  synchronized boolean exclude(String id,boolean value){if(!PhotoPolicy.photoId(id))return false;HashSet<String> ids=exclusions();if(value){if(!ids.contains(id)&&ids.size()>=MAX_EXCLUDED)return false;ids.add(id);}else ids.remove(id);return preferences.edit().putString("excluded",new JSONArray(ids).toString()).commit();}
+  synchronized boolean restoreExcluded(){return preferences.edit().remove("excluded").commit();}
   private ArrayList<Item> read(){ArrayList<Item> list=new ArrayList<>();try{JSONArray rows=new JSONArray(preferences.getString("items","[]"));for(int i=0;i<rows.length();i++){JSONObject row=rows.getJSONObject(i);String id=row.optString("id");if(PhotoPolicy.photoId(id))list.add(new Item(id,row.optLong("at")));}}catch(Exception ignored){}return list;}
   private void write(ArrayList<Item> list){JSONArray rows=new JSONArray();for(Item item:list){JSONObject row=new JSONObject();try{row.put("id",item.id);row.put("at",item.at);rows.put(row);}catch(Exception ignored){}}preferences.edit().putString("items",rows.toString()).commit();}
   private static byte[] bounded(InputStream stream) throws Exception {ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buffer=new byte[32768];int n,total=0;while((n=stream.read(buffer))!=-1){total+=n;if(total>PhotoPolicy.MAX_DOWNLOAD)throw new IllegalArgumentException("Photo exceeds size limit");out.write(buffer,0,n);}return out.toByteArray();}
@@ -34,7 +40,7 @@ final class PhotoStore {
   private static Bitmap rotate(Bitmap image,int orientation){Matrix matrix=new Matrix();switch(orientation){case 2:matrix.postScale(-1,1);break;case 3:matrix.postRotate(180);break;case 4:matrix.postScale(1,-1);break;case 5:matrix.postRotate(90);matrix.postScale(-1,1);break;case 6:matrix.postRotate(90);break;case 7:matrix.postRotate(270);matrix.postScale(-1,1);break;case 8:matrix.postRotate(270);break;default:return image;}Bitmap result=Bitmap.createBitmap(image,0,0,image.getWidth(),image.getHeight(),matrix,true);image.recycle();return result;}
   synchronized boolean add(InputStream input,long receivedAt) throws Exception {
     byte[] original=bounded(input);if(original.length<4096)return false;
-    String id=digest(original);ArrayList<Item> items=read();
+    String id=digest(original);if(exclusions().contains(id))return false;ArrayList<Item> items=read();
     for(int i=0;i<items.size();i++)if(items.get(i).id.equals(id)){if(new File(directory,id+".jpg").isFile()){items.get(i).at=Math.max(items.get(i).at,receivedAt);write(items);return false;}items.remove(i);break;}
     BitmapFactory.Options options=new BitmapFactory.Options();options.inJustDecodeBounds=true;BitmapFactory.decodeByteArray(original,0,original.length,options);
     if(!PhotoPolicy.imageSize(options.outWidth,options.outHeight))return false;
@@ -50,8 +56,16 @@ final class PhotoStore {
       items.add(new Item(id,receivedAt));write(items);return true;
     }finally{if(!image.isRecycled())image.recycle();}
   }
-  synchronized int prune(int days,int maximum){long now=System.currentTimeMillis();ArrayList<Item> items=read(),kept=new ArrayList<>();Collections.sort(items,(a,b)->Long.compare(b.at,a.at));HashSet<String> ids=new HashSet<>();for(Item item:items)if(PhotoPolicy.retain(item.at,now,days)&&kept.size()<maximum&&new File(directory,item.id+".jpg").isFile()&&ids.add(item.id))kept.add(item);write(kept);File[] files=directory.listFiles();if(files!=null)for(File file:files)if(!file.getName().endsWith(".jpg")||!ids.contains(file.getName().replace(".jpg","")))file.delete();return kept.size();}
+  synchronized int prune(int days,int maximum){
+    if(!PhotoPolicy.limits(days,maximum))throw new IllegalArgumentException("Invalid photo limits");
+    long now=System.currentTimeMillis();ArrayList<Item> items=read(),kept=new ArrayList<>();Collections.sort(items,(a,b)->Long.compare(b.at,a.at));HashSet<String> ids=new HashSet<>(),blocked=exclusions();
+    for(Item item:items)if(!blocked.contains(item.id)&&PhotoPolicy.retain(item.at,now,days)&&kept.size()<maximum&&new File(directory,item.id+".jpg").isFile()&&ids.add(item.id))kept.add(item);
+    // Excluded cached images allow immediate undo, without using visible gallery slots.
+    // Keep at most 50 images altogether; hash-only exclusions survive cache pruning.
+    for(Item item:items)if(blocked.contains(item.id)&&PhotoPolicy.retain(item.at,now,days)&&kept.size()<50&&new File(directory,item.id+".jpg").isFile()&&ids.add(item.id))kept.add(item);
+    write(kept);File[] files=directory.listFiles();if(files!=null)for(File file:files)if(!file.getName().endsWith(".jpg")||!ids.contains(file.getName().replace(".jpg","")))file.delete();return kept.size();
+  }
   synchronized JSONArray list(){ArrayList<Item> items=read();Collections.sort(items,(a,b)->Long.compare(b.at,a.at));JSONArray rows=new JSONArray();for(Item item:items)if(new File(directory,item.id+".jpg").isFile()){JSONObject row=new JSONObject();try{row.put("id",item.id);row.put("at",item.at);row.put("url","https://appassets.androidplatform.net/private-photos/"+item.id+".jpg");rows.put(row);}catch(Exception ignored){}}return rows;}
   synchronized InputStream open(String id) throws Exception {if(!PhotoPolicy.photoId(id))throw new IllegalArgumentException("Invalid photo");File image=new File(directory,id+".jpg");if(!image.isFile())throw new java.io.FileNotFoundException();return new FileInputStream(image);}
-  synchronized void clear(){preferences.edit().remove("items").commit();File[] files=directory.listFiles();if(files!=null)for(File file:files)file.delete();}
+  synchronized void clear(){preferences.edit().remove("items").remove("excluded").commit();File[] files=directory.listFiles();if(files!=null)for(File file:files)file.delete();}
 }

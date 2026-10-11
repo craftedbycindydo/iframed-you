@@ -1,0 +1,451 @@
+{
+  "date": "2026-10-11",
+  "version": "2.12.3",
+  "synthetic": true,
+  "runtimeErrors": [],
+  "screenshots": [
+    {
+      "id": "overview",
+      "title": "Overview \u00b7 unchanged",
+      "group": "Context",
+      "notes": "",
+      "file": "screenshots/overview.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-appearance",
+      "title": "Settings \u00b7 appearance",
+      "group": "Areas",
+      "notes": "",
+      "file": "screenshots/settings-appearance.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-momo",
+      "title": "Settings \u00b7 momo",
+      "group": "Areas",
+      "notes": "",
+      "file": "screenshots/settings-momo.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-weather",
+      "title": "Settings \u00b7 weather",
+      "group": "Areas",
+      "notes": "",
+      "file": "screenshots/settings-weather.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-photos",
+      "title": "Settings \u00b7 photos",
+      "group": "Areas",
+      "notes": "",
+      "file": "screenshots/settings-photos.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-calendars",
+      "title": "Settings \u00b7 calendars",
+      "group": "Areas",
+      "notes": "",
+      "file": "screenshots/settings-calendars.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-household",
+      "title": "Settings \u00b7 household",
+      "group": "Areas",
+      "notes": "",
+      "file": "screenshots/settings-household.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-services",
+      "title": "Settings \u00b7 services",
+      "group": "Areas",
+      "notes": "",
+      "file": "screenshots/settings-services.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-device",
+      "title": "Settings \u00b7 device",
+      "group": "Areas",
+      "notes": "",
+      "file": "screenshots/settings-device.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-calendar-review",
+      "title": "Settings \u00b7 calendar-review",
+      "group": "Areas",
+      "notes": "",
+      "file": "screenshots/settings-calendar-review.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "photo-choices",
+      "title": "Settings \u00b7 picture choices",
+      "group": "Areas",
+      "notes": "",
+      "file": "screenshots/photo-choices.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "calendar-context",
+      "title": "Calendar options over Calendar",
+      "group": "Context",
+      "notes": "",
+      "file": "screenshots/calendar-context.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-dark",
+      "title": "Settings \u00b7 dark mode",
+      "group": "Appearance",
+      "notes": "",
+      "file": "screenshots/settings-dark.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-960x540",
+      "title": "Settings \u00b7 960\u00d7540",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-960x540.jpg",
+      "viewport": [
+        960,
+        540
+      ],
+      "scroll": [
+        960,
+        540
+      ]
+    },
+    {
+      "id": "review-large-960x540",
+      "title": "Inviter review \u00b7 larger text \u00b7 960\u00d7540",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/review-large-960x540.jpg",
+      "viewport": [
+        960,
+        540
+      ],
+      "scroll": [
+        960,
+        540
+      ]
+    },
+    {
+      "id": "settings-1280x800",
+      "title": "Settings \u00b7 1280\u00d7800",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-1280x800.jpg",
+      "viewport": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ]
+    },
+    {
+      "id": "review-large-1280x800",
+      "title": "Inviter review \u00b7 larger text \u00b7 1280\u00d7800",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/review-large-1280x800.jpg",
+      "viewport": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ]
+    },
+    {
+      "id": "settings-1440x900",
+      "title": "Settings \u00b7 1440\u00d7900",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-1440x900.jpg",
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ]
+    },
+    {
+      "id": "review-large-1440x900",
+      "title": "Inviter review \u00b7 larger text \u00b7 1440\u00d7900",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/review-large-1440x900.jpg",
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ]
+    },
+    {
+      "id": "settings-1920x1080",
+      "title": "Settings \u00b7 1920\u00d71080",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-1920x1080.jpg",
+      "viewport": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "id": "review-large-1920x1080",
+      "title": "Inviter review \u00b7 larger text \u00b7 1920\u00d71080",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/review-large-1920x1080.jpg",
+      "viewport": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "id": "settings-1920x1200",
+      "title": "Settings \u00b7 1920\u00d71200",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-1920x1200.jpg",
+      "viewport": [
+        1920,
+        1200
+      ],
+      "scroll": [
+        1920,
+        1200
+      ]
+    },
+    {
+      "id": "review-large-1920x1200",
+      "title": "Inviter review \u00b7 larger text \u00b7 1920\u00d71200",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/review-large-1920x1200.jpg",
+      "viewport": [
+        1920,
+        1200
+      ],
+      "scroll": [
+        1920,
+        1200
+      ]
+    },
+    {
+      "id": "settings-390x844",
+      "title": "Settings \u00b7 390\u00d7844",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-390x844.jpg",
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        1171
+      ]
+    },
+    {
+      "id": "review-large-390x844",
+      "title": "Inviter review \u00b7 larger text \u00b7 390\u00d7844",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/review-large-390x844.jpg",
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        1182
+      ]
+    }
+  ],
+  "browserChecks": [
+    "Settings lightbox preserves context, traps focus and dismisses safely",
+    "Settings categories and feature return routes",
+    "Photo choices live in Settings and persist through refresh, reload and undo",
+    "Three slideshow styles and duplicate-free collage",
+    "Simple month calendar, Settings visibility, search, metadata and event countdown",
+    "Household note, shopping undo, countdown, timer and restart persistence",
+    "Manual privacy pause and safe restore",
+    "Optional navigation and display preference transfer",
+    "Owner-curated YouTube shortcut persistence",
+    "Photo icons and touch controls fit short landscape and narrow viewports",
+    "geometry 960\u00d7540 standard",
+    "geometry 960\u00d7540 large",
+    "geometry 1024\u00d7640 standard",
+    "geometry 1024\u00d7640 large",
+    "geometry 1280\u00d7720 standard",
+    "geometry 1280\u00d7720 large",
+    "geometry 1280\u00d7800 standard",
+    "geometry 1280\u00d7800 large",
+    "geometry 1440\u00d7900 standard",
+    "geometry 1440\u00d7900 large",
+    "geometry 1600\u00d7900 standard",
+    "geometry 1600\u00d7900 large",
+    "geometry 1920\u00d71080 standard",
+    "geometry 1920\u00d71080 large",
+    "geometry 1920\u00d71200 standard",
+    "geometry 1920\u00d71200 large",
+    "geometry 390\u00d7844 standard",
+    "geometry 390\u00d7844 large"
+  ],
+  "browserResult": {
+    "checks": 29,
+    "screenshots": 0,
+    "loadRetries": 0,
+    "runtimeErrors": 0
+  },
+  "unitTests": {
+    "javascript": 53,
+    "python": 14
+  },
+  "deviceAcceptance": {
+    "model": "D156",
+    "android": "12",
+    "webview": "95.0.4638.74",
+    "transport": "identity-verified USB",
+    "physicalResolution": [
+      1920,
+      1080
+    ],
+    "cssViewport": [
+      1280,
+      720
+    ],
+    "checks": [
+      "Upgrade has no first-run setup interruption",
+      "Physical Settings shortcut opens a dialog over Overview",
+      "All nine areas fit the actual 1280\u00d7720 CSS frame viewport",
+      "Physical swipe scrolls settings content with the close control fixed",
+      "Physical Close returns to Overview",
+      "Calendar options open the right area; physical Android Back returns to Calendar",
+      "Physical backdrop touch returns to Calendar",
+      "Photo settings close back to the library",
+      "Reopened guide and its direct settings route retain empty credential fields",
+      "Settings remains open beyond the configured native automatic-photo idle delay"
+    ],
+    "runtimeErrors": [],
+    "privateScreenshotCount": 13
+  }
+}

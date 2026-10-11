@@ -35,7 +35,8 @@ not a household account. They demonstrate the interface, not a live service sign
 | --- | --- |
 | ![Calendar](docs/screenshots/calendar-linen.jpg) | ![Appearance settings](docs/screenshots/appearance.jpg) |
 
-[Latest slideshow controls and APK](docs/reviews/2026-10-11-controls/index.html).
+[Latest Settings navigation, gallery curation and APK](docs/reviews/2026-10-11-gallery-curation/index.html).
+[Slideshow controls report](docs/reviews/2026-10-11-controls/index.html).
 [October 11 refinement report with revised screenshots](docs/reviews/2026-10-11-refinement/index.html).
 [Earlier implementation report](docs/reviews/2026-10-11-implementation/index.html).
 
@@ -45,12 +46,12 @@ not a household account. They demonstrate the interface, not a live service sign
 | --- | --- |
 | Overview | One-screen clock/date, illustrated current weather, recent photos when available, and three upcoming events |
 | Weather | Live Open-Meteo forecast, city search, hourly and five-day outlook, saved forecast when offline, nine illustrated condition scenes with day/night variants |
-| Photos | Shared Google album or a private Gmail picture cache; browse/zoom, favourites, reversible hide, Fit/Fill and captions, three styles, shuffle/repeat, configurable mail checks and optional exact sender rule |
+| Photos | Shared Google album or a private Gmail picture cache; browse/zoom, favourites, persistent trash/exclusion with Undo, date/count retention, Fit/Fill and captions, three styles, shuffle/repeat, configurable mail checks and optional exact sender rule |
 | Calendar | Read-only month and selected-date agenda, source visibility in Settings, editable labels/colours, loaded-date search, direct Google iCal feeds, offline cache and on-frame inviter review |
 | Home | Google Home’s website, using its supported controls and your own session |
 | YouTube | Touch-friendly mobile site or standard website, with full-screen video support |
 | Momo | Procedural Canvas 2D character, reactions, accessory gallery, daily outfits, night snoozes and morning yawns |
-| Settings | Focused categories, six paired palettes, astronomical mode, larger text, Overview presets, optional navigation, quiet hours/privacy pause, service recovery and non-secret display transfer |
+| Settings | Lightbox over the current screen, left-side category navigation, six paired palettes, astronomical mode, larger text, Overview presets, optional navigation, quiet hours/privacy pause, service recovery and non-secret display transfer |
 | Household · optional | Local pinned note, shopping checklist with undo, countdowns and visible timers; no phone sync or background-alert promise |
 | First-run guide | A three-step on-frame guide for city, photos and calendar; reopen it from Settings at any time |
 

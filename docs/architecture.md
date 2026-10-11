@@ -122,8 +122,11 @@ local JavaScript; no framework, hosted service or phone synchronization was adde
 `skylit.frame` stores display/playback/quiet preferences; `skylit.household` stores
 notes, shopping items, countdowns and visible timers. Timers survive restart as end
 timestamps but promise no background alarm, sound or phone notification. Photo
-choices are bounded by current hashed IDs and a native cache epoch, cleared when
-an account changes or its cache is erased. Hidden items are excluded before every
+favourite/framing/caption choices are bounded by current hashed IDs and a native
+cache epoch, cleared when an account changes or its cache is erased. Native
+exclusion hashes are separate, survive image pruning and are checked before an
+attachment can enter the cache. They are bounded to 4,096 and clear only through
+restore, account change or explicit cache erase/disconnect. Hidden items are excluded before every
 playback/Overview selection. Calendar visibility is an independent display rule
 applied after inviter approval; the month/selected-date agenda is the only view.
 Legacy Week/Today choices are ignored. Source metadata stays in native private storage.
@@ -151,3 +154,22 @@ review has a separate panel, sharing the existing controller and approval storag
 Photo source, per-picture choices and playback preferences stay in Settings; the
 player exposes only transport and zoom. Overview prints and Weather presentation
 return to their 2.11 arrangement while retaining adaptive landscape bounds.
+
+In 2.12.3, `workspace.js` moves that editor into a body-level Settings dialog. The
+active dashboard tab remains underneath. A fixed heading/category/close region
+sits above an internally scrolling editor. The dialog traps keyboard focus, masks
+the shell from accessibility navigation, and restores the original focus on
+Close, backdrop click, Escape or Android Back. Explicit app navigation closes it.
+The Android idle callback defers automatic photo/quiet entry while Settings is
+open; browser quiet scheduling follows the same rule. No preference storage
+format changes. The implementation uses APIs supported by WebView 95.
+
+In 2.13.0, Settings has a left-side category rail inside its dialog and uses the
+labelled selector only on narrow previews. Native photo retention accepts 7/30/90/180
+days or a zero-day count mode. Count mode reads the most recent 1,000 inbox messages
+without an age cutoff; all modes retain the existing 100-part per-check limit.
+`PhotoStore` gives visible pictures their selected capacity first, retains excluded
+cached copies for Undo only when space remains, and caps all images together at 50.
+Its synchronized exclusion/add/prune operations prevent refresh races. Exclusion
+hashes are available only to the local dashboard; stale callbacks reread current
+native rules before rendering. Legacy hidden choices migrate to native exclusions.

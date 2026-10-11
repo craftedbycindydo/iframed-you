@@ -41,7 +41,7 @@ public class MainActivity extends Activity {
   private int remoteGeneration=0, dashboardCrashes=0;
   private boolean exitArmed;
   private float exitX,exitY;
-  private final Runnable idleTask=()->{final int generation=idleGeneration;if(dashboard==null)return;dashboard.evaluateJavascript("!!(window.SkylitWorkspace&&window.SkylitWorkspace.idle())",value->{if(generation!=idleGeneration||!foreground||remote!=null||localPhotosOpen)return;if("true".equals(value)){quietOpen=true;pauseMomo(true);dashboard.evaluateJavascript("window.SkylitWorkspace&&window.SkylitWorkspace.pause(true)",null);}else if(prefs.getInt("idle",120)>0&&"email".equals(prefs.getString("photo_source","album"))&&photos.list().length()>0)openLocalPhotos(true);else if(prefs.getInt("idle",120)>0&&validAlbum(prefs.getString("album","")))openRemote(prefs.getString("album",""),true,true);else resetIdle();});};
+  private final Runnable idleTask=()->{final int generation=idleGeneration;if(dashboard==null)return;dashboard.evaluateJavascript("window.SkylitApp&&window.SkylitApp.settingsOpen&&window.SkylitApp.settingsOpen()?null:!!(window.SkylitWorkspace&&window.SkylitWorkspace.idle())",value->{if(generation!=idleGeneration||!foreground||remote!=null||localPhotosOpen)return;if("null".equals(value)){resetIdle();return;}if("true".equals(value)){quietOpen=true;pauseMomo(true);dashboard.evaluateJavascript("window.SkylitWorkspace&&window.SkylitWorkspace.pause(true)",null);}else if(prefs.getInt("idle",120)>0&&"email".equals(prefs.getString("photo_source","album"))&&photos.list().length()>0)openLocalPhotos(true);else if(prefs.getInt("idle",120)>0&&validAlbum(prefs.getString("album","")))openRemote(prefs.getString("album",""),true,true);else resetIdle();});};
   private final Runnable photoCheckTask=new Runnable(){@Override public void run(){if(photoMail!=null)photoMail.maybeSync();handler.postDelayed(this,60000L);}};
   private final Runnable exitTask=()->{exitArmed=false;openStockApp();};
 
@@ -101,6 +101,8 @@ public class MainActivity extends Activity {
     @JavascriptInterface public String photoStatus(){return photoMail.status().toString();}
     @JavascriptInterface public boolean photoConnect(String email,String appPassword){return photoMail.connect(email,appPassword);}
     @JavascriptInterface public boolean photoConfigure(int days,int maximum){return photoMail.configure(days,maximum);}
+    @JavascriptInterface public boolean photoExclude(String id,boolean excluded){return photoMail.exclude(id,excluded);}
+    @JavascriptInterface public boolean photoRestoreExcluded(){return photoMail.restoreExcluded();}
     @JavascriptInterface public boolean photoDelivery(String raw){return photoMail.delivery(raw);}
     @JavascriptInterface public String photoDeliverySettings(){return photoMail.deliverySettings();}
     @JavascriptInterface public boolean photoEraseCache(){return photoMail.eraseCache();}

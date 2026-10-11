@@ -185,3 +185,27 @@ labelled area selector above a single editor column. Existing calendars precede 
 collapsed add form. Inviter review opens its own panel with pending/approved
 choices first and setup below. Capture viewport images for comparisons: full-page
 captures of a sticky rail can misrepresent its actual screen position.
+
+## Settings lightbox — 2.12.3
+
+Open Settings over the current screen, with a dimmed background and one editor
+column. Keep its heading, area selector and 48-pixel Close button fixed while
+content scrolls. Size the dialog from both viewport dimensions, with comfortable
+margins on landscape displays and smaller margins on a narrow preview. Retain
+warm light/dark surfaces, larger text, the existing categories and disclosures.
+Closing returns to the underlying screen and original control; switching areas
+keeps that context. Setup links use the same dialog, returning to the guide.
+Pause automatic photo and quiet-hour entry while the owner is using Settings.
+
+## Settings navigation and gallery curation — 2.13.0
+
+Inside the Settings lightbox, use a left-side category rail for landscape screens,
+with its own scroll on short displays. Keep a single editor column and fixed Close
+button. Narrow previews retain the labelled selector. The underlying dashboard
+context and focus-return behavior remain the same.
+
+The emailed-photo library places a 48-pixel trash action on each thumbnail as a
+separate button, avoiding nested controls and accidental viewer opening. It means
+exclude from this frame, with Undo and restore in Settings. Use one retention
+selector with date/count groups; capacity is shown only for date-based choices.
+Keep all further delivery/curation controls in Settings and the player minimal.

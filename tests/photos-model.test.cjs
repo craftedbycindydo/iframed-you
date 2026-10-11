@@ -25,3 +25,11 @@ test('last check displays in the configured city time rather than Android timezo
   assert.match(caption,/6:26/);
   assert.doesNotMatch(caption,/10:26/);
 });
+
+test('retention accepts recent-day and count modes with bounded persistent exclusions',()=>{
+ for(const days of [0,7,30,90,180])assert.equal(Photos.normalize({days}).days,days);
+ for(const days of [-1,1,365,Infinity,'30'])assert.equal(Photos.normalize({days}).days,30);
+ const id='a'.repeat(64),state=Photos.normalize({excluded:[id,id,'../file','https://example.invalid/photo.jpg',null]});
+ assert.deepEqual(state.excluded,[id]);
+ assert.equal(Photos.normalize({excluded:Array.from({length:5000},(_,i)=>i.toString(16).padStart(64,'0'))}).excluded.length,4096);
+});

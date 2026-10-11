@@ -45,8 +45,10 @@ Only one check runs at a time. Automatic failures back off from five minutes to
 one hour; the last good cache is retained. **Check now** starts an immediate check. It scans recent inbox
 messages, accepts image parts with sane dimensions and size, resizes them to at most
 2400 pixels on the long edge, removes EXIF metadata by re-encoding, and keeps a
-private cache of the newest 5–50 unique pictures from the chosen 30- or 90-day
-window. The default is 30 pictures from 30 days. Email bodies and sender data are
+private cache of up to 50 unique pictures. Gallery retention can use the last
+7, 30, 90 or 180 days (by email received date), with a separate 5–50-picture
+capacity, or the last 10, 20, 30, 40 or 50 non-excluded photos regardless of age.
+The default remains 30 pictures from 30 days; existing preferences are retained. Email bodies and sender data are
 not saved. Other mail folders and cloud photo albums are not scanned. A picture
 deleted from email may remain until its retention window expires or the user
 disconnects. When offline, the last saved pictures remain playable.
@@ -59,20 +61,42 @@ the same signing key retains settings; uninstalling removes the private cache.
 
 ## Presentation, local choices and delivery policy
 
-**Photo settings** opens the shared Photos category with a return route. Presentation
+**Photo settings** opens the shared Photos category in the Settings lightbox.
+Its left-side navigation stays available while the editor scrolls. Presentation
 contains style, speed, shuffle, repeat, favourites-only playback and an Overview
 favourite preference. These apply to cached emailed pictures; a shared album uses
 Google's player. Open **Settings → Photos → Local picture choices**, select a
-picture, and favourite/hide it, choose **Fit** (the default, whole image) or **Fill**,
+picture, and favourite/exclude it, choose **Fit** (the default, whole image) or **Fill**,
 or add a local caption. Received dates appear there; Skylit does not infer capture
 dates or identify people. The photo viewer has only Previous, Play/Pause, Zoom/Fit,
 Next and Close, each shown as an icon with an accessible name.
 
-Hidden pictures stay out of every slideshow and Overview. Undo a hide in Photos,
-or use **Photo settings → Local picture choices** to show/restore hidden items.
-Choices use deduplicated picture IDs and survive refresh/reordering; expired pictures
-are pruned from local choices. Changing the Gmail account or erasing/disconnecting
-its cache clears choices. These actions never delete email messages.
+Each gallery thumbnail has a trash icon. It **excludes** that picture from this
+frame's gallery, Overview and every slideshow; it never deletes email. Undo is
+available immediately. Exclusions are stored privately by the original image's
+SHA-256 ID, so Check now, restart, cache expiry, pruning and a later import of the
+same file do not restore an unwanted photo. Different file bytes have a different
+ID; this is not a visual-similarity or person-recognition filter.
+
+Use **Photo settings → Local picture choices** to show excluded pictures still
+cached, restore one, or restore all exclusions. If its cached copy has expired,
+restoring permits the next Check now to import it again. Excluded pictures do not
+consume the selected gallery count. A cached excluded copy can remain for Undo
+when space permits, but all cached images together stay bounded to 50. Hash-only
+exclusions remain when their image is removed, with a limit of 4,096 exclusions.
+At the limit, new exclusions are refused rather than silently forgetting old ones.
+Changing the Gmail account, disconnecting or explicitly erasing the cache also
+clears exclusions and local choices. Favourite, framing and caption choices are
+kept for currently cached IDs and are pruned when those pictures expire.
+
+**Gallery retention** lives under **Photo settings → Storage**. Date choices use
+received time rather than capture dates. Count choices keep the newest eligible,
+non-excluded unique files without an age cutoff. Each check still scans at most
+1,000 inbox messages and 100 image parts, so a very large inbox may yield fewer
+than the requested number. The optional sender rule applies before import. Lowering
+retention/capacity removes old cached files immediately; expanding it does not
+restore them until Check now imports eligible files again. Favourites-only playback
+and favourite preference on Overview affect presentation, not retention.
 
 Delivery's optional trusted-sender list accepts up to 50 exact addresses. When
 switched on, all From addresses must match before attachments are saved. Empty or
@@ -82,9 +106,10 @@ saved pictures only** clears the cache while retaining the connection. Disconnec
 also removes the credential. Both erase routes require a second tap; revoke the
 app password in Google separately. Connection fields remain empty when reopened.
 
-The new schedule/filter code has automated policy checks and a signed build. Its
-real selected-window delivery, failure recovery and long-term pruning still require
-physical-frame acceptance; do not describe those as verified from a browser demo.
+Retention, pruning, deduplication, exclusion persistence and restore are exercised
+by the actual PhotoStore on the frame using isolated synthetic images. Live mail
+checks and household UI acceptance are recorded separately in [verification](verification.md);
+these tests do not establish long-term unattended mail reliability.
 
 ## Limits and verification
 

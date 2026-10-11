@@ -1,0 +1,516 @@
+{
+  "date": "2026-10-11",
+  "version": "2.13.0",
+  "synthetic": true,
+  "screenshots": [
+    {
+      "id": "gallery",
+      "title": "Gallery \u00b7 exclusion controls",
+      "group": "Gallery",
+      "notes": "",
+      "file": "screenshots/gallery.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "gallery-excluded",
+      "title": "Gallery \u00b7 excluded picture and Undo",
+      "group": "Gallery",
+      "notes": "",
+      "file": "screenshots/gallery-excluded.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-appearance",
+      "title": "Settings \u00b7 appearance",
+      "group": "Settings",
+      "notes": "",
+      "file": "screenshots/settings-appearance.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-momo",
+      "title": "Settings \u00b7 momo",
+      "group": "Settings",
+      "notes": "",
+      "file": "screenshots/settings-momo.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-weather",
+      "title": "Settings \u00b7 weather",
+      "group": "Settings",
+      "notes": "",
+      "file": "screenshots/settings-weather.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-photos",
+      "title": "Settings \u00b7 photos",
+      "group": "Settings",
+      "notes": "",
+      "file": "screenshots/settings-photos.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-calendars",
+      "title": "Settings \u00b7 calendars",
+      "group": "Settings",
+      "notes": "",
+      "file": "screenshots/settings-calendars.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-calendar-review",
+      "title": "Settings \u00b7 calendar-review",
+      "group": "Settings",
+      "notes": "",
+      "file": "screenshots/settings-calendar-review.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-household",
+      "title": "Settings \u00b7 household",
+      "group": "Settings",
+      "notes": "",
+      "file": "screenshots/settings-household.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-services",
+      "title": "Settings \u00b7 services",
+      "group": "Settings",
+      "notes": "",
+      "file": "screenshots/settings-services.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-device",
+      "title": "Settings \u00b7 device",
+      "group": "Settings",
+      "notes": "",
+      "file": "screenshots/settings-device.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "retention-count",
+      "title": "Retention \u00b7 last 30 photos",
+      "group": "Retention",
+      "notes": "",
+      "file": "screenshots/retention-count.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "retention-days",
+      "title": "Retention \u00b7 last 90 days",
+      "group": "Retention",
+      "notes": "",
+      "file": "screenshots/retention-days.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "photo-choices",
+      "title": "Settings \u00b7 local curation",
+      "group": "Retention",
+      "notes": "",
+      "file": "screenshots/photo-choices.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "settings-dark",
+      "title": "Settings \u00b7 dark appearance",
+      "group": "Appearance",
+      "notes": "",
+      "file": "screenshots/settings-dark.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "gallery-960x540",
+      "title": "Gallery \u00b7 960\u00d7540",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/gallery-960x540.jpg",
+      "viewport": [
+        960,
+        540
+      ],
+      "scroll": [
+        960,
+        608
+      ]
+    },
+    {
+      "id": "settings-960x540",
+      "title": "Settings \u00b7 960\u00d7540",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-960x540.jpg",
+      "viewport": [
+        960,
+        540
+      ],
+      "scroll": [
+        960,
+        608
+      ]
+    },
+    {
+      "id": "settings-large-960x540",
+      "title": "Inviter review \u00b7 larger text \u00b7 960\u00d7540",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-large-960x540.jpg",
+      "viewport": [
+        960,
+        540
+      ],
+      "scroll": [
+        960,
+        617
+      ]
+    },
+    {
+      "id": "gallery-1280x800",
+      "title": "Gallery \u00b7 1280\u00d7800",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/gallery-1280x800.jpg",
+      "viewport": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ]
+    },
+    {
+      "id": "settings-1280x800",
+      "title": "Settings \u00b7 1280\u00d7800",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-1280x800.jpg",
+      "viewport": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ]
+    },
+    {
+      "id": "settings-large-1280x800",
+      "title": "Inviter review \u00b7 larger text \u00b7 1280\u00d7800",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-large-1280x800.jpg",
+      "viewport": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ]
+    },
+    {
+      "id": "gallery-1440x900",
+      "title": "Gallery \u00b7 1440\u00d7900",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/gallery-1440x900.jpg",
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ]
+    },
+    {
+      "id": "settings-1440x900",
+      "title": "Settings \u00b7 1440\u00d7900",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-1440x900.jpg",
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ]
+    },
+    {
+      "id": "settings-large-1440x900",
+      "title": "Inviter review \u00b7 larger text \u00b7 1440\u00d7900",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-large-1440x900.jpg",
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ]
+    },
+    {
+      "id": "gallery-1920x1080",
+      "title": "Gallery \u00b7 1920\u00d71080",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/gallery-1920x1080.jpg",
+      "viewport": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "id": "settings-1920x1080",
+      "title": "Settings \u00b7 1920\u00d71080",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-1920x1080.jpg",
+      "viewport": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "id": "settings-large-1920x1080",
+      "title": "Inviter review \u00b7 larger text \u00b7 1920\u00d71080",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-large-1920x1080.jpg",
+      "viewport": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "id": "gallery-1920x1200",
+      "title": "Gallery \u00b7 1920\u00d71200",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/gallery-1920x1200.jpg",
+      "viewport": [
+        1920,
+        1200
+      ],
+      "scroll": [
+        1920,
+        1200
+      ]
+    },
+    {
+      "id": "settings-1920x1200",
+      "title": "Settings \u00b7 1920\u00d71200",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-1920x1200.jpg",
+      "viewport": [
+        1920,
+        1200
+      ],
+      "scroll": [
+        1920,
+        1200
+      ]
+    },
+    {
+      "id": "settings-large-1920x1200",
+      "title": "Inviter review \u00b7 larger text \u00b7 1920\u00d71200",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-large-1920x1200.jpg",
+      "viewport": [
+        1920,
+        1200
+      ],
+      "scroll": [
+        1920,
+        1200
+      ]
+    },
+    {
+      "id": "gallery-390x844",
+      "title": "Gallery \u00b7 390\u00d7844",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/gallery-390x844.jpg",
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        938
+      ]
+    },
+    {
+      "id": "settings-390x844",
+      "title": "Settings \u00b7 390\u00d7844",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-390x844.jpg",
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        938
+      ]
+    },
+    {
+      "id": "settings-large-390x844",
+      "title": "Inviter review \u00b7 larger text \u00b7 390\u00d7844",
+      "group": "Responsive",
+      "notes": "",
+      "file": "screenshots/settings-large-390x844.jpg",
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        973
+      ]
+    }
+  ],
+  "runtimeErrors": [],
+  "verification": {
+    "javascriptTests": 54,
+    "pythonTests": 14,
+    "browserChecks": 31,
+    "browserLoadRetries": 0,
+    "isolatedAndroidChecks": 44,
+    "physicalUiChecks": 14,
+    "physicalRetentionModes": 9,
+    "physicalRuntimeErrors": 0,
+    "liveMailCheckSucceeded": false,
+    "originalPreferencesPreserved": true,
+    "normalApkSha256": "4bcd1521e14057a043a7e6bcfcbb5880d2c00f2973818487d2d928676faeb6c5"
+  }
+}

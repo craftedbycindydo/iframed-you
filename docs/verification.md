@@ -1,5 +1,78 @@
 # Delivery verification — October 11, 2026
 
+## Version 2.13.0 — Settings navigation and gallery curation
+
+- Settings uses a left-side category rail inside its lightbox on landscape
+  screens, keeping a single scrolling editor, fixed header/Close and underlying
+  context. Narrow previews retain the labelled selector.
+- Gallery thumbnails have separate 48-pixel trash buttons. Exclusions keep photos
+  out of the gallery, Overview and all playback. Private original-file hash rules
+  survive Check now, image expiry/pruning and restart; native import checks them
+  before saving. Undo/restore remain available, with a 4,096-rule bound and no
+  silent eviction. Explicit cache erase/account change/disconnect clears rules.
+- Retention offers last 7/30/90/180 days with capacity, or last 10/20/30/40/50
+  non-excluded photos without an age cutoff. Count mode reads at most 1,000 recent
+  inbox messages; the existing 100-image-part limit remains. All cached images
+  together stay bounded to 50. Default and existing retention are preserved.
+- 54 JavaScript tests, 14 Python tests and 31 rendered browser checks pass. No
+  runtime errors or load retries. Visually reviewed 33 synthetic captures across
+  Settings, gallery/Undo, retention, dark mode and landscape/narrow/larger-text
+  variants. Public fixtures remain excluded from the APK.
+- The actual PhotoStore/Bitmap/JSON code passed 44 isolated Android checks on the
+  identity-verified USB D156: every retention option, deduplication, count capacity,
+  exclusion after reopening/pruning/reimport, restore/erase and import races.
+  Synthetic images and in-memory preferences were used in a temporary directory;
+  household cache/account data was untouched by that harness.
+- Normal signed 2.13.0 (version code 23), valid v1/v2/v3 signatures. Installed in
+  place with the same signing key on Android 12 / WebView 95 at 1920×1080 physical
+  and 1280×720 CSS. The installed APK matches the built artifact byte for byte.
+- Fourteen physical checks passed: every Settings area, internal swipe with fixed
+  header, all nine retention choices through the native bridge, trash, exclusion
+  from Overview/slideshow, Check now persistence, Undo, restore, actual app
+  restart, Calendar context/Android Back and the reopened guide with empty
+  credential fields. No runtime errors. Thirteen physical captures remain private.
+- Live Check now reported a mail error. Exclusion remained intact, but successful
+  real mail refresh/new import is unverified. Earlier weather/calendar refresh
+  failures also remain unresolved. Same-file reimport rejection was verified by
+  the isolated Android harness, without household credentials.
+- Original preference groups, mailbox configuration, two cached pictures, one
+  calendar configuration, retention and exclusions restored and verified. HOME
+  and the stock launcher preserved; temporary inspection and the task’s ADB
+  forward removed. Private upgrade/undo record copied to Downloads.
+- Source/history/APK public-data and Gitleaks history/source-export checks: zero
+  findings. APK SHA-256:
+  `4bcd1521e14057a043a7e6bcfcbb5880d2c00f2973818487d2d928676faeb6c5`.
+- [Report, rules and screenshots](reviews/2026-10-11-gallery-curation/index.html).
+
+## Version 2.12.3 — Settings lightbox
+
+- Settings now opens over the current tab, with a fixed heading, category selector
+  and Close button above an internally scrolling editor. Keeps category switching
+  in the same context and restores focus on Close/backdrop/Escape/Android Back.
+  Navigation and setup links close or reopen the shared editor appropriately.
+- Automatic photo/quiet entry defers while Settings is open, in both the Android
+  host and browser quiet scheduler. Preference storage formats are unchanged.
+- Passed 53 JavaScript tests, 14 Python tests and 29 rendered browser checks. Nine
+  viewport sizes, standard/larger text, focus, context, dismissal, scrolling,
+  existing photo/calendar behavior and setup routes passed. No browser runtime
+  errors or load retries. Visually reviewed 25 synthetic screenshots, including
+  every Settings area, dark mode and landscape/narrow variants.
+- Built normal signed 2.12.3 (version code 22), with valid v1/v2/v3 signatures.
+  Source/history/APK public-data inspection: zero findings.
+- Installed in place on the identity-verified USB D156 running Android 12 and
+  WebView 95, physical 1920×1080 / CSS 1280×720. Same signing certificate as the
+  installed 2.12.2. Saved preference hashes, photo account/configuration, two
+  cached pictures and one calendar configuration were preserved.
+- Ten physical checks passed: all areas, swipe/internal scroll with fixed header,
+  Close/outside tap/Android Back, Calendar/Photos context, reopened guide and empty
+  credential fields. Settings stayed open beyond the configured 120-second idle
+  delay; no photo interruption. No runtime errors. Thirteen frame screenshots
+  remain private. HOME and the stock launcher were preserved; per-launch inspection
+  was disabled after testing. Private upgrade/undo record copied to Downloads.
+- Earlier weather/calendar refresh failures remain unresolved; this UI acceptance
+  did not reverify live service synchronization.
+- [Report and screenshots](reviews/2026-10-11-settings-lightbox/index.html).
+
 ## Version 2.12.2 — Minimal slideshow controls
 
 - Removed visible text labels from the five player buttons. Retained icons,
