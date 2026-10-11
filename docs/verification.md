@@ -1,4 +1,90 @@
-# Delivery verification — October 10, 2026
+# Delivery verification — October 11, 2026
+
+## Version 2.12.2 — Minimal slideshow controls
+
+- Removed visible text labels from the five player buttons. Retained icons,
+  dynamic accessible names and generous touch targets; reduced the control bar
+  from 1000 to 600 CSS pixels at its maximum width.
+- Passed 53 JavaScript tests, 14 Python tests and seven focused browser checks:
+  browse/navigation, dynamic Play/Pause and Zoom/Fit, focus/close, three slideshow
+  styles, and control bounds at 1440×900, 1920×1080, 960×540 and 390×844, plus the
+  primary 1280×720 canvas. Nine synthetic captures; zero browser runtime errors.
+- Built normal signed 2.12.2 (version code 21); v1/v2/v3 signatures verify.
+  Source/history/APK public-data inspection: zero findings. Gitleaks 8.30.1
+  (official checksum verified) found no leaks in history or the proposed source
+  export. No installation or
+  device change. APK ready for later physical testing.
+- [Updated controls and screenshots](reviews/2026-10-11-controls/index.html).
+
+## Version 2.12.1 — Owner review refinements
+
+- Addressed all eight review comments. Restored Overview's larger cropped prints
+  and icon-only arrows; restored Weather's previous visual layout. Kept the wide
+  email-photo library, moved source selection and per-picture choices to Settings,
+  restored shared-album spacing and added labelled icons to player controls.
+- Calendar now has one month/selected-date agenda. Core Refresh, view picker,
+  Week/Today functionality and source chips are removed. Saved legacy modes are
+  ignored; source visibility and retry remain in Settings. Race, removal and
+  today-anchored Overview behavior remain covered.
+- Replaced the secondary Settings column with a labelled selector above one
+  editor column and a left-aligned heading/separate return. Existing calendars
+  precede a collapsed connection form. Inviter review opens a dedicated decision
+  view with setup collapsed, without showing connection fields first.
+- Passed 53 JavaScript tests, 14 Python tests and 28 reproducible browser checks,
+  plus four supplemental screenshot/interaction checks. Reviewed 231 synthetic
+  captures at the nine documented viewport sizes and both text profiles, including
+  all tabs, expanded Settings controls, player styles/icons, inviter decisions,
+  palettes and weather scenes. No runtime errors or first-load retries. No
+  horizontal overflow or landscape Overview/Calendar page scroll; month grids fit.
+- Built normal signed 2.12.1 (version code 20); v1/v2/v3 signatures verify. Final
+  source/history/APK public-data inspection has zero findings; empty household
+  configuration and fixture exclusion verified. Gitleaks is unavailable here and
+  remains a publication check. No publication occurred.
+- No installation or device change. The owner requested the APK ready for later
+  device testing; physical upgrade/setup, touch/WebView 95, real mail/calendar/Home
+  functionality and unattended reliability remain pending.
+- [Refinement report and screenshot gallery](reviews/2026-10-11-refinement/index.html)
+  includes the Settings critique, feature map, retained/deferred priorities and
+  exact later acceptance checklist. Earlier reports remain historical records.
+
+## Version 2.12 — Adaptive layouts and optional on-frame features
+
+- Implemented the October 11 review with fluid landscape 16:9 and 16:10 layouts,
+  bounded Overview presets, larger text and eight shared Settings categories.
+  Core Overview/Calendar fit without page scrolling. Household and its Overview
+  note are off by default; Home and YouTube navigation are optional. Warm palette
+  pairs, astronomical automatic mode, reduced motion and Momo are preserved.
+- Added photo favourites/hide/undo, per-photo Fit/Fill and local captions, bounded
+  replay preferences, coarse import progress, private exact-address sender rules,
+  configurable mail intervals and single-flight/backoff policy. Calendar adds
+  Week/Today, loaded-date title search, source visibility and private metadata
+  edits. Added local notes/list/countdowns/visible timers, quiet/privacy display,
+  curated exact-host YouTube links and strict non-secret preference transfer.
+- Final automated suites pass 53 JavaScript and 14 Python tests. Native mail,
+  sender, backoff and YouTube policies run in a pure Java harness. Extra Android
+  CalendarStore metadata cases are prepared but their device runtime test remains
+  pending. Browser checks total 29, with zero runtime errors or reload retries.
+- Reviewed 208 synthetic captures, including all main screens, Settings categories,
+  player/modes/recovery/setup, twelve palette-mode pairs and nine day/night weather
+  scenes. Nine viewport sizes each exercised standard/larger text: 960×540,
+  1024×640, 1280×720, 1280×800, 1440×900, 1600×900, 1920×1080, 1920×1200 and
+  390×844. No page has horizontal overflow. Overview/Calendar have no landscape
+  page overflow or month-grid clipping. Six calendars/long titles/fifty thumbnail
+  records are synthetic volume tests, not evidence of real mail deduplication.
+- The normal signed 2.12.0 APK (version code 19) builds and verifies v1/v2/v3
+  signatures. Source/history/APK public-data checks have zero findings; household
+  configuration is empty and demo fixtures are absent from the APK. Gitleaks was
+  not rerun in this pass and remains a publication check. No publication occurred.
+- The paired TLS wireless frame was unreachable. The owner explicitly requested
+  finishing with the APK ready for later device testing. No deployment, device
+  settings change, fresh Android install, upgrade or multi-day soak was performed.
+  Real mail delivery windows/pruning, private event updates/inviter decisions,
+  quiet first-touch/lifecycle behavior, Home operations and deep-link playback
+  remain unverified. The report includes the exact later acceptance procedure.
+- Full implementation report and capture manifest:
+  [October 11 implementation report](reviews/2026-10-11-implementation/index.html).
+  Original review remains available for before/after comparison. Frame screenshots
+  and household setup evidence must remain private.
 
 ## Version 2.11 — Weather scenes and duplicate-free collage
 

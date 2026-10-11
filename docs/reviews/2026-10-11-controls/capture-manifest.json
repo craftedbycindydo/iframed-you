@@ -1,0 +1,151 @@
+{
+  "version": "2.12.2",
+  "synthetic": true,
+  "checks": [
+    "Icon-only browsing and labelled library launcher",
+    "Zoom/Fit and Play/Pause keep icons and accessible names",
+    "All three slideshow styles",
+    "Touch targets and bounds 1440×900",
+    "Touch targets and bounds 1920×1080",
+    "Touch targets and bounds 960×540",
+    "Touch targets and bounds 390×844"
+  ],
+  "runtimeErrors": [],
+  "screenshots": [
+    {
+      "id": "browse",
+      "title": "Photo browser · minimal controls",
+      "group": "Controls",
+      "notes": "",
+      "file": "screenshots/browse.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "zoom",
+      "title": "Zoom · minimal controls",
+      "group": "Controls",
+      "notes": "",
+      "file": "screenshots/zoom.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "fade",
+      "title": "Slideshow · fade",
+      "group": "Styles",
+      "notes": "",
+      "file": "screenshots/fade.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "stack",
+      "title": "Slideshow · stack",
+      "group": "Styles",
+      "notes": "",
+      "file": "screenshots/stack.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "collage",
+      "title": "Slideshow · collage",
+      "group": "Styles",
+      "notes": "",
+      "file": "screenshots/collage.jpg",
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ]
+    },
+    {
+      "id": "controls-1440x900",
+      "title": "Controls · 1440×900",
+      "group": "Sizes",
+      "notes": "",
+      "file": "screenshots/controls-1440x900.jpg",
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ]
+    },
+    {
+      "id": "controls-1920x1080",
+      "title": "Controls · 1920×1080",
+      "group": "Sizes",
+      "notes": "",
+      "file": "screenshots/controls-1920x1080.jpg",
+      "viewport": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "id": "controls-960x540",
+      "title": "Controls · 960×540",
+      "group": "Sizes",
+      "notes": "",
+      "file": "screenshots/controls-960x540.jpg",
+      "viewport": [
+        960,
+        540
+      ],
+      "scroll": [
+        960,
+        608
+      ]
+    },
+    {
+      "id": "controls-390x844",
+      "title": "Controls · 390×844",
+      "group": "Sizes",
+      "notes": "",
+      "file": "screenshots/controls-390x844.jpg",
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        938
+      ]
+    }
+  ]
+}

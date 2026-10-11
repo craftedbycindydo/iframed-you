@@ -145,3 +145,43 @@ stack remains a generous, named button to Photos, while the label is gone. Print
 are larger and slightly spill over the Upcoming card edge. With only one or two
 saved pictures, collage changes to one or two frames instead of repeating a photo
 just to fill three slots.
+
+## Responsive landscape pass — 2.12
+
+Design for 16:9 and 16:10 landscape displays, using width and available height rather
+than treating 1280×720 as the only canvas. That size remains a checkpoint. Overview
+and the core month view have no page scroll; agendas/settings/libraries can scroll
+deliberately. Short landscapes reduce decorative space before touch targets. The
+optional larger-text profile keeps warm palettes; `appearance.js` owns its scale.
+Avoid selectors newer than Chromium 95 (for example `:has`).
+
+Settings has eight focused destinations with one shared editor per preference. New
+controls belong there or in on-demand photo/event details. Household navigation and
+the Overview note are off by default; healthy service timestamps remain off Overview.
+Three bounded Overview presets replace a freeform widget builder. Preserve Momo,
+the six light/dark pairs and independent offline solar appearance.
+
+Public before/after reports live under `docs/reviews/`. Use `scripts/check_ui.cjs`
+against the synthetic preview for interaction/landscape checks and capture manifests.
+The fixtures' repeated images in the 50-thumbnail stress case test layout volume,
+not import deduplication. Physical WebView 95 acceptance remains separate.
+
+## Owner feedback refinement — 2.12.1
+
+The 2.12 pass added clutter and compacted familiar screens too far. Restore the
+larger loose Overview prints and icon-only weather/calendar arrows. Weather uses
+its previous hero, metric and forecast spacing; remove its additional city action
+and sunrise text. The shared-album card and supporting cards regain their original
+width and padding. Keep the accepted full-width email-photo library.
+
+Photo source, favourite/hide, framing, captions and playback choices belong in
+Settings. The player contains icon-only buttons with accessible names for Previous, Play/Pause, Zoom/Fit,
+Next and Close. Calendar has one month/selected-date agenda, with no core Refresh,
+view picker or source chips. Visibility and retry belong in Settings.
+
+Settings previously created three competing columns and placed its heading between
+unrelated actions. Use a left-aligned heading, a separate contextual return and one
+labelled area selector above a single editor column. Existing calendars precede a
+collapsed add form. Inviter review opens its own panel with pending/approved
+choices first and setup below. Capture viewport images for comparisons: full-page
+captures of a sticky rail can misrepresent its actual screen position.

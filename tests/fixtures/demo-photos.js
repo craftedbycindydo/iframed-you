@@ -3,7 +3,7 @@
   const allNames=['marigolds','dog','cat','lake','orchard'];
   const requested=Number(new URLSearchParams(location.search).get('count'));
   const names=Number.isInteger(requested)&&requested>=1&&requested<=allNames.length?allNames.slice(0,requested):allNames;
-  const photos=names.map((name,index)=>({url:'demo-photos/'+name+'.png',at:Date.now()-index*86400000}));
+  const photos=names.map((name,index)=>({id:String(index+1).padStart(64,'0'),url:'demo-photos/'+name+'.png',at:Date.now()-index*86400000}));
   const normalize=window.SkylitPhotoModel.normalize;
   window.SkylitPhotoModel.normalize=raw=>{
     const base=normalize(raw);let parsed={};try{parsed=typeof raw==='string'?JSON.parse(raw):raw||{}}catch(_){}
@@ -11,7 +11,8 @@
     return Object.assign(base,{photos:safe});
   };
   Object.assign(window.Skylit,{
-    photoStatus:()=>JSON.stringify({connected:true,email:'demo@example.invalid',days:30,maximum:30,lastSync:Date.now(),busy:false,error:'',photos}),
+    photoStatus:()=>JSON.stringify({epoch:'synthetic-cache',connected:true,email:'demo@example.invalid',days:30,maximum:30,lastSync:Date.now(),busy:false,error:'',photos}),
+    photoDeliverySettings:()=>JSON.stringify({interval:3600,trusted:false,senders:[]}),photoDelivery(){return true;},configureQuiet(){},privacyPause(){},ambientClosed(){},
     photoSource(){},photoRefresh(){},photoConfigure(){return true},
     photoOpen(idle){setTimeout(()=>window.SkylitPhotos.open(idle),0)},
     photoBrowse(index){setTimeout(()=>window.SkylitPhotos.open(false,index,false),0)},

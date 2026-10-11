@@ -3,7 +3,7 @@
 ## Available in version 2.5
 
 Calendar now renders inside Skylit, with a month grid, a two-week agenda from the
-selected date, and expandable event details. **Calendar → Manage calendars** opens
+selected date, and expandable event details. **Calendar → Calendar options** opens
 the setup form. Up to six Google iCal feeds are supported, each with its own colour.
 The desktop browser preview does not connect feeds; enter private links on the frame.
 
@@ -15,7 +15,7 @@ Google Calendar on its phones or computers. Refresh is periodic, not instant pus
 
 ## Review inviters on the frame
 
-**Calendar → Review inviters** controls which event organizers appear in Skylit.
+**Calendar → Calendar options → Review who appears on this frame** controls which event organizers appear in Skylit.
 Enter the calendar account's email first, then turn on **Review new inviters before
 showing their events**. Its own events remain visible. Other organizers wait in a
 review list until their exact email address is approved. Remove an address to hide
@@ -40,9 +40,29 @@ management is not required for this local display filter.
 
 Verify with a real invitation from a new organizer: it should wait in Review,
 appear after approval, and disappear after approval is removed. Then cancel or
-uninvite the event in Google Calendar and confirm it disappears after Refresh.
+uninvite the event in Google Calendar and confirm it disappears after the next refresh.
 Until that test is done, organizer extraction is covered by synthetic feed tests,
 not verified against this household's live invitation feed.
+
+## Views and source choices
+
+Calendar keeps one six-row month grid beside a selected-date two-week agenda. The
+Today button returns to the current month/date; it does not change to a separate
+view. Week/Today agenda modes were removed in 2.12.1. Saved legacy mode choices are
+ignored on upgrade. Source visibility lives beside each calendar in Settings and
+also applies to Overview, which remains anchored to today while browsing months.
+
+**Search** filters titles only within the loaded 70-day month window. It does not
+search all calendar history and does not filter Overview. Event details can add a
+local Household countdown; this does not modify the source calendar.
+
+Calendar options opens the shared Calendars Settings category with **Back to
+Calendar**. The Settings area selector sits above a single editor column. Edit a label/colour independently of its secret address; cache acceptance
+preserves metadata edited during a refresh. Removal still deletes the feed and its
+saved data locally, with Google-side revocation handled separately. Inviter decisions
+have their own Settings view; setup is collapsed below them. Calendar connections
+remain in Calendars, with the add form collapsed until needed. The prominent review button
+appears only when loaded events are waiting.
 
 ## Guided household setup
 
@@ -54,7 +74,7 @@ Agents should guide the owner through this flow:
 2. Open **Settings**, select the calendar under **Settings for my calendars**, then
    **Integrate calendar**. Copy **Secret address in iCal format**. This is different
    from a public calendar address, sharing link, embed code or Calendar website URL.
-3. On the frame, open **Calendar → Manage calendars** and enter the link into
+3. On the frame, open **Calendar → Calendar options** and enter the link into
    **Secret iCal address**. Choose **Connect calendar**. The agent should not ask for it in chat or print
    it in tool output. Give the calendar a friendly label and colour.
 4. Wait for **Connected** in the calendar list, then open **Calendar** to see events. Repeat for
@@ -64,8 +84,8 @@ Agents should guide the owner through this flow:
    and a recurring event where available. Check that an owner-made event change
    appears after refresh before reporting synchronization as working.
 6. Explain that events are edited in Google Calendar. The view shows its last refresh
-   time; updates run every 15 minutes and **Refresh** retries immediately. To remove
-   a calendar, open **Manage calendars → Remove → Tap to confirm**. To replace a
+   time; updates run every 15 minutes and **Settings → Device & status → Calendars → Retry** retries immediately. To remove
+   a calendar, open **Calendar options → Remove → Tap to confirm**. To replace a
    revoked or incorrect address, remove the old entry and connect the current link.
 
 If the secret address is unavailable, check calendar ownership and any Workspace

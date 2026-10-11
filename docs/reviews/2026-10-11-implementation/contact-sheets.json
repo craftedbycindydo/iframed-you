@@ -1,0 +1,354 @@
+[
+  {
+    "file": "contact-sheet-01.jpg",
+    "group": "Main screens",
+    "ids": [
+      "overview",
+      "weather",
+      "photos",
+      "calendar",
+      "home",
+      "youtube",
+      "settings",
+      "setup",
+      "household"
+    ]
+  },
+  {
+    "file": "contact-sheet-02.jpg",
+    "group": "Settings",
+    "ids": [
+      "settings-appearance",
+      "settings-momo",
+      "settings-weather",
+      "settings-photos",
+      "settings-calendars",
+      "settings-household",
+      "settings-services",
+      "settings-device",
+      "preferences-transfer"
+    ]
+  },
+  {
+    "file": "contact-sheet-03.jpg",
+    "group": "Photos",
+    "ids": [
+      "photo-browser",
+      "photo-options",
+      "slideshow-fade",
+      "slideshow-stack",
+      "slideshow-collage",
+      "photos-album"
+    ]
+  },
+  {
+    "file": "contact-sheet-04.jpg",
+    "group": "Calendar",
+    "ids": [
+      "calendar-week",
+      "calendar-today",
+      "calendar-month",
+      "calendar-search",
+      "calendar-details",
+      "calendar-inviters"
+    ]
+  },
+  {
+    "file": "contact-sheet-05.jpg",
+    "group": "Household",
+    "ids": [
+      "household-populated",
+      "overview-note"
+    ]
+  },
+  {
+    "file": "contact-sheet-06.jpg",
+    "group": "Privacy",
+    "ids": [
+      "privacy-pause"
+    ]
+  },
+  {
+    "file": "contact-sheet-07.jpg",
+    "group": "Layouts",
+    "ids": [
+      "overview-balanced",
+      "overview-photos",
+      "overview-agenda"
+    ]
+  },
+  {
+    "file": "contact-sheet-08.jpg",
+    "group": "Appearance",
+    "ids": [
+      "theme-linen-light",
+      "theme-linen-dark",
+      "theme-sage-light",
+      "theme-sage-dark",
+      "theme-stone-light",
+      "theme-stone-dark",
+      "theme-ocean-light",
+      "theme-ocean-dark",
+      "theme-plum-light",
+      "theme-plum-dark",
+      "theme-contrast-light",
+      "theme-contrast-dark"
+    ]
+  },
+  {
+    "file": "contact-sheet-09.jpg",
+    "group": "Setup",
+    "ids": [
+      "setup-fresh",
+      "photo-connect",
+      "setup-unverified"
+    ]
+  },
+  {
+    "file": "contact-sheet-10.jpg",
+    "group": "Recovery",
+    "ids": [
+      "overview-empty",
+      "weather-empty",
+      "calendar-empty",
+      "photos-empty",
+      "photos-error",
+      "photos-no-pictures",
+      "weather-offline",
+      "overview-offline",
+      "calendar-offline",
+      "status-offline"
+    ]
+  },
+  {
+    "file": "contact-sheet-11.jpg",
+    "group": "Responsive",
+    "ids": [
+      "responsive-960x540-standard-overview",
+      "responsive-960x540-standard-calendar",
+      "responsive-960x540-standard-weather",
+      "responsive-960x540-standard-photos",
+      "responsive-960x540-standard-settings",
+      "responsive-960x540-standard-household",
+      "responsive-960x540-standard-home",
+      "responsive-960x540-standard-youtube",
+      "responsive-960x540-standard-setup",
+      "responsive-960x540-large-overview",
+      "responsive-960x540-large-calendar",
+      "responsive-960x540-large-settings"
+    ]
+  },
+  {
+    "file": "contact-sheet-12.jpg",
+    "group": "Responsive",
+    "ids": [
+      "responsive-1024x640-standard-overview",
+      "responsive-1024x640-standard-calendar",
+      "responsive-1024x640-standard-weather",
+      "responsive-1024x640-standard-photos",
+      "responsive-1024x640-standard-settings",
+      "responsive-1024x640-standard-household",
+      "responsive-1024x640-standard-home",
+      "responsive-1024x640-standard-youtube",
+      "responsive-1024x640-standard-setup",
+      "responsive-1024x640-large-overview",
+      "responsive-1024x640-large-calendar",
+      "responsive-1024x640-large-settings"
+    ]
+  },
+  {
+    "file": "contact-sheet-13.jpg",
+    "group": "Responsive",
+    "ids": [
+      "responsive-1280x720-standard-overview",
+      "responsive-1280x720-standard-calendar",
+      "responsive-1280x720-standard-weather",
+      "responsive-1280x720-standard-photos",
+      "responsive-1280x720-standard-settings",
+      "responsive-1280x720-standard-household",
+      "responsive-1280x720-standard-home",
+      "responsive-1280x720-standard-youtube",
+      "responsive-1280x720-standard-setup",
+      "responsive-1280x720-large-overview",
+      "responsive-1280x720-large-calendar",
+      "responsive-1280x720-large-settings"
+    ]
+  },
+  {
+    "file": "contact-sheet-14.jpg",
+    "group": "Responsive",
+    "ids": [
+      "responsive-1280x800-standard-overview",
+      "responsive-1280x800-standard-calendar",
+      "responsive-1280x800-standard-weather",
+      "responsive-1280x800-standard-photos",
+      "responsive-1280x800-standard-settings",
+      "responsive-1280x800-standard-household",
+      "responsive-1280x800-standard-home",
+      "responsive-1280x800-standard-youtube",
+      "responsive-1280x800-standard-setup",
+      "responsive-1280x800-large-overview",
+      "responsive-1280x800-large-calendar",
+      "responsive-1280x800-large-settings"
+    ]
+  },
+  {
+    "file": "contact-sheet-15.jpg",
+    "group": "Responsive",
+    "ids": [
+      "responsive-1440x900-standard-overview",
+      "responsive-1440x900-standard-calendar",
+      "responsive-1440x900-standard-weather",
+      "responsive-1440x900-standard-photos",
+      "responsive-1440x900-standard-settings",
+      "responsive-1440x900-standard-household",
+      "responsive-1440x900-standard-home",
+      "responsive-1440x900-standard-youtube",
+      "responsive-1440x900-standard-setup",
+      "responsive-1440x900-large-overview",
+      "responsive-1440x900-large-calendar",
+      "responsive-1440x900-large-settings"
+    ]
+  },
+  {
+    "file": "contact-sheet-16.jpg",
+    "group": "Responsive",
+    "ids": [
+      "responsive-1600x900-standard-overview",
+      "responsive-1600x900-standard-calendar",
+      "responsive-1600x900-standard-weather",
+      "responsive-1600x900-standard-photos",
+      "responsive-1600x900-standard-settings",
+      "responsive-1600x900-standard-household",
+      "responsive-1600x900-standard-home",
+      "responsive-1600x900-standard-youtube",
+      "responsive-1600x900-standard-setup",
+      "responsive-1600x900-large-overview",
+      "responsive-1600x900-large-calendar",
+      "responsive-1600x900-large-settings"
+    ]
+  },
+  {
+    "file": "contact-sheet-17.jpg",
+    "group": "Responsive",
+    "ids": [
+      "responsive-1920x1080-standard-overview",
+      "responsive-1920x1080-standard-calendar",
+      "responsive-1920x1080-standard-weather",
+      "responsive-1920x1080-standard-photos",
+      "responsive-1920x1080-standard-settings",
+      "responsive-1920x1080-standard-household",
+      "responsive-1920x1080-standard-home",
+      "responsive-1920x1080-standard-youtube",
+      "responsive-1920x1080-standard-setup",
+      "responsive-1920x1080-large-overview",
+      "responsive-1920x1080-large-calendar",
+      "responsive-1920x1080-large-settings"
+    ]
+  },
+  {
+    "file": "contact-sheet-18.jpg",
+    "group": "Responsive",
+    "ids": [
+      "responsive-1920x1200-standard-overview",
+      "responsive-1920x1200-standard-calendar",
+      "responsive-1920x1200-standard-weather",
+      "responsive-1920x1200-standard-photos",
+      "responsive-1920x1200-standard-settings",
+      "responsive-1920x1200-standard-household",
+      "responsive-1920x1200-standard-home",
+      "responsive-1920x1200-standard-youtube",
+      "responsive-1920x1200-standard-setup",
+      "responsive-1920x1200-large-overview",
+      "responsive-1920x1200-large-calendar",
+      "responsive-1920x1200-large-settings"
+    ]
+  },
+  {
+    "file": "contact-sheet-19.jpg",
+    "group": "Responsive",
+    "ids": [
+      "responsive-390x844-standard-overview",
+      "responsive-390x844-standard-calendar",
+      "responsive-390x844-standard-weather",
+      "responsive-390x844-standard-photos",
+      "responsive-390x844-standard-settings",
+      "responsive-390x844-standard-household",
+      "responsive-390x844-standard-home",
+      "responsive-390x844-standard-youtube",
+      "responsive-390x844-standard-setup",
+      "responsive-390x844-large-overview",
+      "responsive-390x844-large-calendar",
+      "responsive-390x844-large-settings"
+    ]
+  },
+  {
+    "file": "contact-sheet-20.jpg",
+    "group": "Weather scenes",
+    "ids": [
+      "overview-clear-day",
+      "weather-clear-day",
+      "overview-clear-night",
+      "weather-clear-night",
+      "overview-partly-cloudy-day",
+      "weather-partly-cloudy-day",
+      "overview-partly-cloudy-night",
+      "weather-partly-cloudy-night",
+      "overview-cloudy-day",
+      "weather-cloudy-day",
+      "overview-cloudy-night",
+      "weather-cloudy-night"
+    ]
+  },
+  {
+    "file": "contact-sheet-21.jpg",
+    "group": "Weather scenes",
+    "ids": [
+      "overview-fog-day",
+      "weather-fog-day",
+      "overview-fog-night",
+      "weather-fog-night",
+      "overview-rain-day",
+      "weather-rain-day",
+      "overview-rain-night",
+      "weather-rain-night",
+      "overview-snow-day",
+      "weather-snow-day",
+      "overview-snow-night",
+      "weather-snow-night"
+    ]
+  },
+  {
+    "file": "contact-sheet-22.jpg",
+    "group": "Weather scenes",
+    "ids": [
+      "overview-showers-day",
+      "weather-showers-day",
+      "overview-showers-night",
+      "weather-showers-night",
+      "overview-snow-showers-day",
+      "weather-snow-showers-day",
+      "overview-snow-showers-night",
+      "weather-snow-showers-night",
+      "overview-storm-day",
+      "weather-storm-day",
+      "overview-storm-night",
+      "weather-storm-night"
+    ]
+  },
+  {
+    "file": "contact-sheet-23.jpg",
+    "group": "Momo",
+    "ids": [
+      "momo-leaf",
+      "momo-earmuffs"
+    ]
+  },
+  {
+    "file": "contact-sheet-24.jpg",
+    "group": "Services",
+    "ids": [
+      "youtube-shortcuts"
+    ]
+  }
+]

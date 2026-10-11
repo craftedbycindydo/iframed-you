@@ -72,3 +72,20 @@ household calendars. Unit tests supplement, rather than replace, device checks.
 
 There is no claimed percentage coverage, full accessibility certification, or
 long-term unattended stability result. See docs/verification.md for checks actually run.
+
+## Optional rendered regression suite
+
+Start `python3 scripts/preview.py`, then run `node scripts/check_ui.cjs` with a local
+Playwright installation. `SKYLIT_PLAYWRIGHT` may specify its module path and
+`SKYLIT_CHROME` an existing Chrome executable; these are test-only dependencies.
+`--capture docs/reviews/DATE-implementation` writes synthetic screenshots plus a
+manifest. It exercises category/return routes, Settings curation/reload, icon controls and slideshow styles,
+month agenda/search/Settings visibility/metadata, local shopping undo/persistence, privacy
+pause, optional navigation and display-transfer exclusion. Its viewport matrix
+covers 960×540, 1024×640, 1280×720/800, 1440×900, 1600×900, 1920×1080/1200 and
+390×844, both text profiles, with six feeds/long titles/50 thumbnails.
+
+Record any first-load retry separately. The previously observed desktop module
+omission is not proof of a native asset failure. Chrome browser geometry coverage
+does not replace Android WebView 95, touch, native quiet timing or service delivery
+checks. The native calendar test also covers metadata edits during pending refresh.

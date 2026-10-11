@@ -7,20 +7,20 @@ class Element{
  set textContent(v){this._text=v;this.children=[]}get textContent(){return this._text+this.children.map(c=>c.textContent||'').join('')}
  append(...c){this.children.push(...c)}setAttribute(k,v){this.attrs[k]=v}scrollIntoView(){}
 }
-function setup({multiple=false,organizer=''}={}){
+function setup({multiple=false,organizer='',savedView=null}={}){
  const now=Date.parse('2026-10-10T08:00Z'),elements=new Map(),pending=[],listeners={};
- const network={onLine:true};
+ const network={onLine:true},storage=new Map();if(savedView)storage.set('skylit.calendarView',JSON.stringify(savedView));
  const $=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id)};
  let sources=[{id:'demo',name:'Example',color:'#833e2c',body:'synthetic',fetchedAt:now}];
  const window={SkylitApp:{calendarPreferences:()=>({timezone:'UTC',clock:'24'}),go(){}},Skylit:{calendarList:()=>JSON.stringify(sources),calendarRefresh(){},calendarRemove(id){sources=sources.filter(s=>s.id!==id);return true}},addEventListener(name,fn){listeners[name]=fn}};
  class FixedDate extends Date{constructor(...a){super(...(a.length?a:[now]))}static now(){return now}}
  class Worker{postMessage(bounds){this.bounds=bounds;pending.push(this)}terminate(){}}
- vm.runInNewContext(fs.readFileSync('web/calendar.js','utf8'),{window,document:{getElementById:$,createElement:tag=>new Element(tag),createTextNode:t=>({textContent:t})},Date:FixedDate,Intl,Worker,SkylitOverview:Overview,SkylitCalendarPolicy:CalendarPolicy,navigator:network,setTimeout,clearTimeout,setInterval(){}});
+ vm.runInNewContext(fs.readFileSync('web/calendar.js','utf8'),{window,document:{getElementById:$,createElement:tag=>new Element(tag),createTextNode:t=>({textContent:t})},Date:FixedDate,Intl,Worker,SkylitOverview:Overview,SkylitCalendarPolicy:CalendarPolicy,navigator:network,localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},setTimeout,clearTimeout,setInterval(){}});
  const event={title:'Upcoming example',organizer,allDay:false,startDay:'2026-10-10',endDay:'2026-10-10',start:now+3600000,end:now+7200000};
  const eventList=multiple?[event,{...event,title:'Later today',start:now+10800000,end:now+14400000},{...event,title:'Next day',startDay:'2026-10-11',endDay:'2026-10-11',start:now+86400000,end:now+90000000}]:[event];
  const complete=(worker,fail=false)=>fail?worker.onmessage({data:{error:'bad'}}):worker.onmessage({data:{events:eventList.filter(e=>worker.bounds.from<=e.startDay&&worker.bounds.to>e.startDay)}});
  const flush=()=>new Promise(resolve=>setImmediate(resolve));
- return {$,pending,complete,flush,network,listeners};
+ return {$,pending,complete,flush,network,listeners,storage};
 }
 test('calendar ignores stale render results and overview stays on today while browsing other months',async()=>{
  const h=setup();h.complete(h.pending.shift());await h.flush();assert.match(h.$('overview-events').textContent,/Upcoming example/);
@@ -34,7 +34,7 @@ test('calendar ignores stale render results and overview stays on today while br
 });
 test('removing a calendar while parsing immediately clears overview and cannot resurrect events',async()=>{
  const h=setup();h.complete(h.pending.shift());await h.flush();h.$('calendar-next').onclick();const old=h.pending.shift();
- const remove=h.$('calendar-sources').children[0].children[1];remove.onclick();remove.onclick();await h.flush();
+ const remove=h.$('calendar-sources').children[0].children[1].children[1];remove.onclick();remove.onclick();await h.flush();
  assert.match(h.$('overview-events').textContent,/Add a calendar/);
  h.complete(old);await h.flush();h.complete(h.pending.shift());await h.flush();
  assert.match(h.$('overview-events').textContent,/Add a calendar/);assert.equal(h.$('calendar-content').hidden,true);
@@ -65,4 +65,28 @@ test('inviter approval and removal update both Calendar and Overview without a r
  h.$('calendar-approved').children[0].children[1].onclick();
  assert.doesNotMatch(h.$('overview-events').textContent,/Upcoming example/);
  assert.doesNotMatch(h.$('calendar-agenda').textContent,/Upcoming example/);
+});
+
+
+test('source visibility hides both Calendar and Overview immediately without removing feeds',async()=>{
+ const h=setup();h.complete(h.pending.shift());await h.flush();
+ const checkbox=h.$('calendar-sources').children[0].children[0].children[1].children[0];checkbox.checked=false;checkbox.onchange();
+ assert.doesNotMatch(h.$('calendar-agenda').textContent,/Upcoming example/);
+ assert.doesNotMatch(h.$('overview-events').textContent,/Upcoming example/);
+ assert.equal(h.$('calendar-content').hidden,false);assert.deepEqual(JSON.parse(h.storage.get('skylit.calendarView')).hidden,['demo']);
+ const restored=h.$('calendar-sources').children[0].children[0].children[1].children[0];restored.checked=true;restored.onchange();
+ assert.match(h.$('overview-events').textContent,/Upcoming example/);
+});
+test('an upgrade with a retired Today view keeps the selected-date month agenda',async()=>{
+ const h=setup({multiple:true,savedView:{view:'today',hidden:[]}});h.complete(h.pending.shift());await h.flush();
+ assert.match(h.$('calendar-agenda').textContent,/Later today/);assert.match(h.$('calendar-agenda').textContent,/Next day/);assert.equal(h.$('calendar-view').onchange,undefined);
+});
+
+test('loaded-date search filters only Calendar, preserving the today-anchored Overview',async()=>{
+ const h=setup({multiple:true});h.complete(h.pending.shift());await h.flush();
+ h.$('calendar-search').value='Next day';h.$('calendar-search').oninput();
+ assert.match(h.$('calendar-agenda').textContent,/Next day/);assert.doesNotMatch(h.$('calendar-agenda').textContent,/Upcoming example/);
+ assert.match(h.$('overview-events').textContent,/Upcoming example/);
+ h.$('calendar-search').value='';h.$('calendar-search').oninput();
+ assert.match(h.$('calendar-agenda').textContent,/Upcoming example/);
 });

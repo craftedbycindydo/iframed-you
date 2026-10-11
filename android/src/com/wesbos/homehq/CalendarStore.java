@@ -41,6 +41,10 @@ final class CalendarStore {
     JSONArray a=rows(),next=new JSONArray();for(int i=0;i<a.length();i++)if(!id.equals(a.optJSONObject(i).optString("id")))next.put(a.optJSONObject(i));
     requests.remove(id);pending.remove(id);return prefs.edit().putString("feeds",next.toString()).commit();
   }
+  synchronized boolean metadata(String id,String name,String color){
+    if(name==null||name.trim().isEmpty()||name.trim().length()>60||color==null||!color.matches("#[a-fA-F0-9]{6}"))return false;
+    JSONArray a=rows();try{for(int i=0;i<a.length();i++){JSONObject row=a.getJSONObject(i);if(id.equals(row.optString("id"))){row.put("name",name.trim()).put("color",color);return prefs.edit().putString("feeds",a.toString()).commit();}}}catch(Exception ignored){}return false;
+  }
   synchronized void refresh(String id,Receiver callback){
     JSONObject row=find(id);if(row==null||requests.containsKey(id))return;
     final String request=UUID.randomUUID().toString(),url=row.optString("url");requests.put(id,request);

@@ -54,7 +54,7 @@ test('guide can be reopened and links to the real setup controls', () => {
   const run = launch({settings: '{}', mail: true, calendars: [{id: 'one'}]});
   run.element('setup-reopen').onclick();
   assert.deepEqual(run.routes, ['setup']);
-  assert.equal(run.element('setup-photos-status').textContent, 'Photo source connected');
+  assert.equal(run.element('setup-photos-status').textContent, 'Configured · Send a test picture');
   assert.equal(run.element('setup-calendar-status').textContent, '1 calendar added');
   run.buttons[0].onclick();
   assert.equal(run.routes.at(-1), 'settings');
@@ -63,4 +63,14 @@ test('guide can be reopened and links to the real setup controls', () => {
   assert.equal(run.routes.at(-1), 'photos');
   run.buttons[2].onclick();
   assert.equal(run.element('calendar-settings').scrolled, true);
+});
+
+
+test('a saved photo credential is distinguished from received pictures and a refreshed calendar',()=>{
+ const {progress}=launch().window.SkylitOnboardingModel;
+ assert.match(progress(true,false,true,1).photos,/Configured/);
+ assert.doesNotMatch(progress(true,false,true,1).photos,/received|verified/i);
+ assert.match(progress(true,false,true,1,1,123).photos,/Picture received/);
+ assert.match(progress(true,false,true,1,1,123).calendar,/refreshed/);
+ assert.match(progress(true,true,false,0).photos,/Open to verify/);
 });

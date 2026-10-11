@@ -7,7 +7,7 @@
   const outfit = document.getElementById('momo-outfit');
   const motion = document.getElementById('momo-motion');
   const caption = document.getElementById('momo-expression');
-  const hats = ['none','beret','beanie','bucket','cap','party','crown','flower','headphones','bow','nightcap','wizard'];
+  const hats = ['none','beret','beanie','bucket','cap','party','crown','flower','headphones','bow','nightcap','wizard','leaf','earmuffs'];
   const moods = ['hello','curious','wink','delighted','stretch','sneeze','dance','peek','proud','puzzled','sleepy','surprised','yawn'];
   const labels = {yawn:'Just five more minutes…',hello:'Hello, you.',curious:'What’s happening over there?',wink:'Our little secret.',delighted:'Well, this is lovely.',stretch:'A little stretch.',sneeze:'Ah… ah… achoo!',dance:'A tiny happy dance.',peek:'Just checking in.',proud:'Looking rather fetching.',puzzled:'Hmm. Interesting.',sleepy:'Just resting my eyes.',surprised:'Oh! Hello!'};
   let prefs = {hat:'auto',motion:'lively',routine:true};
@@ -50,6 +50,8 @@
     if(h==='headphones'){ctx.beginPath();ctx.ellipse(0,-7,65,55,0,Math.PI,Math.PI*2);ctx.strokeStyle=p.ink;ctx.lineWidth=9;ctx.stroke();ctx.strokeStyle=p.blue;ctx.lineWidth=4;ctx.stroke();round(-73,-18,13,35,6,p.blue);round(60,-18,13,35,6,p.blue);}
     if(h==='bow'){ctx.save();ctx.translate(29,-44);ctx.rotate(.2);shape([[0,0],[-22,-12],[-20,12]],p.coral);shape([[0,0],[22,-12],[20,12]],p.coral);oval(0,0,5,6,p.shell);ctx.restore();}
     if(h==='nightcap'){ctx.beginPath();ctx.moveTo(-33,-36);ctx.quadraticCurveTo(-15,-89,25,-69);ctx.quadraticCurveTo(40,-57,44,-47);ctx.quadraticCurveTo(15,-68,29,-35);ctx.closePath();ctx.fillStyle=p.blue;ctx.fill();ctx.strokeStyle=p.ink;ctx.lineWidth=2.5;ctx.stroke();round(-34,-40,67,10,4,p.cream);oval(45,-47+Math.sin(t)*1.5,7,7,p.cream);}
+    if(h==='leaf'){ctx.save();ctx.translate(28,-43);ctx.rotate(-.4);shape([[0,4],[-18,-7],[-12,-13],[-19,-23],[-3,-20],[5,-35],[14,-21],[26,-22],[21,-10],[30,-5],[9,5]],p.coral);line([[3,11],[7,-24]],p.ink,2);ctx.restore();}
+    if(h==='earmuffs'){ctx.beginPath();ctx.ellipse(0,-7,63,56,0,Math.PI,Math.PI*2);ctx.strokeStyle=p.sage;ctx.lineWidth=8;ctx.stroke();oval(-65,-3,13,19,p.cream);oval(65,-3,13,19,p.cream);}
     if(h==='wizard'){shape([[-33,-38],[-8,-97],[29,-38]],p.blue);oval(0,-37,43,5,p.blue);star(-7,-67,6,p.shell);oval(8,-48,2,2,p.cream,null);}
   }
   function eye(x,y,w,h,type,blink,angle=0){
@@ -134,7 +136,7 @@
   reduced.addEventListener('change',()=>{lastFrame=0;wake();});window.addEventListener('resize',resize);
   window.Momo={setPaused:suspend,greet:()=>{refreshCalendar();react(period()==='night'?'sleepy':period()==='morning'?'yawn':'hello');},status:()=>({hat:chosenHat(),preference:prefs.hat,period:period(),date:calendar.date,timezone:calendar.timezone,motion:prefs.motion,reduced:reduced.matches,paused,frames,expression:canvas.dataset.expression})};
   const gallery=document.getElementById('momo-gallery'),cards=[];
-  const hatLabels={none:'Just Momo',beret:'Terracotta beret',beanie:'Bobble beanie',bucket:'Garden bucket',cap:'Weekend cap',party:'Party hat',crown:'Little crown',flower:'Flower clip',headphones:'Headphones',bow:'Ribbon bow',nightcap:'Nightcap',wizard:'Wizard hat'};
+  const hatLabels={none:'Just Momo',beret:'Terracotta beret',beanie:'Bobble beanie',bucket:'Garden bucket',cap:'Weekend cap',party:'Party hat',crown:'Little crown',flower:'Flower clip',headphones:'Headphones',bow:'Ribbon bow',nightcap:'Nightcap',wizard:'Wizard hat',leaf:'Autumn leaf',earmuffs:'Winter earmuffs'};
   function selectHat(hat){prefs.hat=hat;outfit.value=hat;persist();updateWardrobe();react('proud',true);}
   function updateWardrobe(){
     const selected=chosenHat();

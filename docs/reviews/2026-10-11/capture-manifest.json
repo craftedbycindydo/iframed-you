@@ -1,0 +1,1511 @@
+{
+  "date": "2026-10-11",
+  "version": "2.11.0",
+  "revision": "227abf1",
+  "source": "Isolated scripts/preview.py synthetic demo",
+  "screenshots": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "group": "Main screens",
+      "notes": "Frame viewport: 1280×720 CSS pixels; 1920×1080 image.",
+      "file": "screenshots/overview.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "weather",
+      "title": "Weather",
+      "group": "Main screens",
+      "notes": "Frame viewport: 1280×720 CSS pixels; 1920×1080 image.",
+      "file": "screenshots/weather.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "photos",
+      "title": "Photos",
+      "group": "Main screens",
+      "notes": "Frame viewport: 1280×720 CSS pixels; 1920×1080 image.",
+      "file": "screenshots/photos.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "calendar",
+      "title": "Calendar",
+      "group": "Main screens",
+      "notes": "Frame viewport: 1280×720 CSS pixels; 1920×1080 image.",
+      "file": "screenshots/calendar.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        860
+      ],
+      "tab": "calendar"
+    },
+    {
+      "id": "home",
+      "title": "Home",
+      "group": "Main screens",
+      "notes": "Frame viewport: 1280×720 CSS pixels; 1920×1080 image.",
+      "file": "screenshots/home.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "home"
+    },
+    {
+      "id": "youtube",
+      "title": "Youtube",
+      "group": "Main screens",
+      "notes": "Frame viewport: 1280×720 CSS pixels; 1920×1080 image.",
+      "file": "screenshots/youtube.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "youtube"
+    },
+    {
+      "id": "settings",
+      "title": "Settings",
+      "group": "Main screens",
+      "notes": "Frame viewport: 1280×720 CSS pixels; 1920×1080 image.",
+      "file": "screenshots/settings.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        3111
+      ],
+      "tab": "settings"
+    },
+    {
+      "id": "setup-configured",
+      "title": "Setup guide · reopened",
+      "group": "Setup",
+      "notes": "Synthetic configured example; guide reopened without resetting data.",
+      "file": "screenshots/setup-configured.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "setup"
+    },
+    {
+      "id": "photo-settings",
+      "title": "Photo settings · expanded",
+      "group": "Photos",
+      "notes": "Email source, slideshow controls and setup fields; synthetic account only.",
+      "file": "screenshots/photo-settings.jpg",
+      "fullPage": true,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        1288
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "photo-settings-retention",
+      "title": "Photo settings · storage and disconnect",
+      "group": "Photos",
+      "notes": "Retention controls and immediate erase action.",
+      "file": "screenshots/photo-settings-retention.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        1288
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "photo-browser",
+      "title": "Photo browser",
+      "group": "Photos",
+      "notes": "Tap a saved thumbnail; paused photo with controls.",
+      "file": "screenshots/photo-browser.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "photo-zoom",
+      "title": "Photo browser · zoomed",
+      "group": "Photos",
+      "notes": "Zoomed view with pan support.",
+      "file": "screenshots/photo-zoom.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "slideshow-fade",
+      "title": "Slideshow · Soft fade",
+      "group": "Photos",
+      "notes": "Manual playback with theme controls.",
+      "file": "screenshots/slideshow-fade.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "slideshow-clean",
+      "title": "Slideshow · controls hidden",
+      "group": "Photos",
+      "notes": "Controls fade after inactivity.",
+      "file": "screenshots/slideshow-clean.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "slideshow-stack",
+      "title": "Slideshow · Falling prints",
+      "group": "Photos",
+      "notes": "Manual playback with theme controls.",
+      "file": "screenshots/slideshow-stack.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "slideshow-collage",
+      "title": "Slideshow · Photo collage",
+      "group": "Photos",
+      "notes": "Manual playback with theme controls.",
+      "file": "screenshots/slideshow-collage.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "photo-idle",
+      "title": "Idle photo mode",
+      "group": "Photos",
+      "notes": "Native timer is not exercised here; preview opens the existing idle player.",
+      "file": "screenshots/photo-idle.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "photos-album",
+      "title": "Photos · shared album",
+      "group": "Photos",
+      "notes": "No shared-album URL entered; Google-owned slideshow is an external screen.",
+      "file": "screenshots/photos-album.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "calendar-details",
+      "title": "Calendar · event details",
+      "group": "Calendar",
+      "notes": "Expanded synthetic event location, time and description.",
+      "file": "screenshots/calendar-details.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        860
+      ],
+      "tab": "calendar"
+    },
+    {
+      "id": "calendar-browse",
+      "title": "Calendar · another month",
+      "group": "Calendar",
+      "notes": "Month browsing; Overview remains anchored to fixture today.",
+      "file": "screenshots/calendar-browse.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        860
+      ],
+      "tab": "calendar"
+    },
+    {
+      "id": "calendar-inviters",
+      "title": "Calendar · inviter review",
+      "group": "Calendar",
+      "notes": "Frame-only display rules; owner address blank.",
+      "file": "screenshots/calendar-inviters.jpg",
+      "fullPage": true,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        1388
+      ],
+      "tab": "calendar"
+    },
+    {
+      "id": "calendar-inviters-pending",
+      "title": "Calendar · waiting for review",
+      "group": "Calendar",
+      "notes": "Synthetic fixture lacks organizers; shows missing-organizer cases.",
+      "file": "screenshots/calendar-inviters-pending.jpg",
+      "fullPage": true,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        1443
+      ],
+      "tab": "calendar"
+    },
+    {
+      "id": "calendar-manage",
+      "title": "Manage calendars · connection and help",
+      "group": "Calendar",
+      "notes": "Secret address input remains empty.",
+      "file": "screenshots/calendar-manage.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        3332
+      ],
+      "tab": "settings"
+    },
+    {
+      "id": "calendar-remove",
+      "title": "Manage calendars · remove confirmation",
+      "group": "Calendar",
+      "notes": "First confirmation tap only; fixture source is not removed.",
+      "file": "screenshots/calendar-remove.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        3332
+      ],
+      "tab": "settings"
+    },
+    {
+      "id": "settings-full",
+      "title": "Settings · complete page",
+      "group": "Settings",
+      "notes": "Full scroll capture of every settings section.",
+      "file": "screenshots/settings-full.jpg",
+      "fullPage": true,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        3332
+      ],
+      "tab": "settings"
+    },
+    {
+      "id": "settings-momo",
+      "title": "Settings · Momo wardrobe",
+      "group": "Settings",
+      "notes": "Wardrobe gallery, energy, rhythm and expression controls.",
+      "file": "screenshots/settings-momo.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        3332
+      ],
+      "tab": "settings"
+    },
+    {
+      "id": "settings-momo-gallery",
+      "title": "Settings · accessory gallery",
+      "group": "Settings",
+      "notes": "Eleven accessories plus Just Momo, shuffle and expression preview.",
+      "file": "screenshots/settings-momo-gallery.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        3332
+      ],
+      "tab": "settings"
+    },
+    {
+      "id": "settings-connections",
+      "title": "Settings · weather, photos and home",
+      "group": "Settings",
+      "notes": "City, units, clock, album, idle timing and Home URL.",
+      "file": "screenshots/settings-connections.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        3332
+      ],
+      "tab": "settings"
+    },
+    {
+      "id": "settings-device",
+      "title": "Settings · about and device actions",
+      "group": "Settings",
+      "notes": "Device-only shortcuts are shown without opening Android system screens.",
+      "file": "screenshots/settings-device.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        3332
+      ],
+      "tab": "settings"
+    },
+    {
+      "id": "settings-city-results",
+      "title": "Settings · city search results",
+      "group": "Settings",
+      "notes": "Two synthetic geocoding choices; existing city not changed.",
+      "file": "screenshots/settings-city-results.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        3423
+      ],
+      "tab": "settings"
+    },
+    {
+      "id": "settings-auto",
+      "title": "Appearance · automatic sunrise/sunset",
+      "group": "Appearance",
+      "notes": "Offline solar timing at synthetic London location.",
+      "file": "screenshots/settings-auto.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        3423
+      ],
+      "tab": "settings"
+    },
+    {
+      "id": "theme-linen-light",
+      "title": "linen · light",
+      "group": "Appearance",
+      "notes": "Same content in each of the six paired palettes.",
+      "file": "screenshots/theme-linen-light.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "theme-linen-dark",
+      "title": "linen · dark",
+      "group": "Appearance",
+      "notes": "Same content in each of the six paired palettes.",
+      "file": "screenshots/theme-linen-dark.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "theme-sage-light",
+      "title": "sage · light",
+      "group": "Appearance",
+      "notes": "Same content in each of the six paired palettes.",
+      "file": "screenshots/theme-sage-light.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "theme-sage-dark",
+      "title": "sage · dark",
+      "group": "Appearance",
+      "notes": "Same content in each of the six paired palettes.",
+      "file": "screenshots/theme-sage-dark.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "theme-stone-light",
+      "title": "stone · light",
+      "group": "Appearance",
+      "notes": "Same content in each of the six paired palettes.",
+      "file": "screenshots/theme-stone-light.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "theme-stone-dark",
+      "title": "stone · dark",
+      "group": "Appearance",
+      "notes": "Same content in each of the six paired palettes.",
+      "file": "screenshots/theme-stone-dark.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "theme-ocean-light",
+      "title": "ocean · light",
+      "group": "Appearance",
+      "notes": "Same content in each of the six paired palettes.",
+      "file": "screenshots/theme-ocean-light.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "theme-ocean-dark",
+      "title": "ocean · dark",
+      "group": "Appearance",
+      "notes": "Same content in each of the six paired palettes.",
+      "file": "screenshots/theme-ocean-dark.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "theme-plum-light",
+      "title": "plum · light",
+      "group": "Appearance",
+      "notes": "Same content in each of the six paired palettes.",
+      "file": "screenshots/theme-plum-light.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "theme-plum-dark",
+      "title": "plum · dark",
+      "group": "Appearance",
+      "notes": "Same content in each of the six paired palettes.",
+      "file": "screenshots/theme-plum-dark.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "theme-contrast-light",
+      "title": "contrast · light",
+      "group": "Appearance",
+      "notes": "Same content in each of the six paired palettes.",
+      "file": "screenshots/theme-contrast-light.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "theme-contrast-dark",
+      "title": "contrast · dark",
+      "group": "Appearance",
+      "notes": "Same content in each of the six paired palettes.",
+      "file": "screenshots/theme-contrast-dark.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "weather-offline",
+      "title": "Weather · saved forecast after refresh failure",
+      "group": "Recovery",
+      "notes": "Simulated network failure and offline browser status; local assets remain available.",
+      "file": "screenshots/weather-offline.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "overview-offline",
+      "title": "Overview · offline saved data",
+      "group": "Recovery",
+      "notes": "Simulated offline status; saved weather and events remain visible.",
+      "file": "screenshots/overview-offline.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "calendar-offline",
+      "title": "Calendar · offline saved events",
+      "group": "Recovery",
+      "notes": "Simulated offline status; local worker assets remain available.",
+      "file": "screenshots/calendar-offline.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        860
+      ],
+      "tab": "calendar"
+    },
+    {
+      "id": "setup-fresh",
+      "title": "Setup guide · first run",
+      "group": "Setup",
+      "notes": "Seed settings removed only in the disposable demo response.",
+      "file": "screenshots/setup-fresh.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "setup"
+    },
+    {
+      "id": "overview-empty",
+      "title": "Overview · no setup",
+      "group": "Recovery",
+      "notes": "No city, no photos, no calendars.",
+      "file": "screenshots/overview-empty.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "weather-empty",
+      "title": "Weather · city needed",
+      "group": "Recovery",
+      "notes": "",
+      "file": "screenshots/weather-empty.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "calendar-empty",
+      "title": "Calendar · no calendars",
+      "group": "Recovery",
+      "notes": "",
+      "file": "screenshots/calendar-empty.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "calendar"
+    },
+    {
+      "id": "photos-unconnected",
+      "title": "Photos · inbox not connected",
+      "group": "Recovery",
+      "notes": "",
+      "file": "screenshots/photos-unconnected.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "photo-setup-empty",
+      "title": "Photos · email setup",
+      "group": "Setup",
+      "notes": "Empty account and app password fields; no credential entered.",
+      "file": "screenshots/photo-setup-empty.jpg",
+      "fullPage": true,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        1210
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "photos-empty",
+      "title": "Photos · connected inbox with no pictures",
+      "group": "Recovery",
+      "notes": "Synthetic connected account, empty cache.",
+      "file": "screenshots/photos-empty.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "photos-error",
+      "title": "Photos · failed check with saved pictures",
+      "group": "Recovery",
+      "notes": "Simulated importer error; cached pictures retained.",
+      "file": "screenshots/photos-error.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        720
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "desktop-setup",
+      "title": "setup · desktop",
+      "group": "Responsive",
+      "notes": "1440×900 CSS pixels, full scroll capture.",
+      "file": "screenshots/desktop-setup.jpg",
+      "fullPage": true,
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "tab": "setup"
+    },
+    {
+      "id": "desktop-overview",
+      "title": "overview · desktop",
+      "group": "Responsive",
+      "notes": "1440×900 CSS pixels, full scroll capture.",
+      "file": "screenshots/desktop-overview.jpg",
+      "fullPage": true,
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "desktop-weather",
+      "title": "weather · desktop",
+      "group": "Responsive",
+      "notes": "1440×900 CSS pixels, full scroll capture.",
+      "file": "screenshots/desktop-weather.jpg",
+      "fullPage": true,
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "desktop-photos",
+      "title": "photos · desktop",
+      "group": "Responsive",
+      "notes": "1440×900 CSS pixels, full scroll capture.",
+      "file": "screenshots/desktop-photos.jpg",
+      "fullPage": true,
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "desktop-calendar",
+      "title": "calendar · desktop",
+      "group": "Responsive",
+      "notes": "1440×900 CSS pixels, full scroll capture.",
+      "file": "screenshots/desktop-calendar.jpg",
+      "fullPage": true,
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        1172
+      ],
+      "tab": "calendar"
+    },
+    {
+      "id": "desktop-home",
+      "title": "home · desktop",
+      "group": "Responsive",
+      "notes": "1440×900 CSS pixels, full scroll capture.",
+      "file": "screenshots/desktop-home.jpg",
+      "fullPage": true,
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "tab": "home"
+    },
+    {
+      "id": "desktop-youtube",
+      "title": "youtube · desktop",
+      "group": "Responsive",
+      "notes": "1440×900 CSS pixels, full scroll capture.",
+      "file": "screenshots/desktop-youtube.jpg",
+      "fullPage": true,
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "tab": "youtube"
+    },
+    {
+      "id": "desktop-settings",
+      "title": "settings · desktop",
+      "group": "Responsive",
+      "notes": "1440×900 CSS pixels, full scroll capture.",
+      "file": "screenshots/desktop-settings.jpg",
+      "fullPage": true,
+      "viewport": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        3174
+      ],
+      "tab": "settings"
+    },
+    {
+      "id": "narrow-setup",
+      "title": "setup · narrow",
+      "group": "Responsive",
+      "notes": "390×844 CSS pixels, full scroll capture.",
+      "file": "screenshots/narrow-setup.jpg",
+      "fullPage": true,
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        1374
+      ],
+      "tab": "setup"
+    },
+    {
+      "id": "narrow-overview",
+      "title": "overview · narrow",
+      "group": "Responsive",
+      "notes": "390×844 CSS pixels, full scroll capture.",
+      "file": "screenshots/narrow-overview.jpg",
+      "fullPage": true,
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        1284
+      ],
+      "tab": "overview"
+    },
+    {
+      "id": "narrow-weather",
+      "title": "weather · narrow",
+      "group": "Responsive",
+      "notes": "390×844 CSS pixels, full scroll capture.",
+      "file": "screenshots/narrow-weather.jpg",
+      "fullPage": true,
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        1525
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "narrow-photos",
+      "title": "photos · narrow",
+      "group": "Responsive",
+      "notes": "390×844 CSS pixels, full scroll capture.",
+      "file": "screenshots/narrow-photos.jpg",
+      "fullPage": true,
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        1134
+      ],
+      "tab": "photos"
+    },
+    {
+      "id": "narrow-calendar",
+      "title": "calendar · narrow",
+      "group": "Responsive",
+      "notes": "390×844 CSS pixels, full scroll capture.",
+      "file": "screenshots/narrow-calendar.jpg",
+      "fullPage": true,
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        2137
+      ],
+      "tab": "calendar"
+    },
+    {
+      "id": "narrow-home",
+      "title": "home · narrow",
+      "group": "Responsive",
+      "notes": "390×844 CSS pixels, full scroll capture.",
+      "file": "screenshots/narrow-home.jpg",
+      "fullPage": true,
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        844
+      ],
+      "tab": "home"
+    },
+    {
+      "id": "narrow-youtube",
+      "title": "youtube · narrow",
+      "group": "Responsive",
+      "notes": "390×844 CSS pixels, full scroll capture.",
+      "file": "screenshots/narrow-youtube.jpg",
+      "fullPage": true,
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        844
+      ],
+      "tab": "youtube"
+    },
+    {
+      "id": "narrow-settings",
+      "title": "settings · narrow",
+      "group": "Responsive",
+      "notes": "390×844 CSS pixels, full scroll capture.",
+      "file": "screenshots/narrow-settings.jpg",
+      "fullPage": true,
+      "viewport": [
+        390,
+        844
+      ],
+      "scroll": [
+        390,
+        4815
+      ],
+      "tab": "settings"
+    },
+    {
+      "id": "weather-clear-day",
+      "title": "clear · day",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-clear-day.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-clear-night",
+      "title": "clear · night",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-clear-night.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-partly-cloudy-day",
+      "title": "partly-cloudy · day",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-partly-cloudy-day.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-partly-cloudy-night",
+      "title": "partly-cloudy · night",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-partly-cloudy-night.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-cloudy-day",
+      "title": "cloudy · day",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-cloudy-day.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-cloudy-night",
+      "title": "cloudy · night",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-cloudy-night.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-fog-day",
+      "title": "fog · day",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-fog-day.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-fog-night",
+      "title": "fog · night",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-fog-night.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-rain-day",
+      "title": "rain · day",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-rain-day.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-rain-night",
+      "title": "rain · night",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-rain-night.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-snow-day",
+      "title": "snow · day",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-snow-day.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-snow-night",
+      "title": "snow · night",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-snow-night.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-rain-showers-day",
+      "title": "rain-showers · day",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-rain-showers-day.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-rain-showers-night",
+      "title": "rain-showers · night",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-rain-showers-night.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-snow-showers-day",
+      "title": "snow-showers · day",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-snow-showers-day.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-snow-showers-night",
+      "title": "snow-showers · night",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-snow-showers-night.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-storm-day",
+      "title": "storm · day",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-storm-day.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    },
+    {
+      "id": "weather-storm-night",
+      "title": "storm · night",
+      "group": "Weather scenes",
+      "notes": "Synthetic condition scene.",
+      "file": "screenshots/weather-storm-night.jpg",
+      "fullPage": false,
+      "viewport": [
+        1280,
+        720
+      ],
+      "scroll": [
+        1280,
+        738
+      ],
+      "tab": "weather"
+    }
+  ],
+  "issues": [
+    {
+      "type": "runtime",
+      "message": "Cannot read properties of undefined (reading 'at')"
+    }
+  ],
+  "blockedExternalOrigins": []
+}

@@ -1,0 +1,345 @@
+{
+  "version": "2.12.0",
+  "date": "2026-10-11",
+  "features": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "description": "Clock/date, current weather, three upcoming plans and recent photos. Three layout presets; optional note excerpt. Overview remains anchored to today."
+    },
+    {
+      "id": "weather",
+      "title": "Weather",
+      "description": "Current conditions, hourly and five-day forecasts, nine scenes, saved/offline recovery, city/time/units, sunrise/sunset. Automatic colour mode computes solar times offline."
+    },
+    {
+      "id": "photos",
+      "title": "Photos",
+      "description": "Shared album or private email-photo cache; library, browse/zoom and three slideshow styles. Favourite/hide/Fit/Fill/caption, shuffle/repeat/favourites-only, optional trusted senders and bounded polling."
+    },
+    {
+      "id": "calendar",
+      "title": "Calendar",
+      "description": "Read-only private feeds; Month, Week and Today, visibility chips, loaded-title search, event details and local countdown action. Metadata editing and optional inviter review."
+    },
+    {
+      "id": "household",
+      "title": "Household \u00b7 optional",
+      "description": "On-frame note and shopping checklist with completion undo, up to five countdowns and three visible timers. Off in default navigation; no phone-sync or background-alarm promise."
+    },
+    {
+      "id": "home",
+      "title": "Home",
+      "description": "External Google Home launcher with a first-use checklist. Optional rail item. Account sign-in and real controls require owner verification."
+    },
+    {
+      "id": "youtube",
+      "title": "YouTube",
+      "description": "External mobile/standard launcher, optional six curated shortcuts and exact-host validation. Browser behavior depends on the frame\u2019s WebView."
+    },
+    {
+      "id": "settings",
+      "title": "Settings",
+      "description": "Eight categories; six palettes with light/dark/astronomical automatic mode, larger text, Momo preferences and two seasonal accessories. Coarse service health, private-content pause, quiet hours and non-secret display transfer."
+    },
+    {
+      "id": "setup",
+      "title": "Setup guide",
+      "description": "Fresh-install setup, optional skip, return links, progress cues and explicit verification steps. Never prefills household credentials."
+    }
+  ],
+  "screenChanges": [
+    {
+      "id": "overview",
+      "title": "A balanced, adaptive dashboard",
+      "change": "Fluid landscape layout and three bounded presets. Labelled Forecast and Calendar routes, large clickable weather/event surfaces, a safe gap beneath photos, today-anchored plans, contextual Calendar setup and an optional one-line household note. Healthy timestamps stay in Settings."
+    },
+    {
+      "id": "weather",
+      "title": "A compact forecast",
+      "change": "Shorter current-condition hero, readable forecast rows, sunrise in the supporting note and a Change city route to the shared editor. Saved forecast and retry states remain explicit. All nine existing scenes retain day/night variants."
+    },
+    {
+      "id": "photos",
+      "title": "A full-width photo library",
+      "change": "The library uses the available width. Photo settings opens the shared category with a return route. Coarse saved/checking/checked status, slideshow and manual check remain visible; favourites and reversible hide choices survive refresh/reload."
+    },
+    {
+      "id": "photos-album",
+      "title": "A compact shared-album launcher",
+      "change": "Source switching remains in Photos. Album and idle configuration share the Settings editor. The page identifies Google\u2019s player separately from Skylit\u2019s email-photo styles and offline cache."
+    },
+    {
+      "id": "photo-player",
+      "title": "Photo options only when needed",
+      "change": "Browse and Slideshow labels distinguish modes. An Options drawer holds favourite, hide, Fit/Fill, local caption and received date. Closing restores thumbnail focus; keyboard focus stays in the player. Shuffle, repeat and favourites-only are optional."
+    },
+    {
+      "id": "photo-settings",
+      "title": "Presentation, Delivery and Storage",
+      "change": "Broad presentation/delivery groups, a collapsed account form with empty credential fields, import-verification guidance and a separate storage/erase area. Bounded polling, exact-address trusted senders and progress counts use native private storage."
+    },
+    {
+      "id": "calendar",
+      "title": "Month, Week and Today without page scrolling",
+      "change": "Management is grouped under Calendar options. Pending inviter review appears only when needed. Source chips toggle visibility; search opens on demand and covers loaded dates. The month grid fits the landscape canvas and the agenda scrolls internally."
+    },
+    {
+      "id": "calendar-manage",
+      "title": "A shared editor with a return route",
+      "change": "Back to Calendar, connected labels and refresh state precede the add form. Labels/colours change without revealing or re-entering a feed URL. Removal remains confirmed; private-link instructions use the agreed read-only integration."
+    },
+    {
+      "id": "calendar-inviters",
+      "title": "Decisions before setup",
+      "change": "Pending review comes first, approved inviters next, and owner/policy setup lives in a disclosure. Exact-address Show/Hide on frame decisions update Calendar and Overview. Loaded-date and read-only limits remain explicit."
+    },
+    {
+      "id": "home",
+      "title": "A compact external-service panel",
+      "change": "One primary launch action, an owner verification checklist and an optional navigation toggle. The UI asks the owner to confirm a real device operation; it does not infer authenticated controls."
+    },
+    {
+      "id": "youtube",
+      "title": "Layout beside launch",
+      "change": "Mobile/standard layout and launch live together. Up to six owner-entered public video/playlist shortcuts are optional; both JavaScript and native code validate exact HTTPS destinations. External playback/return still needs frame acceptance."
+    },
+    {
+      "id": "settings",
+      "title": "Eight focused categories",
+      "change": "Appearance, Momo, Weather & time, Photos, Calendars, Household, Services and Device & status. One existing editor is reused per preference. Larger text, live appearance preview and six light/dark pairs remain independent. Recovery actions and advanced device controls stay here. Saving feedback reserves its space."
+    },
+    {
+      "id": "setup",
+      "title": "Configured and verified are distinct",
+      "change": "The guide distinguishes credentials/configuration from a received picture or refreshed feed, remembers its current step, and offers Continue setup from the shared editors. Existing-install launch suppression remains covered by tests."
+    }
+  ],
+  "roadmap": [
+    {
+      "priority": "P0",
+      "title": "Service status and guided recovery",
+      "kind": "Foundation / extends every integration",
+      "effort": "M",
+      "why": "A network indicator and saved credential do not prove a feature works. Failures need a useful next action, not a generic Connected label.",
+      "mvp": "A local status panel with last successful weather fetch, calendar parse, mail check and cached-picture count; each service offers Retry or its setup route. Keep Home as owner-verified, never infer remote authentication.",
+      "done": "Offline data remains usable; status contains no URLs, mail identity, event details or tokens; each recovery action is tested.",
+      "depends": "Existing coarse native status and caches; actual-frame verification.",
+      "status": "Implemented; physical acceptance pending",
+      "evidence": "Browser recovery flows and offline synthetic states; native/API build verified. Real service checks remain in the acceptance list."
+    },
+    {
+      "priority": "P0",
+      "title": "Unattended reliability and acceptance pass",
+      "kind": "Quality work / before expanding scope",
+      "effort": "M",
+      "why": "Docs explicitly leave long-term mail polling, age pruning, fresh Android setup, live inviter rules and Home operations open.",
+      "mvp": "Run a documented multi-day frame soak, upgrade/restart/offline tests, bounded-cache pruning and owner-led real calendar-change/inviter checks. Record results privately with labels only.",
+      "done": "No stuck player/import, lost settings, stale-feed resurrection or unbounded cache; unresolved compatibility issues are visible in the UI.",
+      "depends": "Identified device and owner participation for household tests. No factory reset or destructive reinstall.",
+      "status": "Prepared; awaiting device",
+      "evidence": "Acceptance procedure prepared. No deployment, fresh install, upgrade, restart or multi-day soak was performed in this pass."
+    },
+    {
+      "priority": "P1",
+      "title": "Configurable email-photo refresh and progress",
+      "kind": "Extension / Photos",
+      "effort": "M",
+      "why": "The current importer checks at most once a day after a successful check, plus manual Check now. Newly emailed pictures can feel late.",
+      "mvp": "Offer bounded 15-minute, hourly or daily polling; show Checking, last success, received count and actionable failure. Use one in-flight check and network/error backoff; keep the current manual check.",
+      "done": "A newly sent test image appears within the selected online window; retries do not overlap or remove the last good cache.",
+      "depends": "Native PhotoMail scheduling; battery/network/large-inbox testing on the frame.",
+      "status": "Implemented; physical acceptance pending",
+      "evidence": "15-minute/hourly/daily checks, single-flight import, progress and bounded retry backoff. Java policy tests pass; a real delivery window remains unverified."
+    },
+    {
+      "priority": "P1",
+      "title": "Photo favourites, hide and fit/fill",
+      "kind": "Extension / Photos + Overview",
+      "effort": "M",
+      "why": "A displayed family photo deserves selection and intentional cropping. A cache of 30\u201350 pictures needs more control than next/previous.",
+      "mvp": "Favourite and hide from playback, reversible local choices, Fit/Fill per photo and a shuffle toggle. Let Overview prefer favourites; avoid changing or deleting email messages.",
+      "done": "Hidden pictures stay out of all playback modes and Overview; undo works; portrait faces survive Fit; curation survives a harmless refresh.",
+      "depends": "Stable deduplicated photo IDs; retention/account-change semantics and bounded local state.",
+      "status": "Implemented; physical acceptance pending",
+      "evidence": "Stable photo IDs, bounded choices, hide/restore/undo, fit/fill and refresh/reload persistence tested with synthetic pictures."
+    },
+    {
+      "priority": "P1",
+      "title": "Today/Week agenda and calendar filters",
+      "kind": "Extension / Calendar + Overview",
+      "effort": "M",
+      "why": "A month is good for orientation; households often need the next few hours, a week or one calendar's plans.",
+      "mvp": "Read-only Today and Week agenda modes plus per-calendar visibility chips. Remember the view locally; keep Today obvious and details accessible.",
+      "done": "Overnight/all-day/DST and dense days remain readable; hiding a feed is reversible; Overview still uses today and the agreed visibility rules.",
+      "depends": "Existing parsed feeds and race/removal guards; no OAuth or event editing.",
+      "status": "Implemented; physical acceptance pending",
+      "evidence": "Parser/timezone/race tests plus rendered modes/search/source filters; the independent Overview regression still passes."
+    },
+    {
+      "priority": "P1",
+      "title": "Household note and shopping checklist",
+      "kind": "New daily-use feature",
+      "effort": "M",
+      "why": "Adds a reason to touch the frame beyond weather/photos without needing another hosted service.",
+      "mvp": "One editable pinned note and a short shopping list stored on this frame; large add/check/undo controls. Overview can show a small optional excerpt.",
+      "done": "Works offline and after restart; labels clearly say On this frame; a household can recover accidental completion.",
+      "depends": "Single-frame MVP. Phone synchronization is a separate product/integration decision; do not imply Google Keep sync.",
+      "status": "Implemented; browser verified",
+      "evidence": "Local note/list/undo/countdowns/timers persist after browser reload; optional feature and excerpt remain off by default."
+    },
+    {
+      "priority": "P1",
+      "title": "Quiet hours and a privacy pause",
+      "kind": "Extension / idle mode + appearance",
+      "effort": "M",
+      "why": "Automatic palette switching already follows the sun, but households may want control over what is displayed overnight or while guests visit.",
+      "mvp": "An optional schedule for ambient display plus a manual pause that hides photos/event content with a clear restore action. Keep astronomical colour mode independent.",
+      "done": "Schedules respect configured local time/DST; no automatic interruption of active video or manual browsing; touch reliably restores the dashboard.",
+      "depends": "Native idle-state coordination; hardware brightness is a separate optional capability to investigate, not promised.",
+      "status": "Implemented; physical acceptance pending",
+      "evidence": "Configured-city/DST policy tests and browser privacy restore pass. Native idle lifecycle code compiles; actual touch, idle and video non-interruption await testing."
+    },
+    {
+      "priority": "P2",
+      "title": "Overview presets and optional navigation",
+      "kind": "Extension / Overview + shell",
+      "effort": "M",
+      "why": "Different households care most about photos or plans; unused service tabs consume attention.",
+      "mvp": "Three bounded presets: Balanced, Photos first, Agenda first. Toggle optional Home/YouTube rail entries and keep four core destinations fixed.",
+      "done": "Each preset fits 1280\u00d7720 with long content and missing sources; Today remains stable; no hidden destination strands the user.",
+      "depends": "Reliable Settings categories and shared layout rules; avoid a freeform widget builder initially.",
+      "status": "Implemented; browser verified",
+      "evidence": "Balanced/Photos/Agenda presets and optional Home/YouTube navigation are Settings preferences. Default rail stays familiar."
+    },
+    {
+      "priority": "P2",
+      "title": "Readable display profile",
+      "kind": "Extension / accessibility + appearance",
+      "effort": "M",
+      "why": "High contrast exists, but some owners need larger text and controls while keeping Linen or Sage.",
+      "mvp": "A modest/large text preference, consistent 48\u201356px frequent targets and visible keyboard focus; retain optional High contrast and motion controls.",
+      "done": "All tabs, panels and players work at the largest supported size; no hidden labels, clipped agenda or horizontal scrolling.",
+      "depends": "Token-based typography/layout audit; rendered contrast checks in all pairs.",
+      "status": "Implemented; browser verified",
+      "evidence": "Standard/larger profiles pass all nine viewport checks; six palettes and their contrast rules remain covered."
+    },
+    {
+      "priority": "P2",
+      "title": "Trusted photo senders",
+      "kind": "Extension / mail-import policy",
+      "effort": "M\u2013L",
+      "why": "Anyone who can send a picture to the dedicated inbox can currently place it on the display.",
+      "mvp": "An opt-in allowlist checked before saving attachments, with a coarse skipped count and clear rules. Store the minimum sender-policy data privately.",
+      "done": "Unapproved senders cannot place pictures; disabling/changing the rule has defined cache behaviour; sender matching is not presented as cryptographic identity proof.",
+      "depends": "Importer/MIME tests and privacy review; complete basic import reliability first.",
+      "status": "Implemented; physical acceptance pending",
+      "evidence": "Exact normalized sender matching is enforced before new attachments are saved; default is off. Pure Java policy tests pass. Existing cache is kept until explicitly erased."
+    },
+    {
+      "priority": "P2",
+      "title": "Manual calendar visibility and friendly labels",
+      "kind": "Extension / calendar management",
+      "effort": "S\u2013M",
+      "why": "Owners should be able to rename/recolour/hide a source without deleting and reconnecting its private feed.",
+      "mvp": "Edit label and colour, toggle visibility and show separate refresh health for each source.",
+      "done": "No feed URL is exposed or re-entered for a label change; visibility immediately updates both month/agenda and Overview.",
+      "depends": "Native metadata editing plus worker-generation regression coverage.",
+      "status": "Implemented; physical acceptance pending",
+      "evidence": "Rename/recolour and visibility are independent of secret feeds. Rendered metadata editing and filtering pass. Android store test cases are prepared but require the frame."
+    }
+  ],
+  "ideas": [
+    {
+      "title": "Photo replay controls",
+      "status": "Implemented",
+      "detail": "Shuffle, repeat, favourites-only and safe unavailable-image handling."
+    },
+    {
+      "title": "Photo captions and dates",
+      "status": "Implemented",
+      "detail": "Local caption and received date in Options; no inferred people or original capture date."
+    },
+    {
+      "title": "Slideshow style preview",
+      "status": "Implemented",
+      "detail": "Three small motion-aware samples in Presentation."
+    },
+    {
+      "title": "Agenda search and next-event focus",
+      "status": "Implemented in bounded form",
+      "detail": "Title search over loaded dates; event drill-down and a local day countdown. No continuous live event notification."
+    },
+    {
+      "title": "Weather detail choices",
+      "status": "Implemented in bounded form",
+      "detail": "Sunrise joins the supporting Weather note; Overview keeps three metrics. Existing feels-like details remain. Gust controls were not added."
+    },
+    {
+      "title": "Local countdowns",
+      "status": "Implemented in bounded form",
+      "detail": "Up to five dates in Household; an event can supply a date. Overview supports only a note excerpt to keep the dashboard calm."
+    },
+    {
+      "title": "Timers and reminders",
+      "status": "Implemented in bounded form",
+      "detail": "Three visible on-frame timers with persisted end times and dismissal. No native alarm, audio, phone alert or background delivery."
+    },
+    {
+      "title": "A small Momo wardrobe expansion",
+      "status": "Implemented",
+      "detail": "Autumn leaf and Winter earmuffs; Still/reduced motion and daily routine remain supported."
+    },
+    {
+      "title": "Owner-curated YouTube shortcuts",
+      "status": "Implemented; frame playback pending",
+      "detail": "Exact HTTPS video/playlist validation, optional owner titles and restart persistence. No playback claim from a rendered shortcut."
+    },
+    {
+      "title": "Manual local photo import",
+      "status": "Investigated; deferred",
+      "detail": "Android document selection is a possible path, but exact frame file-provider/USB behavior and safe image-cache integration need device research first."
+    },
+    {
+      "title": "Voice shopping-list capture",
+      "status": "Investigated; deferred",
+      "detail": "Recognizer availability and recognition/privacy behavior need checks on this frame before choosing an API or requesting microphone access."
+    },
+    {
+      "title": "A direct local home-control adapter",
+      "status": "Deferred pending owner integration choice",
+      "detail": "First verify actual Home operations and select a supported integration. No guessed device state or new service was added."
+    },
+    {
+      "title": "Non-secret preference transfer",
+      "status": "Implemented",
+      "detail": "Strict display-settings allowlist. Browser file export/import; frame copy/paste. Feeds, links, photos, accounts, city, notes and inviter identities are excluded."
+    },
+    {
+      "title": "Broad cloud/photo/calendar expansion",
+      "status": "Remains deferred",
+      "detail": "Editable Calendar/OAuth, hosted sync, arbitrary embeds, automatic photo analysis and DRM services remain outside the current scope."
+    }
+  ],
+  "acceptance": [
+    "Identify the exact frame model, Android version and authenticated transport before installing. Use the existing signed upgrade path; preserve app data, signing key, original launcher and device settings. No factory reset or firmware change.",
+    "Inspect all affected tabs on the physical 1920\u00d71080 screen and the actual WebView 95. Check standard/larger text, six theme pairs, dense dates and the full Settings return routes.",
+    "Check first-run guide on a non-destructive test install; on the existing frame, verify upgrade preserves settings and does not reopen setup. Reopen Settings \u2192 Device & status \u2192 Setup guide and follow its links.",
+    "Email: send a real test image to the dedicated account, confirm import within the selected interval, slide advance, manual check, offline cache and first-touch idle return. Check trusted/unapproved senders and retain/erase/disconnect effects using private records only.",
+    "Calendar: owner changes an actual event, then verify refreshed event behavior, today-anchored Overview, hide/show, rename/recolour, inviter approval/revocation/cancellation and removal during refresh. Keep feed URLs and event details out of reports and logs.",
+    "Quiet hours: test configured-city boundary and overnight behavior, idle disabled, no saved photos, active manual browse/video, pause restore, Android Back and first touch. Confirm hardware brightness is unchanged.",
+    "Run a multi-day unattended acceptance period covering selected mail polling, offline/reconnect, restarts, old-picture pruning and bounded storage. Record measured results; compilation and synthetic previews cannot establish these.",
+    "Google Home: owner sign-in and a real supported operation. YouTube: actual deep-link playback, full-screen and reliable Return to Skylit. Never treat the launch page alone as success."
+  ],
+  "verification": {
+    "javascript": 53,
+    "python": 14,
+    "renderedChecks": 29,
+    "screenshots": 208,
+    "reloadRetries": 0,
+    "runtimeErrors": 0,
+    "nativeDevice": "Not deployed; user requested APK ready for later testing",
+    "apkVersionCode": 19,
+    "apkSha256": "2a1bfddd25702a7402ed42bf21d2f65db315957ffcfe281c73a8416c7d998b90"
+  }
+}

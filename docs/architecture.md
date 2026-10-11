@@ -110,3 +110,44 @@ and 12/24-hour preference. Service navigation stays in the sidebar.
 `overview-model.js` holds event selection and weather freshness decisions. Preview
 fixtures remain outside the APK allowlist. `scripts/preview.py` serves a disposable
 public-asset copy on loopback with cache disabled; it never stages personal config.
+
+## Focused settings and local utilities (2.12)
+
+`workspace.js` arranges existing editors into Settings categories and provides shared
+contextual return routes, coarse recovery status and optional Household tools.
+`frame-model.js` holds bounded preference/utility/curation rules, date arithmetic,
+quiet schedules and the explicit display-transfer allowlist. These remain plain
+local JavaScript; no framework, hosted service or phone synchronization was added.
+
+`skylit.frame` stores display/playback/quiet preferences; `skylit.household` stores
+notes, shopping items, countdowns and visible timers. Timers survive restart as end
+timestamps but promise no background alarm, sound or phone notification. Photo
+choices are bounded by current hashed IDs and a native cache epoch, cleared when
+an account changes or its cache is erased. Hidden items are excluded before every
+playback/Overview selection. Calendar visibility is an independent display rule
+applied after inviter approval; the month/selected-date agenda is the only view.
+Legacy Week/Today choices are ignored. Source metadata stays in native private storage.
+
+`MailImportPolicy` defines permitted intervals, automatic error backoff and exact
+From-address matching before saving attachments. Delivery settings (including the
+optional sender list) stay in private native preferences; coarse status snapshots
+omit that list. Manual checks remain single-flight and may bypass automatic backoff.
+The native minute checker schedules due work while the activity exists; this is not
+a background Android service. Dedicated-inbox, TLS and read-only constraints remain.
+
+Native idle checks ask the local dashboard whether quiet hours apply in the chosen
+city zone, guarded against a touch/remote/player race before showing the quiet clock.
+Manual privacy pause masks the shell and pauses Momo. Restore returns to Overview;
+active external content/manual browsing is not interrupted automatically. Hardware
+brightness is unchanged. Local calendar metadata edits preserve the private URL and
+last-good feed and cannot be overwritten by a pending accepted refresh.
+
+Owner-curated YouTube links are limited to canonical watch/playlist routes on the
+exact supported hosts, checked in JavaScript and independently at the native bridge.
+They open the existing isolated remote WebView and carry no privileged bridge.
+
+In 2.12.1, Settings uses one editor column and a category selector above it. Inviter
+review has a separate panel, sharing the existing controller and approval storage.
+Photo source, per-picture choices and playback preferences stay in Settings; the
+player exposes only transport and zoom. Overview prints and Weather presentation
+return to their 2.11 arrangement while retaining adaptive landscape bounds.

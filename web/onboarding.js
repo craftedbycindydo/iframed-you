@@ -8,10 +8,10 @@
   // never been opened. Do not interrupt an already configured household.
   const model = {
     shouldOpen: (stored, personal, done, route) => !stored && !personal && !done && !route,
-    progress: (city, album, email, calendars) => ({
+    progress: (city, album, email, calendars, received=0, refreshed=0) => ({
       city: city ? 'City set' : 'City needed',
-      photos: album || email ? 'Photo source connected' : 'Choose a photo source',
-      calendar: calendars > 0 ? `${calendars} calendar${calendars === 1 ? '' : 's'} added` : 'Optional · no calendar added'
+      photos: received>0?'Picture received · Check playback on frame':email?'Configured · Send a test picture':album?'Album configured · Open to verify playback':'Choose a photo source',
+      calendar: refreshed>0?'Calendar refreshed · Check your events':calendars > 0 ? `${calendars} calendar${calendars === 1 ? '' : 's'} added` : 'Optional · no calendar added'
     })
   };
   window.SkylitOnboardingModel = model;
@@ -23,7 +23,9 @@
     const state = app.setupState();
     const mail = nativeState('photoStatus', {});
     const calendars = nativeState('calendarList', []);
-    const labels = model.progress(state.city, state.album, !!mail.connected, Array.isArray(calendars) ? calendars.length : 0);
+    const labels = model.progress(state.city, state.album, !!mail.connected, Array.isArray(calendars) ? calendars.length : 0,Array.isArray(mail.photos)?mail.photos.length:0,Array.isArray(calendars)&&calendars.length&&calendars.every(c=>c.fetchedAt>0)?Math.min(...calendars.map(c=>c.fetchedAt)):0);
+    let step='';try{step=localStorage.getItem('skylit.onboarding.step')||'';}catch(_){}
+    document.querySelectorAll('[data-setup-target]').forEach(button=>{if(button.closest){const card=button.closest('.setup-step');if(card)card.setAttribute('aria-current',button.dataset.setupTarget===step?'step':'false');}});
     $('setup-city-status').textContent = labels.city;
     $('setup-photos-status').textContent = labels.photos;
     $('setup-calendar-status').textContent = labels.calendar;
@@ -39,6 +41,8 @@
   document.querySelectorAll('[data-setup-target]').forEach(button => {
     button.onclick = () => {
       const target = button.dataset.setupTarget;
+      try{localStorage.setItem('skylit.onboarding.step',target);}catch(_){}
+      if(app.openSettings){app.openSettings(target==='photos'?'photos':target==='calendar'?'calendars':'weather','setup');return;}
       app.go(target === 'photos' ? 'photos' : 'settings');
       if (target !== 'photos') {
         const node = $(target === 'calendar' ? 'calendar-settings' : 'city-form');

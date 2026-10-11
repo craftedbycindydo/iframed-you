@@ -1,0 +1,585 @@
+{
+  "summary": "Skylit already has a coherent identity: a warm, glanceable dashboard that becomes a photo frame when idle. The next design pass should make setup, settings and recovery easier while protecting that calm everyday view. The next product pass should deepen photos and household coordination before adding more external-service launchers.",
+  "features": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "kind": "Local dashboard",
+      "capture": "overview",
+      "items": [
+        "Large clock and date; 12/24-hour format in the chosen city's timezone",
+        "Current temperature, high/low, rain probability, wind and sunset",
+        "Nine weather illustrations with day/night variants, shared with Weather",
+        "Up to three recent local photos; tap to open Photos",
+        "Up to three upcoming events grouped by date; remains on today during month browsing",
+        "Weather and Calendar drill-downs; saved/offline/missing-data messages"
+      ],
+      "evidence": "Layout and live weather documented on the frame. Populated event/photo preview here is synthetic; household event-change refresh is not established by this review.",
+      "sources": [
+        "web/app.js",
+        "web/overview-model.js",
+        "web/photos.js",
+        "web/calendar.js"
+      ]
+    },
+    {
+      "id": "weather",
+      "title": "Weather",
+      "kind": "Local UI + direct forecast service",
+      "capture": "weather",
+      "items": [
+        "Open-Meteo current weather, seven hourly slots and five-day outlook",
+        "Feels-like temperature, humidity, rain probability, wind and sunset",
+        "City search with disambiguated results; Celsius/Fahrenheit",
+        "Manual refresh and 15-minute refresh; failed requests retry after one minute",
+        "Last-good forecast cache and explicit saved-data state",
+        "Clear, partly cloudy, cloudy, fog, rain, snow, rain showers, snow showers and storms"
+      ],
+      "evidence": "Real forecast rendering was previously checked on hardware. This capture set exercises synthetic conditions and a browser offline state, not a new live forecast check.",
+      "sources": [
+        "web/app.js",
+        "web/weather-art.js",
+        "web/weather-art.css"
+      ]
+    },
+    {
+      "id": "photos",
+      "title": "Photos",
+      "kind": "Two sources; native private cache",
+      "capture": "photos",
+      "items": [
+        "Google Photos shared-album source and Google-owned slideshow",
+        "Dedicated Gmail inbox source via direct TLS IMAP, read-only import",
+        "Browsable thumbnail library; manual check and last-checked status",
+        "Full-screen browsing, previous/next, pause/play, zoom and pan",
+        "Soft fade, Falling prints and duplicate-free Photo collage",
+        "5/8/12/20-second playback; fading controls; reduced-motion handling",
+        "30/90-day retention and UI limits of 10–50 saved photos; bounded resized JPEG cache",
+        "Private encrypted app password; disconnect erases credential and cache",
+        "Native idle timer, configurable delay and first-touch return; cached email photos work offline"
+      ],
+      "evidence": "Docs record real import of two generated test images, auto-advance, offline cache, idle return, browsing/zoom and style checks. Long-term mail polling and age pruning remain unverified. Shared album playback was separately checked.",
+      "sources": [
+        "web/photos.js",
+        "web/photos-model.js",
+        "web/photo-playback.js",
+        "docs/photos.md"
+      ]
+    },
+    {
+      "id": "calendar",
+      "title": "Calendar",
+      "kind": "Local read-only UI + private feeds",
+      "capture": "calendar",
+      "items": [
+        "Up to six named, coloured Google iCal feeds fetched directly on the frame",
+        "Six-row month grid, date selection, Today and previous/next month",
+        "Two-week agenda from the selected date; expandable time/location/description",
+        "Recurrence, exceptions, all-day and timezone handling in a bounded worker",
+        "Refresh every 15 minutes; manual refresh; last-good offline event cache",
+        "Manage calendars, secret-address help and two-tap removal",
+        "Optional exact-address inviter approvals, pending review and missing-organizer choice",
+        "Same display rule on Calendar and Overview; stale worker responses and removal guarded"
+      ],
+      "evidence": "Public holiday feed was checked on hardware; parser and race/removal rules have automated coverage. A household-owned event change and real inviter approval/revocation/cancellation still need explicit device verification.",
+      "sources": [
+        "web/calendar.js",
+        "web/calendar-model.js",
+        "web/calendar-policy.js",
+        "docs/calendar.md"
+      ]
+    },
+    {
+      "id": "home",
+      "title": "Home controls",
+      "kind": "External Google Home website",
+      "capture": "home",
+      "items": [
+        "Launch Google Home in a separate full-screen WebView",
+        "Owner signs in on the frame; exact HTTPS navigation allowlist",
+        "Configurable Google Home page; persistent Skylit return control",
+        "Native photo idle switching pauses during remote-service use"
+      ],
+      "evidence": "The Google sign-in page was reached. Authenticated controls and real device operations on the frame are not verified; no device states should be inferred from this launch screen.",
+      "sources": [
+        "web/app.js",
+        "docs/architecture.md",
+        "docs/verification.md"
+      ]
+    },
+    {
+      "id": "youtube",
+      "title": "YouTube",
+      "kind": "External website",
+      "capture": "youtube",
+      "items": [
+        "Touch-friendly mobile or standard desktop website",
+        "Separate service WebView; public viewing or owner-managed sign-in",
+        "Full-screen video with a persistent return route",
+        "Photo idle mode suspended while the remote service is open"
+      ],
+      "evidence": "Docs record mobile search and one public video playing with advancing elapsed time, full-screen and return. Desktop-layout playback and ongoing service compatibility remain unverified.",
+      "sources": [
+        "web/app.js",
+        "docs/verification.md"
+      ]
+    },
+    {
+      "id": "settings",
+      "title": "Settings",
+      "kind": "Device-local preferences",
+      "capture": "settings",
+      "items": [
+        "Reopen setup guide without resetting household data",
+        "Six palettes: Linen, Sage, Stone, Ocean, Plum and High contrast",
+        "Light, Dark or Automatic astronomical sunrise/sunset; computed offline",
+        "Momo accessory gallery, rotating/daily outfit, energy and daily rhythm",
+        "City, units and clock; photo idle delay, shared-album link and idle preview",
+        "Google Home page and private calendar management",
+        "About/version, Wi-Fi, wireless-debugging settings and original Skylight app shortcuts"
+      ],
+      "evidence": "Preferences and upgrade preservation have prior device checks. Appearance controls change dashboard colours, not hardware brightness or third-party websites. Browser and frame preferences do not sync.",
+      "sources": [
+        "web/index.html",
+        "web/appearance.js",
+        "web/momo.js",
+        "docs/design.md"
+      ]
+    },
+    {
+      "id": "setup",
+      "title": "Setup guide",
+      "kind": "First-run + reopenable screen",
+      "capture": "setup-fresh",
+      "items": [
+        "Three steps: city/time, photo source and optional calendars",
+        "Coarse readiness labels and direct links to existing forms",
+        "Use dashboard/Open dashboard lets the owner skip optional setup",
+        "Automatic opening on a fresh install; existing settings suppress it on upgrade",
+        "Reopened from Settings; no credentials copied into the guide"
+      ],
+      "evidence": "Fresh browser launch/dismissal and upgrade suppression are covered by tests. Reopening was checked on hardware; a fresh Android installation was not tested on the configured frame.",
+      "sources": [
+        "web/onboarding.js",
+        "tests/onboarding.test.cjs"
+      ]
+    },
+    {
+      "id": "momo",
+      "title": "Momo + app shell",
+      "kind": "Cross-screen behaviour",
+      "capture": "settings-momo",
+      "items": [
+        "Original Canvas 2D companion with twelve expressive reactions",
+        "Tap hello, pointer gaze and scroll response",
+        "Eleven accessories plus Just Momo; daily or 90-second wardrobe rotation",
+        "Local-time morning yawns, evening wind-down and night sleep",
+        "Playful/Gentle/Still and reduced-motion support; pauses while hidden or covered",
+        "Seven-tab rail, connection indicator, native Back and renderer recovery",
+        "Bundled offline startup; bridge only in the local dashboard; original launcher retained"
+      ],
+      "evidence": "Wardrobe, rendering and routine behaviours have device/browser checks and focused tests. Two-finger stock-app gesture and deliberate renderer-crash recovery are not physically certified in the verification record.",
+      "sources": [
+        "web/momo.js",
+        "web/momo-routine.js",
+        "docs/momo.md",
+        "docs/architecture.md"
+      ]
+    }
+  ],
+  "globalDesign": [
+    {
+      "title": "Give Settings a short category index",
+      "priority": "First",
+      "text": "Use Appearance, Momo, Weather & time, Photos, Calendars and Device as six clear destinations. Keep the category index visible while a panel is open and add a clear back route. The existing page requires a long scroll past the wardrobe to reach everyday connection controls.",
+      "bar": "Every category is reachable in one tap from Settings; direct links from setup and service tabs still land on the correct section."
+    },
+    {
+      "title": "Put each control beside the feature it changes",
+      "priority": "First",
+      "text": "Photos should own source, style, speed and idle timing, with one Settings link to the same controls. Calendar management should open within Calendar. Avoid two different settings surfaces for one feature or sending the owner into an unrelated long page.",
+      "bar": "Starting from a feature screen, changing its most common preference takes at most two deliberate taps; there is one authoritative editor per preference."
+    },
+    {
+      "title": "Make status useful and readable",
+      "priority": "First",
+      "text": "Use one status pattern per service: Not set up → Checking → Updated → Saved/offline → Needs attention. The rail's Connected only reflects browser network availability; it does not prove Gmail, Calendar or Home works. Replace technical full timestamps with concise local times and show details on demand.",
+      "bar": "A failure says what remains usable and offers a specific recovery action. Successful credential storage is never described as verified functionality."
+    },
+    {
+      "title": "Keep warm colour, increase functional legibility",
+      "priority": "First",
+      "text": "Preserve soft surfaces, serif headings and Momo. Enlarge the smallest state/help text and improve its token contrast where needed instead of turning every panel high contrast. Make primary and secondary actions consistent; keep focus, selected date and destructive confirmation distinct.",
+      "bar": "Use 44×44 CSS pixels as the minimum design target for frequent touch controls, with 48–56px preferred on the frame. Measure text contrast on actual surfaces and retain all six light/dark pairs.",
+      "cite": "Accessibility references"
+    },
+    {
+      "title": "Design for the frame before the desktop",
+      "priority": "Next",
+      "text": "Treat 1280×720 CSS pixels as the primary canvas. Overview and the core Calendar view should fit without page scrolling; long Settings forms can scroll deliberately. For Weather, trade some hero height for breathing room below the five-day row. On narrow screens, use a compact navigation treatment and lead with the useful content.",
+      "bar": "Check the frame, desktop and narrow widths with long titles, six calendars, a full photo cache, visible errors and enlarged text. No horizontal overflow or clipped actionable status."
+    },
+    {
+      "title": "Keep the rail calm, but make optional apps optional",
+      "priority": "Later",
+      "text": "Keep the four everyday destinations—Overview, Weather, Photos, Calendar—easy to scan. Let households hide Home or YouTube from the rail if unused, keeping Settings available. Keep Momo in the rail and wardrobe controls in Settings; extra mascot shortcuts would add clutter.",
+      "bar": "The default rail stays familiar; hiding optional destinations never strands an active screen or removes its recovery path."
+    }
+  ],
+  "screenDesign": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "capture": "overview",
+      "finding": "The current four-part composition is the strongest screen. Photo prints deliberately overlap the agenda, while the weather artwork and oversized clock supply the visual identity.",
+      "recommendations": [
+        "Keep the clock/weather left and photos/three-event agenda right. Add a modest safe gap below the prints so longer Upcoming headings or warnings never compete with the photograph edges.",
+        "Make a complete weather card and each upcoming-event row a generous drill-down target; retain a visible, labelled route such as Forecast or Calendar instead of relying only on small arrows.",
+        "For absent photos or calendars, rebalance the space and provide one contextual setup action. Keep healthy timestamps out of Overview; show saved/offline warnings without expanding the card unpredictably."
+      ],
+      "layout": "Clock + weather | photo stack + three events; the same grid adapts when a source is absent."
+    },
+    {
+      "id": "weather",
+      "title": "Weather",
+      "capture": "weather",
+      "finding": "Current conditions are clear, but the hero and three metric cards use most of the frame height. At 720 CSS pixels the footer sits below the visible canvas; hour/day supporting labels are small.",
+      "recommendations": [
+        "Reduce the hero's vertical padding/height slightly and reserve a clear area for both forecast rows. Keep the condition illustration; use compact rain/wind/sunset tiles beside it or underneath it.",
+        "Increase hourly time and precipitation labels; align five-day highs/lows in consistent columns. When no city is set, replace the seven-column forecast placeholder with one full-width Choose city state so its copy does not wrap into a narrow stack.",
+        "Pair the city with a Change city action and keep one refresh/status line near the heading. In offline/error states, display Saved forecast plus its age and a Retry action above the data."
+      ],
+      "layout": "Heading/status → current conditions + compact metrics → hourly row → five-day row."
+    },
+    {
+      "id": "photos",
+      "title": "Photos · local library",
+      "capture": "photos",
+      "finding": "The photo-first library works well, but a 290px settings column remains reserved even when its disclosure is closed. The check timestamp is longer and more technical than the rest of the screen.",
+      "recommendations": [
+        "Use the full content width for thumbnails while settings are closed. Put a labelled Photo settings button in the header and open a broad side panel or dedicated subpage only when needed.",
+        "Keep Slideshow primary and Check now secondary; shorten status to 5 saved · Checked 9:15 a.m., with a fuller date available in details.",
+        "Scale the grid for 5, 30 and 50 photos, preserving large thumbnails and a useful scroll position after browsing. For zero photos, replace the empty library with one clear connect/check action and delivery instructions."
+      ],
+      "layout": "Source + settings + actions in one header; library fills the remaining width."
+    },
+    {
+      "id": "photos-album",
+      "title": "Photos · shared album",
+      "capture": "photos-album",
+      "finding": "The album screen devotes a broad, tall card to a small launch action. Album and idle setup live elsewhere; the built-in slideshow-style controls are not available in this source view.",
+      "recommendations": [
+        "Use a compact launch card with the actual state—No album added or Album ready to open—and one primary action. Avoid decorative filler when there is no album preview.",
+        "Place Edit album and Idle timing in this screen's secondary settings area, reusing the existing preference editor.",
+        "Explain beside the source selector that this mode uses Google's player; Skylit's three styles and offline cache belong to emailed photos. Keep source-switching available without a trip through Settings."
+      ],
+      "layout": "Source selector → compact album launch card → album/timing settings."
+    },
+    {
+      "id": "photo-player",
+      "title": "Photo browser, zoom and all slideshow styles",
+      "capture": "slideshow-collage",
+      "finding": "The full-screen photo treatment and fading theme controls are effective. Browse and playback share the same control bar, while collage crops pictures to fill its slots.",
+      "recommendations": [
+        "Make Browse and Slideshow visually distinct modes. Keep Previous/Next/Close in a predictable order; group Play/Pause and Zoom so the effect of zoom pausing playback is clear.",
+        "Provide a Fit/Fill choice for portraits and collage tiles, and return to the same library position after Close. A photo should not lose a face simply to fill an attractive frame.",
+        "Keep controls reachable by touch and keyboard with visible focus; first-touch idle return stays immediate. Test the bar at narrow widths and keep the image counter readable without forcing controls permanently onscreen."
+      ],
+      "layout": "Photo-first full-screen surface; a consistent floating control bar appears on interaction."
+    },
+    {
+      "id": "photo-settings",
+      "title": "Photo delivery, retention and disconnect",
+      "capture": "photo-settings",
+      "finding": "The expanded panel combines styling, credentials, cache limits and disconnect in one narrow column. A first-time owner has to interpret several unrelated controls at once.",
+      "recommendations": [
+        "Divide it into Presentation, Delivery and Storage sections. Show an account-connection form only when connecting/changing an account; show coarse connected status during ordinary use.",
+        "Put app-password prerequisites and a Test delivery checklist next to Connect. After saving, guide the owner to send a picture and verify actual import instead of showing only a saved-credential success.",
+        "Group retention/count limits together and put Disconnect and erase in a clearly separated final section, with confirmation that names the effects and explains Google-side revocation."
+      ],
+      "layout": "Wide subpage/panel with three short groups; sensitive fields remain empty or masked."
+    },
+    {
+      "id": "calendar",
+      "title": "Calendar · month, agenda and event details",
+      "capture": "calendar-details",
+      "finding": "Month + agenda fits the frame and today/selection are distinct. One event title and +N per cell are a sensible density limit. Management actions currently occupy a prominent row even in everyday use.",
+      "recommendations": [
+        "Keep month and agenda. Consolidate management into a Calendar options action; show Review inviters prominently only when there is something waiting, with the count visible.",
+        "Make the selected date heading explicit, offer Month/Week/Today agenda modes, and turn calendar-name chips into visibility filters without deleting feeds.",
+        "Give expanded details a clear time range, location and description hierarchy. Add a discreet Read-only label; preserve the independent today-anchored Overview and distinct today/selection markers."
+      ],
+      "layout": "Month + selected-date agenda; secondary management opens on demand."
+    },
+    {
+      "id": "calendar-manage",
+      "title": "Calendar · management and connection help",
+      "capture": "calendar-manage",
+      "finding": "Manage calendars jumps into the lower part of Settings. The connection form and help are useful, but the owner loses the Calendar context.",
+      "recommendations": [
+        "Open a Calendar management subpage/panel with a Back to Calendar action. Show connected labels, coarse refresh state and removal controls before the add form.",
+        "Make the secret-address instructions a short step list beside the empty input. Keep labels and colours editable separately from reconnecting a feed.",
+        "For replacement/removal, distinguish local deletion from Google-side revocation. Retain confirmation and show saved-data/error status per source without ever revealing its secret URL."
+      ],
+      "layout": "Connected sources → Add calendar → expandable private-link help; explicit return route."
+    },
+    {
+      "id": "calendar-inviters",
+      "title": "Calendar · inviter review",
+      "capture": "calendar-inviters-pending",
+      "finding": "The frame-only scope is correctly explained, but it takes a long inline panel to reach the decisions. The default demo has no organizer addresses and exposes the missing-organizer branch.",
+      "recommendations": [
+        "Separate the one-time owner/review setup from ongoing pending decisions. Lead with Waiting for review, then Approved inviters, with configuration in a disclosure.",
+        "Keep exact-address identity and visible event counts; use Show on frame and Hide on frame labels. Make the missing-organizer option a separate explicit choice.",
+        "Use a dedicated review panel with a return route, preserve read-only semantics and never imply that approving here accepts a Google invitation. Say the count covers only loaded dates."
+      ],
+      "layout": "Pending decisions first; approvals second; owner and policy setup collapsed after configuration."
+    },
+    {
+      "id": "home",
+      "title": "Home controls",
+      "capture": "home",
+      "finding": "This is a launcher to Google Home, not a native device dashboard. The very wide card contains a short paragraph and one button; authenticated operations are unverified.",
+      "recommendations": [
+        "Replace the oversized hero with a compact launch panel and a short first-use checklist. Keep Open home controls as the only primary action.",
+        "Label the boundary clearly: Opens Google Home. Use setup state such as Sign in on frame rather than guessed Connected or device tiles.",
+        "Offer optional hiding of the rail item when unused. Keep the return control visible in the actual external wrapper; verify real controls before proposing favourites or native room/device cards."
+      ],
+      "layout": "Compact external-service launch panel + setup/help disclosure."
+    },
+    {
+      "id": "youtube",
+      "title": "YouTube",
+      "capture": "youtube",
+      "finding": "A large empty launch card is followed by a separate layout settings card. The choice is meaningful but not adjacent to the action it affects.",
+      "recommendations": [
+        "Place mobile/standard layout selection beside Open YouTube in one compact card; default to the touch-friendly layout.",
+        "Keep Photo mode pauses while you watch close to the launch action, with browser/playback limitations in a short disclosure.",
+        "If adding favourites later, show owner-entered titles and destinations with a clear external-site badge. Keep the frame's return control usable above full-screen video."
+      ],
+      "layout": "One launch card containing layout choice, primary action and a concise playback note."
+    },
+    {
+      "id": "settings",
+      "title": "Settings · appearance, Momo and device controls",
+      "capture": "settings-full",
+      "finding": "Appearance is polished, but Settings is a long scroll with a large wardrobe section before city/source controls. Operational shortcuts are mixed with everyday preferences.",
+      "recommendations": [
+        "Start with a six-category index. Make Appearance and Momo separate panels so the gallery does not displace weather, photo or calendar configuration.",
+        "Keep palette and mode independent; show a small live preview plus resolved Light/Dark and next solar change. Preserve six paired palettes and the softer regular themes.",
+        "Group Wi-Fi, original-app recovery and About under Device; put Wireless debugging in an Advanced disclosure. Pair saved/error feedback with the control that changed, instead of relying on a distant page badge."
+      ],
+      "layout": "Category index → one focused preference panel; clear return and inline saving status."
+    },
+    {
+      "id": "setup",
+      "title": "First-run and reopened setup guide",
+      "capture": "setup-fresh",
+      "finding": "The three cards and skip route are clear. A connected credential currently makes Photos look ready even though no imported picture is required; the guide has no persistent return cue once it sends the owner into another screen.",
+      "recommendations": [
+        "Retain three short steps and optional Calendar. Separate Configured from Verified where appropriate: city selected, picture received, calendar refreshed.",
+        "Keep a small Back to setup/Continue setup action in the target forms and remember the current step. Use explicit Choose source, Send test picture and Check events actions as progress changes.",
+        "Keep personal fields out of the guide and avoid automatically reopening it on upgrades. After finishing, land on Overview with a useful empty state for skipped features."
+      ],
+      "layout": "Three-step overview → existing focused editors → verification checklist → dashboard."
+    }
+  ],
+  "roadmap": [
+    {
+      "priority": "P0",
+      "title": "Service status and guided recovery",
+      "kind": "Foundation / extends every integration",
+      "effort": "M",
+      "why": "A network indicator and saved credential do not prove a feature works. Failures need a useful next action, not a generic Connected label.",
+      "mvp": "A local status panel with last successful weather fetch, calendar parse, mail check and cached-picture count; each service offers Retry or its setup route. Keep Home as owner-verified, never infer remote authentication.",
+      "done": "Offline data remains usable; status contains no URLs, mail identity, event details or tokens; each recovery action is tested.",
+      "depends": "Existing coarse native status and caches; actual-frame verification."
+    },
+    {
+      "priority": "P0",
+      "title": "Unattended reliability and acceptance pass",
+      "kind": "Quality work / before expanding scope",
+      "effort": "M",
+      "why": "Docs explicitly leave long-term mail polling, age pruning, fresh Android setup, live inviter rules and Home operations open.",
+      "mvp": "Run a documented multi-day frame soak, upgrade/restart/offline tests, bounded-cache pruning and owner-led real calendar-change/inviter checks. Record results privately with labels only.",
+      "done": "No stuck player/import, lost settings, stale-feed resurrection or unbounded cache; unresolved compatibility issues are visible in the UI.",
+      "depends": "Identified device and owner participation for household tests. No factory reset or destructive reinstall."
+    },
+    {
+      "priority": "P1",
+      "title": "Configurable email-photo refresh and progress",
+      "kind": "Extension / Photos",
+      "effort": "M",
+      "why": "The current importer checks at most once a day after a successful check, plus manual Check now. Newly emailed pictures can feel late.",
+      "mvp": "Offer bounded 15-minute, hourly or daily polling; show Checking, last success, received count and actionable failure. Use one in-flight check and network/error backoff; keep the current manual check.",
+      "done": "A newly sent test image appears within the selected online window; retries do not overlap or remove the last good cache.",
+      "depends": "Native PhotoMail scheduling; battery/network/large-inbox testing on the frame."
+    },
+    {
+      "priority": "P1",
+      "title": "Photo favourites, hide and fit/fill",
+      "kind": "Extension / Photos + Overview",
+      "effort": "M",
+      "why": "A displayed family photo deserves selection and intentional cropping. A cache of 30–50 pictures needs more control than next/previous.",
+      "mvp": "Favourite and hide from playback, reversible local choices, Fit/Fill per photo and a shuffle toggle. Let Overview prefer favourites; avoid changing or deleting email messages.",
+      "done": "Hidden pictures stay out of all playback modes and Overview; undo works; portrait faces survive Fit; curation survives a harmless refresh.",
+      "depends": "Stable deduplicated photo IDs; retention/account-change semantics and bounded local state."
+    },
+    {
+      "priority": "P1",
+      "title": "Today/Week agenda and calendar filters",
+      "kind": "Extension / Calendar + Overview",
+      "effort": "M",
+      "why": "A month is good for orientation; households often need the next few hours, a week or one calendar's plans.",
+      "mvp": "Read-only Today and Week agenda modes plus per-calendar visibility chips. Remember the view locally; keep Today obvious and details accessible.",
+      "done": "Overnight/all-day/DST and dense days remain readable; hiding a feed is reversible; Overview still uses today and the agreed visibility rules.",
+      "depends": "Existing parsed feeds and race/removal guards; no OAuth or event editing."
+    },
+    {
+      "priority": "P1",
+      "title": "Household note and shopping checklist",
+      "kind": "New daily-use feature",
+      "effort": "M",
+      "why": "Adds a reason to touch the frame beyond weather/photos without needing another hosted service.",
+      "mvp": "One editable pinned note and a short shopping list stored on this frame; large add/check/undo controls. Overview can show a small optional excerpt.",
+      "done": "Works offline and after restart; labels clearly say On this frame; a household can recover accidental completion.",
+      "depends": "Single-frame MVP. Phone synchronization is a separate product/integration decision; do not imply Google Keep sync."
+    },
+    {
+      "priority": "P1",
+      "title": "Quiet hours and a privacy pause",
+      "kind": "Extension / idle mode + appearance",
+      "effort": "M",
+      "why": "Automatic palette switching already follows the sun, but households may want control over what is displayed overnight or while guests visit.",
+      "mvp": "An optional schedule for ambient display plus a manual pause that hides photos/event content with a clear restore action. Keep astronomical colour mode independent.",
+      "done": "Schedules respect configured local time/DST; no automatic interruption of active video or manual browsing; touch reliably restores the dashboard.",
+      "depends": "Native idle-state coordination; hardware brightness is a separate optional capability to investigate, not promised."
+    },
+    {
+      "priority": "P2",
+      "title": "Overview presets and optional navigation",
+      "kind": "Extension / Overview + shell",
+      "effort": "M",
+      "why": "Different households care most about photos or plans; unused service tabs consume attention.",
+      "mvp": "Three bounded presets: Balanced, Photos first, Agenda first. Toggle optional Home/YouTube rail entries and keep four core destinations fixed.",
+      "done": "Each preset fits 1280×720 with long content and missing sources; Today remains stable; no hidden destination strands the user.",
+      "depends": "Reliable Settings categories and shared layout rules; avoid a freeform widget builder initially."
+    },
+    {
+      "priority": "P2",
+      "title": "Readable display profile",
+      "kind": "Extension / accessibility + appearance",
+      "effort": "M",
+      "why": "High contrast exists, but some owners need larger text and controls while keeping Linen or Sage.",
+      "mvp": "A modest/large text preference, consistent 48–56px frequent targets and visible keyboard focus; retain optional High contrast and motion controls.",
+      "done": "All tabs, panels and players work at the largest supported size; no hidden labels, clipped agenda or horizontal scrolling.",
+      "depends": "Token-based typography/layout audit; rendered contrast checks in all pairs."
+    },
+    {
+      "priority": "P2",
+      "title": "Trusted photo senders",
+      "kind": "Extension / mail-import policy",
+      "effort": "M–L",
+      "why": "Anyone who can send a picture to the dedicated inbox can currently place it on the display.",
+      "mvp": "An opt-in allowlist checked before saving attachments, with a coarse skipped count and clear rules. Store the minimum sender-policy data privately.",
+      "done": "Unapproved senders cannot place pictures; disabling/changing the rule has defined cache behaviour; sender matching is not presented as cryptographic identity proof.",
+      "depends": "Importer/MIME tests and privacy review; complete basic import reliability first."
+    },
+    {
+      "priority": "P2",
+      "title": "Manual calendar visibility and friendly labels",
+      "kind": "Extension / calendar management",
+      "effort": "S–M",
+      "why": "Owners should be able to rename/recolour/hide a source without deleting and reconnecting its private feed.",
+      "mvp": "Edit label and colour, toggle visibility and show separate refresh health for each source.",
+      "done": "No feed URL is exposed or re-entered for a label change; visibility immediately updates both month/agenda and Overview.",
+      "depends": "Native metadata editing plus worker-generation regression coverage."
+    }
+  ],
+  "ideas": [
+    {
+      "category": "Nice-to-have",
+      "title": "Photo replay controls",
+      "text": "Shuffle, repeat, favourites-only playback and a safe skip-unavailable-image route; retain duplicate-free collage and offline playback."
+    },
+    {
+      "category": "Nice-to-have",
+      "title": "Photo captions and dates",
+      "text": "Owner-entered local captions and received-date display on demand. Do not infer people, locations or original capture dates from metadata that is intentionally stripped."
+    },
+    {
+      "category": "Nice-to-have",
+      "title": "Slideshow style preview",
+      "text": "A tiny sample animation beside each of the three styles, with clear reduced-motion behaviour and one-tap selection."
+    },
+    {
+      "category": "Nice-to-have",
+      "title": "Agenda search and next-event focus",
+      "text": "Search loaded event titles locally and show a selected event countdown. Clearly limit search to the loaded horizon; never imply all-history coverage."
+    },
+    {
+      "category": "Nice-to-have",
+      "title": "Weather detail choices",
+      "text": "Sunrise and optional gusts/feels-like details if available in the forecast contract. Keep the Overview at three metrics; no location permission or automatic-mode API dependency."
+    },
+    {
+      "category": "Nice-to-have",
+      "title": "Local countdowns",
+      "text": "A birthday, visit or holiday countdown entered on the frame, optionally sourced from an existing event. Keep it a compact optional Overview module."
+    },
+    {
+      "category": "Nice-to-have",
+      "title": "Timers and reminders",
+      "text": "Large kitchen timer and locally entered reminders with visible dismissal. Native background/alarm behaviour needs its own verification; avoid promising phone alerts."
+    },
+    {
+      "category": "Nice-to-have",
+      "title": "A small Momo wardrobe expansion",
+      "text": "A few seasonal accessories or owner-selected celebration days using the existing canvas/routine. Make them optional; preserve Still mode and pause behaviour."
+    },
+    {
+      "category": "Exploratory",
+      "title": "Owner-curated YouTube shortcuts",
+      "text": "A handful of named public playlists/videos with exact-host validation. Validate full-screen/return on WebView 95 before relying on deep links."
+    },
+    {
+      "category": "Exploratory",
+      "title": "Manual local photo import",
+      "text": "Android file picker for selected images, using the same resize/metadata removal/storage limits. Investigate USB/file-provider compatibility on the exact frame first."
+    },
+    {
+      "category": "Exploratory",
+      "title": "Voice shopping-list capture",
+      "text": "Useful after the local list succeeds. Explicit opt-in, visible listening state and clear storage/recognition behaviour; research device support and a maintainable sync route before choosing an API."
+    },
+    {
+      "category": "Exploratory",
+      "title": "A direct local home-control adapter",
+      "text": "Only after real Google Home compatibility is known and an owner explicitly chooses a supported local integration. Never paint guessed light/thermostat states onto the dashboard."
+    },
+    {
+      "category": "Exploratory",
+      "title": "Non-secret preference transfer",
+      "text": "Export/import palette, clock and layout preferences only, excluding feeds, album links, account addresses, photos, inviter identities and credentials. Full household backup would need a separate secure design."
+    },
+    {
+      "category": "Defer",
+      "title": "Broad cloud/photo/calendar expansion",
+      "text": "Defer editable Calendar/OAuth, public calendar links, hosted sync backends, automatic photo analysis, arbitrary embedded sites and DRM streaming. They add authentication, maintenance or compatibility costs outside the current frame-first brief."
+    }
+  ],
+  "sequence": [
+    {
+      "title": "First pass: navigation and trust",
+      "text": "Settings categories; feature-local controls; concise state/retry labels; frame readability. Run the missing reliability/device acceptance checks alongside this work."
+    },
+    {
+      "title": "Second pass: better photos and plans",
+      "text": "Adjustable mail refresh, photo favourites/hide/fit, Today/Week agenda and source visibility. These deepen the two most useful existing features."
+    },
+    {
+      "title": "Third pass: one new household utility",
+      "text": "Ship the local note/shopping checklist, then quiet hours/privacy pause. Learn from daily use before adding phone sync, voice or more service integrations."
+    }
+  ]
+}

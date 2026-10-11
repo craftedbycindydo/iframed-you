@@ -9,6 +9,11 @@ from tempfile import TemporaryDirectory
 from assets import stage_assets
 
 
+class PreviewServer(ThreadingHTTPServer):
+    # Chromium requests the script bundle concurrently; avoid dropping startup assets.
+    request_queue_size = 64
+
+
 class PreviewHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
@@ -35,7 +40,7 @@ def main():
         page.write_text(page.read_text().replace('<script src="local-config.js">', '<script src="demo.js"></script><script src="local-config.js">').replace('<script src="photos.js">', '<script src="demo-photos.js"></script><script src="photos.js">'))
         print(f'Synthetic demo only: http://127.0.0.1:{args.port}', flush=True)
         try:
-            ThreadingHTTPServer(('127.0.0.1', args.port), partial(PreviewHandler, directory=temp)).serve_forever()
+            PreviewServer(('127.0.0.1', args.port), partial(PreviewHandler, directory=temp)).serve_forever()
         except KeyboardInterrupt:
             pass
 

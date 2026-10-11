@@ -26,5 +26,6 @@ function resolve(mode,city,now=new Date(),systemDark=false){
  candidates.sort((a,b)=>a.at-b.at);
  return {mode:dark?'dark':'light',reason:'sun',next:candidates[0]||null};
 }
-return {palettes,normalize,tokens,resolve};
+function displayTokens(profile){return {'ui-scale':profile==='large'?'1.15':'1'};}
+return {palettes,normalize,tokens,resolve,displayTokens};
 });

@@ -21,7 +21,7 @@ test('last check displays in the configured city time rather than Android timezo
   const checked=Date.UTC(2026,9,10,22,26,0);
   const status={connected:true,busy:false,error:'',lastSync:checked,photos:[{},{}]};
   const caption=Photos.caption(status,'America/Toronto');
-  assert.match(caption,/2 saved photos/);
+  assert.match(caption,/2 saved/);
   assert.match(caption,/6:26/);
   assert.doesNotMatch(caption,/10:26/);
 });

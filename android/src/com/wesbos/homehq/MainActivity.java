@@ -36,12 +36,13 @@ public class MainActivity extends Activity {
   private PhotoStore photos;
   private PhotoMail photoMail;
   private boolean idlePhotos,localPhotosOpen,remotePhotos,foreground,slideshowScheduled,slideshowStarted;
-  private boolean swallowIdleTouch;
+  private boolean swallowIdleTouch,quietOpen;
+  private int idleGeneration,localPhotoGeneration;
   private int remoteGeneration=0, dashboardCrashes=0;
   private boolean exitArmed;
   private float exitX,exitY;
-  private final Runnable idleTask=()->{if("email".equals(prefs.getString("photo_source","album")))openLocalPhotos(true);else openRemote(prefs.getString("album",""),true,true);};
-  private final Runnable photoCheckTask=new Runnable(){@Override public void run(){if(photoMail!=null)photoMail.maybeSync();handler.postDelayed(this,60*60*1000L);}};
+  private final Runnable idleTask=()->{final int generation=idleGeneration;if(dashboard==null)return;dashboard.evaluateJavascript("!!(window.SkylitWorkspace&&window.SkylitWorkspace.idle())",value->{if(generation!=idleGeneration||!foreground||remote!=null||localPhotosOpen)return;if("true".equals(value)){quietOpen=true;pauseMomo(true);dashboard.evaluateJavascript("window.SkylitWorkspace&&window.SkylitWorkspace.pause(true)",null);}else if(prefs.getInt("idle",120)>0&&"email".equals(prefs.getString("photo_source","album"))&&photos.list().length()>0)openLocalPhotos(true);else if(prefs.getInt("idle",120)>0&&validAlbum(prefs.getString("album","")))openRemote(prefs.getString("album",""),true,true);else resetIdle();});};
+  private final Runnable photoCheckTask=new Runnable(){@Override public void run(){if(photoMail!=null)photoMail.maybeSync();handler.postDelayed(this,60000L);}};
   private final Runnable exitTask=()->{exitArmed=false;openStockApp();};
 
   @Override public void onCreate(Bundle state){
@@ -72,9 +73,9 @@ public class MainActivity extends Activity {
         String mime=path.endsWith(".txt")?"text/plain":path.endsWith(".js")?"text/javascript":path.endsWith(".css")?"text/css":path.endsWith(".svg")?"image/svg+xml":path.endsWith(".png")?"image/png":"text/html";
         try{return new WebResourceResponse(mime,"UTF-8",getAssets().open(path.substring(1)));}catch(IOException e){return missing();}
       }
-      @Override public void onPageFinished(WebView view,String url){view.evaluateJavascript("JSON.stringify(window.SkylitApp?window.SkylitApp.status():{ready:false})",v->Log.i(TAG,"Dashboard ready: "+v));pauseMomo(!foreground||remote!=null);resetIdle();}
+      @Override public void onPageFinished(WebView view,String url){view.evaluateJavascript("JSON.stringify(window.SkylitApp?{ready:true,tab:window.SkylitApp.status().tab}:{ready:false})",v->Log.i(TAG,"Dashboard ready: "+v));pauseMomo(!foreground||remote!=null);resetIdle();}
       @Override public boolean onRenderProcessGone(WebView view,RenderProcessGoneDetail detail){
-        root.removeView(view);view.destroy();dashboard=null;localPhotosOpen=false;idlePhotos=false;swallowIdleTouch=false;
+        root.removeView(view);view.destroy();dashboard=null;localPhotoGeneration++;idleGeneration++;quietOpen=false;localPhotosOpen=false;idlePhotos=false;swallowIdleTouch=false;
         if(++dashboardCrashes<=2)handler.postDelayed(()->{createDashboard();},1000);
         else showFailure("The dashboard browser stopped repeatedly. Restart the frame to try again.");
         Log.e(TAG,"Dashboard renderer stopped; recovered="+(dashboardCrashes<=2));return true;
@@ -92,6 +93,7 @@ public class MainActivity extends Activity {
   public class DashboardBridge {
     @JavascriptInterface public String calendarList(){return calendars.snapshot();}
     @JavascriptInterface public String calendarAdd(String name,String color,String url){return calendars.add(name,color,url);}
+    @JavascriptInterface public boolean calendarMetadata(String id,String name,String color){return calendars.metadata(id,name,color);}
     @JavascriptInterface public boolean calendarRemove(String id){return calendars.remove(id);}
     @JavascriptInterface public void calendarRefresh(String id){calendars.refresh(id,result->runOnUiThread(()->{if(dashboard!=null)dashboard.evaluateJavascript("window.SkylitCalendar&&window.SkylitCalendar.receive("+result+")",null);}));}
     @JavascriptInterface public boolean calendarAccept(String id,String request,boolean valid){return calendars.accept(id,request,valid);}
@@ -99,25 +101,32 @@ public class MainActivity extends Activity {
     @JavascriptInterface public String photoStatus(){return photoMail.status().toString();}
     @JavascriptInterface public boolean photoConnect(String email,String appPassword){return photoMail.connect(email,appPassword);}
     @JavascriptInterface public boolean photoConfigure(int days,int maximum){return photoMail.configure(days,maximum);}
+    @JavascriptInterface public boolean photoDelivery(String raw){return photoMail.delivery(raw);}
+    @JavascriptInterface public String photoDeliverySettings(){return photoMail.deliverySettings();}
+    @JavascriptInterface public boolean photoEraseCache(){return photoMail.eraseCache();}
     @JavascriptInterface public void photoRefresh(){photoMail.sync();}
     @JavascriptInterface public void photoOpen(boolean idle){runOnUiThread(()->openLocalPhotos(idle));}
     @JavascriptInterface public void photoBrowse(int index){runOnUiThread(()->openLocalPhotos(false,index,false));}
     @JavascriptInterface public boolean photoDisconnect(){boolean removed=photoMail.disconnect();if(removed)runOnUiThread(()->{if(localPhotosOpen&&dashboard!=null)dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.close()",null);});return removed;}
     @JavascriptInterface public void photoSource(String source){if(!"email".equals(source)&&!"album".equals(source))return;prefs.edit().putString("photo_source",source).apply();runOnUiThread(()->resetIdle());}
-    @JavascriptInterface public void localPhotoClosed(){runOnUiThread(()->{idlePhotos=false;localPhotosOpen=false;pauseMomo(false);resetIdle();});}
+    @JavascriptInterface public void localPhotoClosed(){runOnUiThread(()->{localPhotoGeneration++;idlePhotos=false;localPhotosOpen=false;pauseMomo(false);resetIdle();});}
 
+    @JavascriptInterface public void configureQuiet(boolean enabled){prefs.edit().putBoolean("quiet",enabled).apply();runOnUiThread(()->resetIdle());}
+    @JavascriptInterface public void privacyPause(){runOnUiThread(()->{quietOpen=true;idleGeneration++;handler.removeCallbacks(idleTask);pauseMomo(true);});}
+    @JavascriptInterface public void ambientClosed(){runOnUiThread(()->{quietOpen=false;pauseMomo(false);resetIdle();});}
     @JavascriptInterface public void configure(String album,int seconds){if(!album.isEmpty()&&!validAlbum(album))return;int delay=(seconds==0||seconds==60||seconds==120||seconds==300||seconds==600)?seconds:120;prefs.edit().putString("album",album).putInt("idle",delay).apply();runOnUiThread(()->resetIdle());}
     @JavascriptInterface public void openPhotos(String album,boolean idle){if(validAlbum(album))runOnUiThread(()->openRemote(album,true,idle));}
     @JavascriptInterface public void openHome(String url){if(validHome(url))runOnUiThread(()->openRemote(url,false,false));}
     @JavascriptInterface public void openYouTube(String layout){runOnUiThread(()->openRemote("desktop".equals(layout)?"https://www.youtube.com/":"https://m.youtube.com/",false,false));}
+    @JavascriptInterface public void openYouTubeLink(String url){if(validYouTube(url)&&YouTubeLink.valid(url))runOnUiThread(()->openRemote(url,false,false));}
     @JavascriptInterface public void openCalendar(String url){if(validCalendar(url))runOnUiThread(()->openRemote(url,false,false));}
     @JavascriptInterface public void openWifiSettings(){runOnUiThread(()->{try{startActivity(new Intent(android.provider.Settings.ACTION_WIFI_SETTINGS));}catch(android.content.ActivityNotFoundException e){Toast.makeText(MainActivity.this,"Wi-Fi settings are unavailable on this device.",Toast.LENGTH_LONG).show();}});}
     @JavascriptInterface public void openDeveloperSettings(){runOnUiThread(()->{try{startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS));}catch(android.content.ActivityNotFoundException e){Toast.makeText(MainActivity.this,"Developer settings are unavailable on this device.",Toast.LENGTH_LONG).show();}});}
     @JavascriptInterface public void openStock(){runOnUiThread(()->openStockApp());}
   }
-  private void resetIdle(){handler.removeCallbacks(idleTask);if(!foreground||remote!=null||localPhotosOpen)return;boolean hasSource="email".equals(prefs.getString("photo_source","album"))?photos.list().length()>0:validAlbum(prefs.getString("album",""));if(!hasSource)return;int seconds=prefs.getInt("idle",120);if(seconds>0)handler.postDelayed(idleTask,seconds*1000L);}
+  private void resetIdle(){idleGeneration++;handler.removeCallbacks(idleTask);if(!foreground||remote!=null||localPhotosOpen||quietOpen)return;boolean hasSource="email".equals(prefs.getString("photo_source","album"))?photos.list().length()>0:validAlbum(prefs.getString("album",""));if(!hasSource&&!prefs.getBoolean("quiet",false))return;int seconds=prefs.getInt("idle",120);if(seconds==0&&prefs.getBoolean("quiet",false))seconds=120;if(seconds>0)handler.postDelayed(idleTask,seconds*1000L);}
   private void openLocalPhotos(boolean idle){openLocalPhotos(idle,0,true);}
-  private void openLocalPhotos(boolean idle,int index,boolean autoplay){int count=photos.list().length();if(dashboard==null||count==0)return;int safeIndex=Math.max(0,Math.min(count-1,index));handler.removeCallbacks(idleTask);localPhotosOpen=true;idlePhotos=idle;pauseMomo(true);dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.open("+idle+","+safeIndex+","+autoplay+")",null);}
+  private void openLocalPhotos(boolean idle,int index,boolean autoplay){int count=photos.list().length();if(dashboard==null||count==0)return;int safeIndex=Math.max(0,Math.min(count-1,index));handler.removeCallbacks(idleTask);localPhotosOpen=true;idlePhotos=idle;final int generation=++localPhotoGeneration;pauseMomo(true);dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.open("+idle+","+safeIndex+","+autoplay+")",value->{if("false".equals(value)&&generation==localPhotoGeneration){localPhotosOpen=false;idlePhotos=false;pauseMomo(false);resetIdle();}});}
   private void openRemote(String url,boolean photos,boolean idle){
     final boolean youtube=validYouTube(url);
     if(photos&&!validAlbum(url)||!photos&&!validHome(url)&&!validCalendar(url)&&!youtube)return;
@@ -177,6 +186,7 @@ public class MainActivity extends Activity {
   private void showFailure(String message){TextView text=new TextView(this);text.setText(message);text.setTextSize(25);text.setTextColor(Color.DKGRAY);text.setGravity(Gravity.CENTER);root.addView(text,new FrameLayout.LayoutParams(-1,-1));}
   @Override public boolean dispatchTouchEvent(MotionEvent e){
     if(swallowIdleTouch){if(e.getActionMasked()==MotionEvent.ACTION_UP||e.getActionMasked()==MotionEvent.ACTION_CANCEL)swallowIdleTouch=false;return true;}
+    if(quietOpen&&remote==null){if(e.getActionMasked()==MotionEvent.ACTION_DOWN){swallowIdleTouch=true;if(dashboard!=null)dashboard.evaluateJavascript("window.SkylitWorkspace&&window.SkylitWorkspace.restore()",null);}return true;}
     if(idlePhotos&&remote==null){if(e.getActionMasked()==MotionEvent.ACTION_DOWN){swallowIdleTouch=true;if(dashboard!=null)dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.close()",null);}return true;}
     if(idlePhotos&&remote!=null){if(e.getActionMasked()==MotionEvent.ACTION_DOWN)closeRemote();return true;}
     if(e.getActionMasked()==MotionEvent.ACTION_DOWN)resetIdle();
@@ -185,10 +195,10 @@ public class MainActivity extends Activity {
     return super.dispatchTouchEvent(e);
   }
   private void pauseMomo(boolean paused){if(dashboard!=null)dashboard.evaluateJavascript("window.Momo&&window.Momo.setPaused("+paused+")",null);}
-  @Override protected void onResume(){super.onResume();foreground=true;pauseMomo(remote!=null||localPhotosOpen);if(photoMail!=null)photoMail.maybeSync();resetIdle();hideBars();}
+  @Override protected void onResume(){super.onResume();foreground=true;pauseMomo(remote!=null||localPhotosOpen||quietOpen);if(photoMail!=null)photoMail.maybeSync();resetIdle();hideBars();}
   @Override protected void onPause(){foreground=false;pauseMomo(true);handler.removeCallbacks(idleTask);handler.removeCallbacks(exitTask);super.onPause();}
   @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);WebView.setWebContentsDebuggingEnabled(intent.getBooleanExtra("debug",false));if(remote!=null)closeRemote();if(localPhotosOpen&&dashboard!=null)dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.close()",null);}
-  @Override public void onBackPressed(){if(remote!=null)closeRemote();else if(localPhotosOpen&&dashboard!=null)dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.close()",null);else if(dashboard!=null)dashboard.evaluateJavascript("window.SkylitApp&&window.SkylitApp.go('overview')",null);}
+  @Override public void onBackPressed(){if(quietOpen&&dashboard!=null){dashboard.evaluateJavascript("window.SkylitWorkspace&&window.SkylitWorkspace.restore()",null);return;}if(remote!=null)closeRemote();else if(localPhotosOpen&&dashboard!=null)dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.close()",null);else if(dashboard!=null)dashboard.evaluateJavascript("window.SkylitApp&&window.SkylitApp.back()",null);}
   @Override public void onWindowFocusChanged(boolean hasFocus){super.onWindowFocusChanged(hasFocus);if(hasFocus)hideBars();}
   private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
   private void hideBars(){getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_STABLE);}
