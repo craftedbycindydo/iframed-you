@@ -41,7 +41,7 @@
   optionFields[3].id='photo-limit-row';optionFields[3].querySelector('label').textContent='Maximum shown photos';
   settings.querySelector('.photo-settings-content').insertBefore(presentation,settings.querySelector('label[for="photo-source"]'));
 
-  const visibility=document.createElement('details');visibility.id='photo-choices';visibility.className='photo-visibility-settings';visibility.innerHTML='<summary>Local picture choices</summary><p class="small subtle">Favourite, exclusion, framing and captions apply to emailed pictures on this frame. These choices never delete email.</p><p id="photo-visibility" class="small subtle"></p><div id="photo-choice-editor"><label for="photo-choice-select">Picture</label><select id="photo-choice-select"></select><div class="photo-choice-fields"><img id="photo-choice-preview" alt="Selected picture"><div><button id="photo-favourite" class="secondary">Favourite</button><label class="cal-check"><input id="photo-hide" type="checkbox"> Exclude from gallery</label><label for="photo-fit">Picture framing</label><select id="photo-fit"><option value="contain">Fit · show the whole picture</option><option value="cover">Fill · crop to the frame</option></select><label for="photo-caption">Caption · on this frame</label><input id="photo-caption" maxlength="120" autocomplete="off"><p id="photo-received" class="small subtle"></p></div></div></div><label class="cal-check"><input id="photo-show-hidden" type="checkbox"> Show excluded pictures in the library</label><button id="photo-restore-hidden" class="secondary">Restore all excluded pictures</button>';settings.querySelector('.photo-settings-content').append(visibility);
+  const visibility=document.createElement('details');visibility.id='photo-choices';visibility.className='photo-visibility-settings';visibility.innerHTML='<summary>Local picture choices</summary><p class="small subtle">Favourite, exclusion, framing and captions apply to saved pictures on this frame. These choices never delete email.</p><p id="photo-visibility" class="small subtle"></p><div id="photo-choice-editor"><label for="photo-choice-select">Picture</label><select id="photo-choice-select"></select><div class="photo-choice-fields"><img id="photo-choice-preview" alt="Selected picture"><div><button id="photo-favourite" class="secondary">Favourite</button><label class="cal-check"><input id="photo-hide" type="checkbox"> Exclude from gallery</label><label for="photo-fit">Picture framing</label><select id="photo-fit"><option value="contain">Fit · show the whole picture</option><option value="cover">Fill · crop to the frame</option></select><label for="photo-caption">Caption · on this frame</label><input id="photo-caption" maxlength="120" autocomplete="off"><p id="photo-received" class="small subtle"></p></div></div></div><label class="cal-check"><input id="photo-show-hidden" type="checkbox"> Show excluded pictures in the library</label><button id="photo-restore-hidden" class="secondary">Restore all excluded pictures</button>';settings.querySelector('.photo-settings-content').append(visibility);
   const overlay = document.createElement('div');
   overlay.id = 'photo-player';
   overlay.hidden = true;
@@ -68,7 +68,7 @@
     saveChoices();render();if(opened){buildPlaylist(playing||idle);if(!playlist.length)close();else {index=Math.max(0,playlist.findIndex(p=>frame.photoId(p)===frame.photoId(previous)));show();}}window.dispatchEvent(new Event('skylit-service-status'));}
   function refresh(){if(!native||!native.photoStatus)return;try{receive(native.photoStatus());}catch(e){$('photo-mail-status').textContent='Could not read the photo status from this frame.';}}
   function renderOverviewPhotos(){
-    const items=source==='email'?frame.overviewPictures(state.photos,curated,preferences()):[];
+    const items=frame.overviewPictures(state.photos,curated,preferences());
     const button=$('overview-photos'),host=$('overview-photo-stack');
     button.hidden=!items.length;
     document.querySelector('.overview-grid').classList.toggle('with-photos',items.length>0);
@@ -76,12 +76,15 @@
     items.forEach((photo,i)=>{const image=document.createElement('img');image.src=photo.url;image.alt='';image.style.setProperty('--photo-angle',playback.angle(i)+'deg');host.append(image)});
   }
   function render(){
-    const album=source==='album';
+    const album=source==='album',local=state.photos.length>0,albumShown=album&&(!local||!!$('album-url').value);
     $('photo-source').value=source;
     $('photo-mail-setup').hidden=source!=='email';
-    workspace.hidden=album;
-    page.querySelector('.photo-feature').hidden=!album;
-    detailsRow.hidden=!album;
+    workspace.hidden=album&&!local;
+    page.querySelector('.photo-feature').hidden=!albumShown;
+    detailsRow.hidden=!albumShown;
+    mailCard.querySelector('.eyebrow').textContent=state.connected?'PICTURES SENT TO YOUR INBOX':'PICTURES ON THIS FRAME';
+    mailCard.querySelector('.photo-tiles+p').textContent=state.connected?'Tap a picture to browse and zoom. Saved pictures stay on this frame; messages stay in your inbox.':'Tap a picture to browse and zoom. Saved pictures stay on this frame.';
+    $('photo-check').hidden=!state.connected;
     const timezone=window.SkylitApp.calendarPreferences().timezone;
     $('photo-mail-status').textContent=native?model.caption(state,timezone):'Email photo delivery is available in the Android frame app.';
     $('photo-check').disabled=!native||!state.connected||state.busy;
@@ -93,7 +96,7 @@
     $('photo-style').value=style;
     $('photo-disconnect').hidden=!state.connected;
     const tiles=$('photo-tiles');const scroll=window.scrollY;tiles.replaceChildren();
-    if(!state.photos.length){const empty=document.createElement('p');empty.className='photo-empty';empty.textContent=state.connected?'No pictures saved yet. Tap Check now after sending one to your inbox.':'Connect a dedicated inbox in Photo settings to start your library.';tiles.append(empty)}
+    if(!state.photos.length){const empty=document.createElement('p');empty.className='photo-empty';empty.textContent=state.connected?'No pictures saved yet. Tap Check now after sending one to your inbox.':'Add pictures from the Skylit phone app, or connect an iCloud shared album or a dedicated inbox in Photo settings.';tiles.append(empty)}
     const visible=state.photos.filter(photo=>showHidden||!choice(photo).hidden);
     if(state.photos.length&&!visible.length){const empty=document.createElement('p');empty.className='photo-empty';empty.textContent='All saved pictures are excluded. Restore them in Photo settings or check for new pictures.';tiles.append(empty);}
     visible.forEach((photo,i)=>{const card=document.createElement('div');card.className='photo-tile-card';const button=document.createElement('button');button.type='button';button.className='photo-tile';button.dataset.photoId=frame.photoId(photo)||'';button.setAttribute('aria-label','Open picture '+(i+1)+(choice(photo).favourite?' · Favourite':'')+(choice(photo).hidden?' · Excluded':''));button.classList.toggle('is-hidden',choice(photo).hidden);if(choice(photo).favourite){const badge=document.createElement('span');badge.textContent='★';badge.className='photo-favourite-badge';button.append(badge);}const image=document.createElement('img');image.src=photo.url;image.alt='';image.loading='lazy';button.append(image);button.onclick=()=>{if(choice(photo).hidden){updateChoice(frame.photoId(photo),{hidden:false});return;}if(native&&native.photoBrowse)native.photoBrowse(state.photos.indexOf(photo));else open(false,state.photos.indexOf(photo),false)};
@@ -154,7 +157,7 @@
   window.SkylitPhotos={open,close,receive,refresh,selectedSource,setSource,health:()=>({configured:state.connected,updated:state.lastSync,busy:state.busy,error:!!state.error,count:state.photos.length,imported:state.imported,skipped:state.skipped}),isOpen:()=>opened};
   $('photo-source').onchange=()=>setSource($('photo-source').value);
   $('overview-photos').onclick=()=>window.SkylitApp.go('photos');
-  $('photo-play').onclick=()=>{if(native&&native.photoOpen)native.photoOpen(false);else open(false)};
+  const playLocal=()=>{if(native&&native.photoOpen)native.photoOpen(false);else open(false)};$('photo-play').onclick=playLocal;
   function openSettings(){if(window.SkylitApp.openSettings)window.SkylitApp.openSettings('photos','photos');else {window.SkylitApp.go('settings');settings.open=true;settings.scrollIntoView();}}
   photoSettingsButton.onclick=openSettings;page.querySelector('.photo-copy .quiet').onclick=openSettings;
   $('photo-check').onclick=()=>{if(native&&native.photoRefresh){native.photoRefresh();$('photo-setup-status').textContent='Checking mail…';setTimeout(refresh,300)}};
@@ -192,8 +195,8 @@
   stage.addEventListener('pointerup',()=>drag=null);stage.addEventListener('pointercancel',()=>drag=null);
   stage.addEventListener('wheel',event=>{if(!opened)return;event.preventDefault();if(playing)$('photo-pause').click();zoomTo(zoom+(event.deltaY<0 ? .25 : -.25));revealControls()},{passive:false});
   document.addEventListener('keydown',event=>{if(!opened)return;keyboardActivity=true;if(event.key==='Tab'){const controls=Array.from(overlay.querySelectorAll('button:not(:disabled),input,select')).filter(e=>e.getClientRects().length);if(controls.length){event.preventDefault();const at=controls.indexOf(document.activeElement),next=(at+(event.shiftKey?-1:1)+controls.length)%controls.length;controls[next].focus();}}if(event.key==='Escape')close();if(event.key==='ArrowRight')move(1,true);if(event.key==='ArrowLeft')move(-1,true);if(event.key===' '){event.preventDefault();$('photo-pause').click();}if(event.key==='+'||event.key==='='){event.preventDefault();zoomTo(zoom+.25)}if(event.key==='-'){event.preventDefault();zoomTo(zoom-.25)}revealControls();});
-  $('start-photos').onclick=()=>{if(source==='email'){if(!state.connected){page.querySelector('.photo-copy .quiet').click();return;}if(!state.photos.length){$('photo-check').click();return;}if(native&&native.photoOpen)native.photoOpen(false);else open(false)}else if(!$('album-url').value)page.querySelector('.photo-copy .quiet').click();else if(native)native.openPhotos($('album-url').value,false);else window.open($('album-url').value,'_blank','noopener')};
-  $('test-idle').onclick=()=>{if(source==='email'){if(native&&native.photoOpen)native.photoOpen(true);else open(true)}else if(native)native.openPhotos($('album-url').value,true);else if($('album-url').value)window.open($('album-url').value,'_blank','noopener')};
+  $('start-photos').onclick=()=>{if(source==='email'||!$('album-url').value){if(state.photos.length)playLocal();else if(source==='email'&&state.connected)$('photo-check').click();else page.querySelector('.photo-copy .quiet').click()}else if(native)native.openPhotos($('album-url').value,false);else window.open($('album-url').value,'_blank','noopener')};
+  $('test-idle').onclick=()=>{if(source==='email'||!$('album-url').value&&state.photos.length){if(native&&native.photoOpen)native.photoOpen(true);else open(true)}else if(native)native.openPhotos($('album-url').value,true);else if($('album-url').value)window.open($('album-url').value,'_blank','noopener')};
   if(native&&native.photoSource)native.photoSource(source);
   refresh();render();
   window.addEventListener('skylit-preferences',render);window.addEventListener('skylit-display',()=>{render();if(opened){buildPlaylist(playing||idle);if(!playlist.length)close();else{index=Math.min(index,playlist.length-1);show();schedule();}}});

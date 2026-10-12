@@ -39,13 +39,14 @@ public final class CalendarStoreTest {
     String id=store.add("Test","#687354",url);check(!id.isEmpty(),"add");
     check(store.add("Duplicate","#687354",url).isEmpty(),"duplicate rejected");
     check(!store.snapshot().contains("private-test"),"snapshot must omit credentials");
+    JSONObject label=new JSONArray(store.labels()).getJSONObject(0);check(label.length()==3&&label.getString("id").equals(id)&&label.getString("name").equals("Test")&&label.getString("color").equals("#687354"),"labels carry only id, name and colour");
     JSONObject response=fetch(store,id);check(store.accept(id,response.getString("request"),true),"accept");
-    response=fetch(store,id);check(store.metadata(id,"Renamed","#547d91"),"metadata edit");check(!store.metadata(id,"","#547d91"),"empty label rejected");check(!store.metadata(id,"Bad","javascript:bad"),"bad colour rejected");check(store.accept(id,response.getString("request"),true),"pending refresh accepted after metadata edit");JSONObject renamed=new JSONArray(store.snapshot()).getJSONObject(0);check(renamed.getString("name").equals("Renamed")&&renamed.getString("color").equals("#547d91"),"refresh preserves new label and colour");check(!store.snapshot().contains("private-test"),"metadata edit does not expose feed");
+    response=fetch(store,id);check(store.metadata(id,"Renamed","#547d91"),"metadata edit");check(!store.metadata(id,"","#547d91"),"empty label rejected");check(!store.metadata(id,"Bad","javascript:bad"),"bad colour rejected");check(store.accept(id,response.getString("request"),true),"pending refresh accepted after metadata edit");JSONObject renamed=new JSONArray(store.snapshot()).getJSONObject(0);check(renamed.getString("name").equals("Renamed")&&renamed.getString("color").equals("#547d91"),"refresh preserves new label and colour");check(!store.snapshot().contains("private-test"),"metadata edit does not expose feed");check(new JSONArray(store.labels()).getJSONObject(0).getString("name").equals("Renamed"),"labels follow metadata edits");
     String good=store.snapshot();next[0]=null;check(fetch(store,id).has("error"),"network failure");check(good.equals(store.snapshot()),"retain cache after network failure");
     next[0]="BAD CALENDAR";response=fetch(store,id);check(!store.accept(id,response.getString("request"),false),"reject bad parser result");check(good.equals(store.snapshot()),"retain cache after parser failure");
     response=fetch(store,id);store.resetRequests();check(!store.accept(id,response.getString("request"),true),"old renderer response rejected");
     response=fetch(store,id);check(store.remove(id),"remove");check(!store.accept(id,response.getString("request"),true),"removed calendar cannot be resurrected");check(store.snapshot().equals("[]"),"removed metadata and cache");check(!prefs.getString("feeds","").contains("private-test"),"removed secret");store.close();
     CalendarStore restored=new CalendarStore(prefs,url2->"");check(restored.snapshot().equals("[]"),"removal persists");restored.close();
-    System.out.println("CalendarStore: 19 checks passed");
+    System.out.println("CalendarStore: 21 checks passed");
   }
 }

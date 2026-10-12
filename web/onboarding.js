@@ -8,9 +8,9 @@
   // never been opened. Do not interrupt an already configured household.
   const model = {
     shouldOpen: (stored, personal, done, route) => !stored && !personal && !done && !route,
-    progress: (city, album, email, calendars, received=0, refreshed=0) => ({
+    progress: (city, album, email, calendars, received=0, refreshed=0, icloud=false) => ({
       city: city ? 'City set' : 'City needed',
-      photos: received>0?'Picture received · Check playback on frame':email?'Configured · Send a test picture':album?'Album configured · Open to verify playback':'Choose a photo source',
+      photos: received>0?'Picture received · Check playback on frame':email?'Configured · Send a test picture':icloud?'iCloud album connected · Pictures appear after the first sync':album?'Album configured · Open to verify playback':'Choose a photo source',
       calendar: refreshed>0?'Calendar refreshed · Check your events':calendars > 0 ? `${calendars} calendar${calendars === 1 ? '' : 's'} added` : 'Optional · no calendar added'
     })
   };
@@ -23,7 +23,7 @@
     const state = app.setupState();
     const mail = nativeState('photoStatus', {});
     const calendars = nativeState('calendarList', []);
-    const labels = model.progress(state.city, state.album, !!mail.connected, Array.isArray(calendars) ? calendars.length : 0,Array.isArray(mail.photos)?mail.photos.length:0,Array.isArray(calendars)&&calendars.length&&calendars.every(c=>c.fetchedAt>0)?Math.min(...calendars.map(c=>c.fetchedAt)):0);
+    const labels = model.progress(state.city, state.album, !!mail.connected, Array.isArray(calendars) ? calendars.length : 0,Array.isArray(mail.photos)?mail.photos.length:0,Array.isArray(calendars)&&calendars.length&&calendars.every(c=>c.fetchedAt>0)?Math.min(...calendars.map(c=>c.fetchedAt)):0,!!(window.SkylitICloud&&window.SkylitICloud.status()));
     let step='';try{step=localStorage.getItem('skylit.onboarding.step')||'';}catch(_){}
     document.querySelectorAll('[data-setup-target]').forEach(button=>{if(button.closest){const card=button.closest('.setup-step');if(card)card.setAttribute('aria-current',button.dataset.setupTarget===step?'step':'false');}});
     $('setup-city-status').textContent = labels.city;
@@ -52,6 +52,7 @@
   });
   window.addEventListener('skylit-tab', event => { if (event.detail === 'setup') render(); });
   window.addEventListener('skylit-preferences', () => { if ($('setup').classList.contains('active')) render(); });
+  window.addEventListener('skylit-service-status', () => { if ($('setup').classList.contains('active')) render(); });
   let stored = false, done = false;
   try { stored = localStorage.getItem('skylit.settings') !== null; done = localStorage.getItem(key) === '1'; } catch (_) {}
   const personal = !!(window.SKYLIT_LOCAL && Object.keys(window.SKYLIT_LOCAL).length);

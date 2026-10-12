@@ -5,7 +5,7 @@ const fs = require('node:fs');
 
 const source = fs.readFileSync('web/onboarding.js', 'utf8');
 
-function launch({settings = null, personal = {}, done = null, hash = '', mail = false, calendars = []} = {}) {
+function launch({settings = null, personal = {}, done = null, hash = '', mail = false, calendars = [], icloud = null} = {}) {
   const values = new Map();
   if (settings !== null) values.set('skylit.settings', settings);
   if (done !== null) values.set('skylit.onboarding.done', done);
@@ -19,6 +19,7 @@ function launch({settings = null, personal = {}, done = null, hash = '', mail = 
   const listeners = {};
   const window = {
     SKYLIT_LOCAL: personal,
+    SkylitICloud: {status: () => icloud},
     SkylitApp: {go: route => routes.push(route), setupState: () => ({city: false, album: false})},
     Skylit: {photoStatus: () => JSON.stringify({connected: mail}), calendarList: () => JSON.stringify(calendars)},
     addEventListener: (name, callback) => { listeners[name] = callback; }
@@ -30,7 +31,7 @@ function launch({settings = null, personal = {}, done = null, hash = '', mail = 
     location: {hash},
     requestAnimationFrame: callback => callback()
   });
-  return {window, routes, element, values, buttons};
+  return {window, routes, element, values, buttons, listeners};
 }
 
 test('fresh installation opens setup; dismissal persists and opens Overview', () => {
@@ -73,4 +74,16 @@ test('a saved photo credential is distinguished from received pictures and a ref
  assert.match(progress(true,false,true,1,1,123).photos,/Picture received/);
  assert.match(progress(true,false,true,1,1,123).calendar,/refreshed/);
  assert.match(progress(true,true,false,0).photos,/Open to verify/);
+});
+
+test('a connected iCloud album counts as a configured photo source',()=>{
+ const run=launch({settings:'{}',icloud:{name:'Family',count:0,lastSync:0,syncing:true,error:''}});
+ run.element('setup-reopen').onclick();
+ assert.match(run.element('setup-photos-status').textContent,/iCloud album connected/);
+ assert.equal(launch({settings:'{}'}).window.SkylitOnboardingModel.progress(true,false,false,0).photos,'Choose a photo source');
+ const {progress}=run.window.SkylitOnboardingModel;
+ assert.match(progress(true,false,false,0,2,0,true).photos,/Picture received/);
+ assert.match(progress(true,true,false,0,0,0,true).photos,/iCloud album connected/);
+ assert.match(progress(true,false,true,0,0,0,true).photos,/Send a test picture/);
+ assert.equal(typeof run.listeners['skylit-service-status'],'function');
 });

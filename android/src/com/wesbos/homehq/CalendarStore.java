@@ -17,6 +17,7 @@ final class CalendarStore {
   private final ExecutorService executor=Executors.newSingleThreadExecutor();
   private final HashMap<String,JSONObject> pending=new HashMap<>();
   private final HashMap<String,String> requests=new HashMap<>();
+  private String labelSource,labelCache;
   CalendarStore(SharedPreferences prefs){this(prefs,CalendarFeed::download);}
   CalendarStore(SharedPreferences prefs,Downloader downloader){this.prefs=prefs;this.downloader=downloader;}
   private JSONArray rows(){try{return new JSONArray(prefs.getString("feeds","[]"));}catch(Exception e){return new JSONArray();}}
@@ -25,6 +26,12 @@ final class CalendarStore {
     JSONArray result=new JSONArray(),a=rows();
     for(int i=0;i<a.length();i++)try{JSONObject row=new JSONObject(a.getJSONObject(i).toString());row.remove("url");result.put(row);}catch(Exception e){}
     return result.toString();
+  }
+  synchronized String labels(){
+    String source=prefs.getString("feeds","[]");if(source.equals(labelSource))return labelCache;
+    JSONArray result=new JSONArray(),a=rows();
+    for(int i=0;i<a.length();i++)try{JSONObject row=a.getJSONObject(i);result.put(new JSONObject().put("id",row.getString("id")).put("name",row.getString("name")).put("color",row.getString("color")));}catch(Exception e){}
+    labelSource=source;labelCache=result.toString();return labelCache;
   }
   synchronized String add(String name,String color,String url){
     try{

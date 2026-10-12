@@ -1,0 +1,10 @@
+Skylit.xcodeproj/
+build/
+build-*/
+DerivedData/
+.build/
+.swiftpm/
+.screens/
+*.xcarchive
+xcuserdata/
+.DS_Store

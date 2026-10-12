@@ -77,3 +77,4 @@
 @media(max-width:799px){#settings .settings-layout{flex-direction:column}#settings .settings-index{flex:0 0 auto;padding:0 18px 18px;border:0;overflow:visible}#settings .settings-index>label,#settings .settings-index>select{display:block}#settings .settings-index>select{width:100%;margin-top:6px}.settings-category-links{display:none}}
 
 #photo-mail-setup .photo-options{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+.photo-workspace:not([hidden])+.photo-feature{margin-top:var(--space)}

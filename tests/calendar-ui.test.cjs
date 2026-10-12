@@ -11,8 +11,8 @@ function setup({multiple=false,organizer='',savedView=null}={}){
  const now=Date.parse('2026-10-10T08:00Z'),elements=new Map(),pending=[],listeners={};
  const network={onLine:true},storage=new Map();if(savedView)storage.set('skylit.calendarView',JSON.stringify(savedView));
  const $=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id)};
- let sources=[{id:'demo',name:'Example',color:'#833e2c',body:'synthetic',fetchedAt:now}];
- const window={SkylitApp:{calendarPreferences:()=>({timezone:'UTC',clock:'24'}),go(){}},Skylit:{calendarList:()=>JSON.stringify(sources),calendarRefresh(){},calendarRemove(id){sources=sources.filter(s=>s.id!==id);return true}},addEventListener(name,fn){listeners[name]=fn}};
+ let sources=[{id:'demo',name:'Example',color:'#833e2c',body:'synthetic',fetchedAt:now}],lists=0;const accepted=[];
+ const window={SkylitApp:{calendarPreferences:()=>({timezone:'UTC',clock:'24'}),go(){}},Skylit:{calendarList:()=>{lists++;return JSON.stringify(sources)},calendarRefresh(){},calendarAccept(id,request,ok){accepted.push([id,request,ok]);if(ok)sources=sources.map(s=>s.id===id?{...s,body:'synthetic',fetchedAt:now}:s);return true},calendarRemove(id){sources=sources.filter(s=>s.id!==id);return true}},addEventListener(name,fn){listeners[name]=fn}};
  class FixedDate extends Date{constructor(...a){super(...(a.length?a:[now]))}static now(){return now}}
  class Worker{postMessage(bounds){this.bounds=bounds;pending.push(this)}terminate(){}}
  vm.runInNewContext(fs.readFileSync('web/calendar.js','utf8'),{window,document:{getElementById:$,createElement:tag=>new Element(tag),createTextNode:t=>({textContent:t})},Date:FixedDate,Intl,Worker,SkylitOverview:Overview,SkylitCalendarPolicy:CalendarPolicy,navigator:network,localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},setTimeout,clearTimeout,setInterval(){}});
@@ -20,7 +20,7 @@ function setup({multiple=false,organizer='',savedView=null}={}){
  const eventList=multiple?[event,{...event,title:'Later today',start:now+10800000,end:now+14400000},{...event,title:'Next day',startDay:'2026-10-11',endDay:'2026-10-11',start:now+86400000,end:now+90000000}]:[event];
  const complete=(worker,fail=false)=>fail?worker.onmessage({data:{error:'bad'}}):worker.onmessage({data:{events:eventList.filter(e=>worker.bounds.from<=e.startDay&&worker.bounds.to>e.startDay)}});
  const flush=()=>new Promise(resolve=>setImmediate(resolve));
- return {$,pending,complete,flush,network,listeners,storage};
+ return {$,pending,complete,flush,network,listeners,storage,window,accepted,lists:()=>lists,native:{add:s=>sources.push(s),remove:id=>{sources=sources.filter(s=>s.id!==id)}}};
 }
 test('calendar ignores stale render results and overview stays on today while browsing other months',async()=>{
  const h=setup();h.complete(h.pending.shift());await h.flush();assert.match(h.$('overview-events').textContent,/Upcoming example/);
@@ -89,4 +89,25 @@ test('loaded-date search filters only Calendar, preserving the today-anchored Ov
  assert.match(h.$('overview-events').textContent,/Upcoming example/);
  h.$('calendar-search').value='';h.$('calendar-search').oninput();
  assert.match(h.$('calendar-agenda').textContent,/Upcoming example/);
+});
+
+test('a calendar added from a phone appears after its first result, without a restart',async()=>{
+ const h=setup();h.complete(h.pending.shift());await h.flush();const before=h.lists();
+ h.native.add({id:'phone',name:'Phone calendar',color:'#2D5BFF',body:'',fetchedAt:0});
+ const done=h.window.SkylitCalendar.receive({id:'phone',request:7,body:'synthetic'});await h.flush();
+ assert.ok(h.lists()>before);h.complete(h.pending.shift());await done;
+ assert.deepEqual(h.accepted,[['phone',7,true]]);assert.equal(h.window.SkylitCalendar.health().count,2);
+ while(h.pending.length){h.complete(h.pending.shift());await h.flush();}
+ assert.match(h.$('calendar-sources').textContent,/Phone calendar/);assert.match(h.$('calendar-sources').children[1].textContent,/Updated/);assert.match(h.$('overview-events').textContent,/Phone calendar/);
+});
+test('a result for an id the frame does not have is still ignored',async()=>{
+ const h=setup();h.complete(h.pending.shift());await h.flush();
+ await h.window.SkylitCalendar.receive({id:'ghost',request:1,body:'synthetic'});await h.window.SkylitCalendar.receive(null);
+ assert.deepEqual(h.accepted,[]);assert.equal(h.pending.length,0);assert.equal(h.window.SkylitCalendar.health().count,1);
+});
+test('a calendar removed from a phone drops its row and events immediately',async()=>{
+ const h=setup();h.complete(h.pending.shift());await h.flush();assert.match(h.$('overview-events').textContent,/Upcoming example/);
+ h.native.remove('demo');await h.window.SkylitCalendar.receive({id:'demo',removed:true,error:'This calendar was removed from a paired phone.'});
+ assert.match(h.$('overview-events').textContent,/Add a calendar/);assert.equal(h.$('calendar-content').hidden,true);assert.doesNotMatch(h.$('calendar-sources').textContent,/Example/);assert.match(h.$('calendar-form-status').textContent,/removed from a paired phone/);
+ assert.equal(h.window.SkylitCalendar.health().count,0);assert.equal(h.window.SkylitCalendar.health().error,false);
 });

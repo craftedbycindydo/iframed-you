@@ -72,6 +72,22 @@ public final class PhotoStoreTest {
       PhotoStore raced=new PhotoStore(new File(root,"race"),new Memory());raced.add(new ByteArrayInputStream(second),now);String racedId=raced.list().getJSONObject(0).getString("id");
       final PhotoStore race=raced;Thread importer=new Thread(()->{try{for(int i=0;i<10;i++)race.add(new ByteArrayInputStream(second),now);}catch(Exception e){throw new RuntimeException(e);}});importer.start();raced.exclude(racedId,true);importer.join();check(!raced.add(new ByteArrayInputStream(second),now)&&excluded(raced,racedId),"refresh/exclusion race cannot resurrect source");
       memory.data.put("excluded",new JSONArray(Arrays.asList(id,"invalid",id)).toString());check(new PhotoStore(folder,memory).excluded().length()==1,"loaded exclusions validate and deduplicate");
+      Memory phoneMemory=new Memory();PhotoStore phoneStore=new PhotoStore(new File(root,"phone"),phoneMemory);byte[] sent=image(900),mailed=image(901);
+      check(phoneStore.add(sent,now-200*day,"phone"),"phone picture saved");String sentId=phoneStore.list().getJSONObject(0).getString("id");
+      check(phoneStore.add(new ByteArrayInputStream(mailed),now-day),"mailed picture saved beside it");String mailedId=phoneStore.list().getJSONObject(0).getString("id");
+      phoneStore.prune(7,30);check(phoneStore.list().length()==2,"phone pictures ignore the mail age window");
+      phoneStore=new PhotoStore(new File(root,"phone"),phoneMemory);phoneStore.prune(7,30);check(phoneStore.list().length()==2,"phone origin survives reopening");
+      check(phoneStore.remove(mailedId)&&excluded(phoneStore,mailedId)&&!phoneStore.add(new ByteArrayInputStream(mailed),now),"removing a mailed picture blocks its re-import");
+      check(phoneStore.add(mailed,now,"phone")&&!excluded(phoneStore,mailedId),"a phone upload overrides that exclusion");
+      check(phoneStore.remove(sentId)&&!excluded(phoneStore,sentId)&&phoneStore.add(sent,now,"phone"),"a removed phone picture can be sent again");
+      check(!phoneStore.remove("../escape")&&!phoneStore.remove(sentId.replace(sentId.charAt(0),sentId.charAt(0)=='a'?'b':'a')),"unknown ids are not removed");
+      check(phoneStore.add(new ByteArrayInputStream(image(902)),now-day),"another mailed picture");phoneStore.clearImported();check(phoneStore.list().length()==2&&phoneStore.excluded().length()==0,"changing the mail account keeps phone pictures only");
+      byte[] shared=image(903),another=image(904);check(phoneStore.add(shared,now-400*day,"album")&&phoneStore.add(another,now-300*day,"album"),"album pictures saved");String sharedId=phoneStore.list().getJSONObject(3).getString("id");
+      phoneStore.prune(7,30);check(phoneStore.list().length()==4&&phoneStore.list().getJSONObject(3).getString("origin").equals("album"),"album pictures ignore the mail age window and report their origin");
+      check(phoneStore.removeOrigin("album",sentId)==0&&phoneStore.removeOrigin("album",sharedId)==1&&!excluded(phoneStore,sharedId)&&phoneStore.list().length()==3,"album removal touches only album pictures and leaves no exclusion");
+      check(phoneStore.add(shared,now-400*day,"album")&&phoneStore.remove(sharedId)&&excluded(phoneStore,sharedId)&&!phoneStore.add(shared,now,"album"),"an album picture trashed on the frame is not taken again");
+      check(!phoneStore.add(sent,now,"album")&&phoneStore.removeOrigin("album",null)==1&&phoneStore.list().length()==2,"disconnecting the album keeps phone pictures, even identical ones");
+      phoneStore.clear();check(phoneStore.list().length()==0,"explicit erase removes phone pictures too");
       System.out.println("PhotoStore: "+checks+" isolated Android checks passed");
     }finally{remove(root);}
   }

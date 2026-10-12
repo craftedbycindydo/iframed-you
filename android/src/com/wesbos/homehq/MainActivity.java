@@ -35,13 +35,14 @@ public class MainActivity extends Activity {
   private CalendarStore calendars;
   private PhotoStore photos;
   private PhotoMail photoMail;
+  private PhoneLink phone;
   private boolean idlePhotos,localPhotosOpen,remotePhotos,foreground,slideshowScheduled,slideshowStarted;
   private boolean swallowIdleTouch,quietOpen;
   private int idleGeneration,localPhotoGeneration;
   private int remoteGeneration=0, dashboardCrashes=0;
   private boolean exitArmed;
   private float exitX,exitY;
-  private final Runnable idleTask=()->{final int generation=idleGeneration;if(dashboard==null)return;dashboard.evaluateJavascript("window.SkylitApp&&window.SkylitApp.settingsOpen&&window.SkylitApp.settingsOpen()?null:!!(window.SkylitWorkspace&&window.SkylitWorkspace.idle())",value->{if(generation!=idleGeneration||!foreground||remote!=null||localPhotosOpen)return;if("null".equals(value)){resetIdle();return;}if("true".equals(value)){quietOpen=true;pauseMomo(true);dashboard.evaluateJavascript("window.SkylitWorkspace&&window.SkylitWorkspace.pause(true)",null);}else if(prefs.getInt("idle",120)>0&&"email".equals(prefs.getString("photo_source","album"))&&photos.list().length()>0)openLocalPhotos(true);else if(prefs.getInt("idle",120)>0&&validAlbum(prefs.getString("album","")))openRemote(prefs.getString("album",""),true,true);else resetIdle();});};
+  private final Runnable idleTask=()->{final int generation=idleGeneration;if(dashboard==null)return;dashboard.evaluateJavascript("window.SkylitApp&&window.SkylitApp.settingsOpen&&window.SkylitApp.settingsOpen()?null:!!(window.SkylitWorkspace&&window.SkylitWorkspace.idle())",value->{if(generation!=idleGeneration||!foreground||remote!=null||localPhotosOpen)return;if("null".equals(value)){resetIdle();return;}if("true".equals(value)){quietOpen=true;pauseMomo(true);dashboard.evaluateJavascript("window.SkylitWorkspace&&window.SkylitWorkspace.pause(true)",null);}else if(prefs.getInt("idle",120)>0&&localSlideshow())openLocalPhotos(true);else if(prefs.getInt("idle",120)>0&&validAlbum(prefs.getString("album","")))openRemote(prefs.getString("album",""),true,true);else resetIdle();});};
   private final Runnable photoCheckTask=new Runnable(){@Override public void run(){if(photoMail!=null)photoMail.maybeSync();handler.postDelayed(this,60000L);}};
   private final Runnable exitTask=()->{exitArmed=false;openStockApp();};
 
@@ -53,6 +54,7 @@ public class MainActivity extends Activity {
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON|WindowManager.LayoutParams.FLAG_FULLSCREEN);
     WebView.setWebContentsDebuggingEnabled(getIntent().getBooleanExtra("debug",false));
     root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(238,232,221));setContentView(root);
+    phone=new PhoneLink(this,calendars,photos,photoMail,script->{if(dashboard==null)return false;dashboard.evaluateJavascript(script,null);return true;});phone.start();
     createDashboard();handler.post(photoCheckTask);
   }
   private void settings(WebView web){WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setUseWideViewPort(true);s.setLoadWithOverviewMode(true);s.setMediaPlaybackRequiresUserGesture(false);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);}
@@ -73,7 +75,7 @@ public class MainActivity extends Activity {
         String mime=path.endsWith(".txt")?"text/plain":path.endsWith(".js")?"text/javascript":path.endsWith(".css")?"text/css":path.endsWith(".svg")?"image/svg+xml":path.endsWith(".png")?"image/png":"text/html";
         try{return new WebResourceResponse(mime,"UTF-8",getAssets().open(path.substring(1)));}catch(IOException e){return missing();}
       }
-      @Override public void onPageFinished(WebView view,String url){view.evaluateJavascript("JSON.stringify(window.SkylitApp?{ready:true,tab:window.SkylitApp.status().tab}:{ready:false})",v->Log.i(TAG,"Dashboard ready: "+v));pauseMomo(!foreground||remote!=null);resetIdle();}
+      @Override public void onPageFinished(WebView view,String url){view.evaluateJavascript("JSON.stringify(window.SkylitApp?{ready:true,tab:window.SkylitApp.status().tab}:{ready:false})",v->Log.i(TAG,"Dashboard ready: "+v));pauseMomo(!foreground||remote!=null);resetIdle();phone.pageReady();}
       @Override public boolean onRenderProcessGone(WebView view,RenderProcessGoneDetail detail){
         root.removeView(view);view.destroy();dashboard=null;localPhotoGeneration++;idleGeneration++;quietOpen=false;localPhotosOpen=false;idlePhotos=false;swallowIdleTouch=false;
         if(++dashboardCrashes<=2)handler.postDelayed(()->{createDashboard();},1000);
@@ -97,6 +99,17 @@ public class MainActivity extends Activity {
     @JavascriptInterface public boolean calendarRemove(String id){return calendars.remove(id);}
     @JavascriptInterface public void calendarRefresh(String id){calendars.refresh(id,result->runOnUiThread(()->{if(dashboard!=null)dashboard.evaluateJavascript("window.SkylitCalendar&&window.SkylitCalendar.receive("+result+")",null);}));}
     @JavascriptInterface public boolean calendarAccept(String id,String request,boolean valid){return calendars.accept(id,request,valid);}
+
+    @JavascriptInterface public String householdSnapshot(){return phone.api.householdSnapshot();}
+    @JavascriptInterface public String householdMutate(String json){return phone.api.householdMutate(json);}
+    @JavascriptInterface public boolean reportSettings(String json){return phone.api.reportSettings(json);}
+    @JavascriptInterface public String pairingStatus(){return phone.status();}
+    @JavascriptInterface public boolean pairingRevoke(String id){return phone.api.pairingRevoke(id);}
+    @JavascriptInterface public boolean pairingRevokeAll(){return phone.api.pairingRevokeAll();}
+    @JavascriptInterface public String icloudStatus(){return phone.api.icloudStatus();}
+    @JavascriptInterface public String icloudConnect(String url){return phone.api.icloudConnect(url);}
+    @JavascriptInterface public boolean icloudDisconnect(){return phone.api.icloudDisconnect();}
+    @JavascriptInterface public void icloudSync(){phone.api.icloudSync();}
 
     @JavascriptInterface public String photoStatus(){return photoMail.status().toString();}
     @JavascriptInterface public boolean photoConnect(String email,String appPassword){return photoMail.connect(email,appPassword);}
@@ -126,7 +139,8 @@ public class MainActivity extends Activity {
     @JavascriptInterface public void openDeveloperSettings(){runOnUiThread(()->{try{startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS));}catch(android.content.ActivityNotFoundException e){Toast.makeText(MainActivity.this,"Developer settings are unavailable on this device.",Toast.LENGTH_LONG).show();}});}
     @JavascriptInterface public void openStock(){runOnUiThread(()->openStockApp());}
   }
-  private void resetIdle(){idleGeneration++;handler.removeCallbacks(idleTask);if(!foreground||remote!=null||localPhotosOpen||quietOpen)return;boolean hasSource="email".equals(prefs.getString("photo_source","album"))?photos.list().length()>0:validAlbum(prefs.getString("album",""));if(!hasSource&&!prefs.getBoolean("quiet",false))return;int seconds=prefs.getInt("idle",120);if(seconds==0&&prefs.getBoolean("quiet",false))seconds=120;if(seconds>0)handler.postDelayed(idleTask,seconds*1000L);}
+  private void resetIdle(){idleGeneration++;handler.removeCallbacks(idleTask);if(!foreground||remote!=null||localPhotosOpen||quietOpen)return;boolean hasSource=localSlideshow()||!"email".equals(prefs.getString("photo_source","album"))&&validAlbum(prefs.getString("album",""));if(!hasSource&&!prefs.getBoolean("quiet",false))return;int seconds=prefs.getInt("idle",120);if(seconds==0&&prefs.getBoolean("quiet",false))seconds=120;if(seconds>0)handler.postDelayed(idleTask,seconds*1000L);}
+  private boolean localSlideshow(){return ("email".equals(prefs.getString("photo_source","album"))||!validAlbum(prefs.getString("album","")))&&photos.list().length()>0;}
   private void openLocalPhotos(boolean idle){openLocalPhotos(idle,0,true);}
   private void openLocalPhotos(boolean idle,int index,boolean autoplay){int count=photos.list().length();if(dashboard==null||count==0)return;int safeIndex=Math.max(0,Math.min(count-1,index));handler.removeCallbacks(idleTask);localPhotosOpen=true;idlePhotos=idle;final int generation=++localPhotoGeneration;pauseMomo(true);dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.open("+idle+","+safeIndex+","+autoplay+")",value->{if("false".equals(value)&&generation==localPhotoGeneration){localPhotosOpen=false;idlePhotos=false;pauseMomo(false);resetIdle();}});}
   private void openRemote(String url,boolean photos,boolean idle){
@@ -184,7 +198,7 @@ public class MainActivity extends Activity {
 
   private void hideCustomView(){if(fullScreen!=null){root.removeView(fullScreen);fullScreen=null;if(fullScreenCallback!=null){fullScreenCallback.onCustomViewHidden();fullScreenCallback=null;}}}
   private void closeRemote(){++remoteGeneration;hideCustomView();if(returnButton!=null){root.removeView(returnButton);returnButton=null;}if(photoHint!=null){root.removeView(photoHint);photoHint=null;}if(remote!=null){WebView old=remote;remote=null;root.removeView(old);old.destroy();}idlePhotos=false;remotePhotos=false;if(dashboard!=null)dashboard.evaluateJavascript("window.SkylitApp&&window.SkylitApp.photoReturned()",null);resetIdle();hideBars();}
-  private void openStockApp(){handler.removeCallbacks(idleTask);Intent stock=getPackageManager().getLaunchIntentForPackage("com.skylight");if(stock!=null)startActivity(stock);}
+  private void openStockApp(){handler.removeCallbacks(idleTask);Intent stock=new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setClassName("amirz.rootless.nexuslauncher","com.google.android.apps.nexuslauncher.NexusLauncherActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);startActivity(stock);}
   private void showFailure(String message){TextView text=new TextView(this);text.setText(message);text.setTextSize(25);text.setTextColor(Color.DKGRAY);text.setGravity(Gravity.CENTER);root.addView(text,new FrameLayout.LayoutParams(-1,-1));}
   @Override public boolean dispatchTouchEvent(MotionEvent e){
     if(swallowIdleTouch){if(e.getActionMasked()==MotionEvent.ACTION_UP||e.getActionMasked()==MotionEvent.ACTION_CANCEL)swallowIdleTouch=false;return true;}
@@ -204,5 +218,5 @@ public class MainActivity extends Activity {
   @Override public void onWindowFocusChanged(boolean hasFocus){super.onWindowFocusChanged(hasFocus);if(hasFocus)hideBars();}
   private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
   private void hideBars(){getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_STABLE);}
-  @Override protected void onDestroy(){calendars.close();photoMail.close();handler.removeCallbacksAndMessages(null);if(remote!=null)remote.destroy();if(dashboard!=null)dashboard.destroy();super.onDestroy();}
+  @Override protected void onDestroy(){phone.stop();calendars.close();photoMail.close();handler.removeCallbacksAndMessages(null);if(remote!=null)remote.destroy();if(dashboard!=null)dashboard.destroy();super.onDestroy();}
 }
