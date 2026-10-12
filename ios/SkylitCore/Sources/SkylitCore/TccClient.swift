@@ -136,6 +136,7 @@ public actor TccClient {
         lastLogin = now()
         cookies = [:]
         do {
+            _ = try await follow(try request("GET", "/portal"), body: nil)
             var post = try request("POST", "/portal")
             post.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             let form = [("timeOffset", String(-TimeZone.current.secondsFromGMT(for: now()) / 60)), ("UserName", credentials.username),
@@ -148,6 +149,7 @@ public actor TccClient {
             if text.contains("The email or password provided is incorrect") || text.contains("The email address is not in the correct format") {
                 throw TccError.badCredentials
             }
+            if text.contains("will not operate without Cookies") { throw TccError.loginFailed }
             sawEmptyAuthCookie = false
             let (_, confirmed) = try await follow(try request("GET", "/portal"), body: nil)
             if sawEmptyAuthCookie { throw TccError.loginFailed }
@@ -242,8 +244,8 @@ public actor TccClient {
 
     private func absorb(_ response: HTTPURLResponse) {
         guard let header = response.value(forHTTPHeaderField: "Set-Cookie") else { return }
-        for (name, value) in Self.cookiePairs(header) {
-            if value.isEmpty {
+        for (name, value, expires) in Self.cookieUpdates(header) {
+            if value.isEmpty, expires || name == Self.authCookie {
                 cookies[name] = nil
                 if name == Self.authCookie { sawEmptyAuthCookie = true }
             } else {
@@ -281,6 +283,10 @@ public actor TccClient {
     }
 
     static func cookiePairs(_ header: String) -> [(String, String)] {
+        cookieUpdates(header).map { ($0.0, $0.1) }
+    }
+
+    static func cookieUpdates(_ header: String) -> [(String, String, Bool)] {
         var cookies: [String] = []
         for piece in header.components(separatedBy: ",") {
             let lead = piece.components(separatedBy: ";")[0].trimmingCharacters(in: .whitespaces)
@@ -296,7 +302,9 @@ public actor TccClient {
             let pair = cookie.components(separatedBy: ";")[0].trimmingCharacters(in: .whitespaces)
             guard let split = pair.firstIndex(of: "=") else { return nil }
             let name = String(pair[..<split])
-            return name.isEmpty ? nil : (name, String(pair[pair.index(after: split)...]))
+            let attributes = cookie.lowercased()
+            let expires = attributes.contains("expires=") || attributes.contains("max-age=")
+            return name.isEmpty ? nil : (name, String(pair[pair.index(after: split)...]), expires)
         }
     }
 }

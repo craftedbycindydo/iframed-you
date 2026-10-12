@@ -429,11 +429,13 @@ final class TccClient {
     lastLogin = up;
     cookies.clear();
     try {
+      follow("GET", "/portal", "application/json", null);
       String form = "timeOffset=" + (-TimeZone.getDefault().getOffset(now) / 60000) + "&UserName=" + encode(username) + "&Password=" + encode(password)
           + "&RememberMe=false";
       Reply posted = follow("POST", "/portal", "application/x-www-form-urlencoded", form);
       if (posted.status == 401) throw new Problem("bad_credentials");
       if (posted.status != 200) throw new Problem("unavailable");
+      if (posted.body.contains("will not operate without Cookies")) throw new Problem("login_failed");
       if (posted.body.contains("The email or password provided is incorrect") || posted.body.contains("The email address is not in the correct format")) {
         throw new Problem("bad_credentials");
       }
@@ -525,7 +527,8 @@ final class TccClient {
       if (split <= 0) continue;
       String name = pair.substring(0, split);
       String value = pair.substring(split + 1);
-      if (value.isEmpty()) {
+      String lowered = cookie.toLowerCase(Locale.US);
+      if (value.isEmpty() && (AUTH_COOKIE.equals(name) || lowered.contains("expires=") || lowered.contains("max-age="))) {
         cookies.remove(name);
         if (AUTH_COOKIE.equals(name)) emptyAuthCookie = true;
       } else {

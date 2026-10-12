@@ -146,6 +146,10 @@ public final class TccTest {
       if (method.equals("POST") && bare.equals("/portal")) return login(call);
       if (method.equals("GET") && "redirect".equals(login) && redirect.startsWith("/portal/") && redirect.startsWith(bare)) return html(302, "", redirect);
       if (method.equals("GET") && (bare.equals("/portal") || bare.equals("/portal/"))) {
+        if (call.headers.get("Cookie") == null) {
+          return html(200, "<html>Sign in</html>", null, TccClient.AUTH_COOKIE + "=; expires=Mon, 11-Oct-1999 22:00:00 GMT; path=/",
+              "ASP.NET_SessionId=visit; path=/; secure; HttpOnly", "TrueHomeCheckCookie=; path=/; secure; HttpOnly");
+        }
         if ("emptyCookie".equals(login)) return html(200, "<html>Sign in</html>", null, TccClient.AUTH_COOKIE + "=; expires=Mon, 11-Oct-1999 22:00:00 GMT; path=/");
         return signedIn(call) ? html(302, "", "/portal/4242/Zones") : html(401, "", null);
       }
@@ -203,6 +207,10 @@ public final class TccTest {
       if ("unauthorized".equals(login)) return html(401, "", null);
       if ("redirect".equals(login)) return html(302, "", redirect);
       if ("emptyCookie".equals(login)) return html(200, "<html>Sign in</html>", null);
+      String jar = call.headers.get("Cookie");
+      if (jar == null || !jar.contains("ASP.NET_SessionId=") || !jar.contains("TrueHomeCheckCookie=")) {
+        return html(200, "<html>This site will not operate without Cookies enabled.</html>", null);
+      }
       if (!USER.equals(fields.get("UserName")) || !password.equals(fields.get("Password"))) {
         return html(200, "<html><div>The email or password provided is incorrect.</div></html>", null);
       }
@@ -269,21 +277,23 @@ public final class TccTest {
   static void login() throws Exception {
     fresh();
     client.signIn(USER, PASS);
-    Call post = server.calls.get(0);
+    same("GET", server.calls.get(0).method, "the sign-in page is loaded first");
+    check(server.calls.get(0).headers.get("Cookie") == null, "no cookie before the first visit");
+    Call post = server.calls.get(1);
     same("POST", post.method, "login is a POST");
     same("/portal", post.path, "login path carries no query");
     same("application/x-www-form-urlencoded", post.headers.get("Content-Type"), "form content type");
     same("XMLHttpRequest", post.headers.get("X-Requested-With"), "ajax header");
-    check(post.headers.get("Cookie") == null, "no cookie before login");
+    same("ASP.NET_SessionId=visit; TrueHomeCheckCookie=", post.headers.get("Cookie"), "visit cookies sent with login");
     check(post.body.contains("UserName=frame%40example.com") && post.body.contains("Password=frame-password") && post.body.contains("RememberMe=false")
         && post.body.startsWith("timeOffset="), "form fields");
-    same(5, server.calls.size(), "login follows its own redirects and confirms");
-    same("GET", server.calls.get(1).method, "redirect followed with GET");
-    same(".ASPXAUTH_TRUEHOME=SESSION1; ASP.NET_SessionId=abc1", server.calls.get(1).headers.get("Cookie"), "cookies with malformed expiry are kept");
+    same(6, server.calls.size(), "login follows its own redirects and confirms");
+    same("GET", server.calls.get(2).method, "redirect followed with GET");
+    same("ASP.NET_SessionId=abc1; TrueHomeCheckCookie=; .ASPXAUTH_TRUEHOME=SESSION1", server.calls.get(2).headers.get("Cookie"), "cookies with malformed expiry are kept");
     check(client.hasSession(), "session held");
     client.read(device(1001));
     same(1, server.logins(), "one login for many calls");
-    same(".ASPXAUTH_TRUEHOME=SESSION1; ASP.NET_SessionId=abc1", server.last().headers.get("Cookie"), "cookie sent on data calls");
+    same("ASP.NET_SessionId=abc1; TrueHomeCheckCookie=; .ASPXAUTH_TRUEHOME=SESSION1", server.last().headers.get("Cookie"), "cookie sent on data calls");
 
     fresh();
     for (int attempt = 1; attempt <= 3; attempt++) {
@@ -331,7 +341,7 @@ public final class TccTest {
         client.signIn(USER, PASS);
       }
     }, "throttle redirect locks at once");
-    same(1, server.calls.size(), "throttle page is not fetched");
+    same(2, server.calls.size(), "throttle page is not fetched");
     same(START + 600000L, client.lockedUntil(), "throttle lock length");
 
     fresh();
@@ -372,7 +382,7 @@ public final class TccTest {
         }
       }, "refused redirect to " + target);
     }
-    same(foreign.length, server.calls.size(), "refused redirects are never followed");
+    same(foreign.length * 2, server.calls.size(), "refused redirects are never followed");
     same(0, client.failures(), "a refused redirect is not a login failure");
     same("/portal/1/Zones?x=1", TccClient.sameOrigin("/portal/1/Zones?x=1", "/portal"), "relative redirect");
     same("/portal/Home", TccClient.sameOrigin("https://mytotalconnectcomfort.com/portal/Home", "/portal"), "absolute same-host redirect");
@@ -384,7 +394,7 @@ public final class TccTest {
         client.signIn(USER, PASS);
       }
     }, "redirect loop ends");
-    same(foreign.length + 6, server.calls.size(), "loop is bounded");
+    same(foreign.length * 2 + 6, server.calls.size(), "loop is bounded");
     server.redirect = "/portal/Error?aspxerrorpath=/portal";
     fails("unavailable", new Action() {
       @Override public void run() throws Exception {
@@ -400,7 +410,7 @@ public final class TccTest {
     server.sessions.clear();
     same("Level-0", client.read(device(1001)).name, "read after re-login");
     same(2, server.logins(), "one re-login");
-    same(".ASPXAUTH_TRUEHOME=SESSION2; ASP.NET_SessionId=abc2", server.last().headers.get("Cookie"), "new cookie replaces the old");
+    same("ASP.NET_SessionId=abc2; TrueHomeCheckCookie=; .ASPXAUTH_TRUEHOME=SESSION2", server.last().headers.get("Cookie"), "new cookie replaces the old");
 
     fresh();
     client.signIn(USER, PASS);
@@ -438,7 +448,7 @@ public final class TccTest {
     same(4242L, devices.get(0).location, "location id");
     same("00D02D1002", devices.get(1).mac, "mac id");
     same(2, server.count("POST", "/portal/Location/GetLocationListData/?page="), "paging stops at the first empty page");
-    check(server.calls.get(5).path.equals("/portal/Location/GetLocationListData/?page=1&filter=") && server.calls.get(5).body == null, "listing call shape");
+    check(server.calls.get(6).path.equals("/portal/Location/GetLocationListData/?page=1&filter=") && server.calls.get(6).body == null, "listing call shape");
 
     TccClient.State heat = client.read(devices.get(0));
     check(server.last().method.equals("GET") && server.last().path.startsWith("/portal/Device/CheckDataSession/1001?_="), "read call shape");
@@ -1062,11 +1072,11 @@ public final class TccTest {
     local.start();
     try {
       TccHttp transport = new TccHttp("http://127.0.0.1:" + local.getAddress().getPort());
-      TccClient.Reply raw = transport.send("GET", "/portal", new HashMap<String, String>(), null);
+      TccClient.Reply raw = transport.send("GET", "/portal/4242/Zones", new HashMap<String, String>(), null);
       same(401, raw.status, "status is passed through");
       final TccClient real = new TccClient(transport, new Storage(), clock, clock);
       real.signIn(USER, PASS);
-      same(5, server.calls.size() - 1, "redirects are followed by the client, not the connection");
+      same(6, server.calls.size() - 1, "redirects are followed by the client, not the connection");
       check(real.hasSession(), "cookies with a malformed expiry survive real HTTP headers");
       List<TccClient.Device> devices = real.devices();
       same(2, devices.size(), "devices over HTTP");

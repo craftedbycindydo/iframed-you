@@ -153,7 +153,10 @@ public final class FakeTccServer: TccTransport, @unchecked Sendable {
             if case .emptyCookie = behavior {
                 return html(200, "<html>Sign in</html>", ["Set-Cookie": "\(TccClient.authCookie)=; expires=Mon, 11-Oct-1999 22:00:00 GMT; path=/"])
             }
-            return isSignedIn(call) ? html(302, "", ["Location": "/portal/\(locationId)/Zones"]) : html(401, "")
+            if isSignedIn(call) { return html(302, "", ["Location": "/portal/\(locationId)/Zones"]) }
+            let cookies = "\(TccClient.authCookie)=; expires=Mon, 11-Oct-1999 22:00:00 GMT; path=/; secure; HttpOnly, "
+                + "ASP.NET_SessionId=visit; path=/; secure; HttpOnly; SameSite=Lax, TrueHomeCheckCookie=; path=/; secure; HttpOnly"
+            return html(200, "<html>Sign in</html>", ["Set-Cookie": cookies])
         }
         if call.method == "GET", path == "/portal/\(locationId)/Zones" {
             return isSignedIn(call) ? html(200, "<html>Zones</html>") : html(401, "")
@@ -210,6 +213,10 @@ public final class FakeTccServer: TccTransport, @unchecked Sendable {
         case .redirect(let location): return html(302, "", ["Location": location])
         case .emptyCookie: return html(200, "<html>Sign in</html>")
         case .normal: break
+        }
+        let sent = (call.headers["Cookie"] ?? "").components(separatedBy: "; ")
+        guard sent.contains(where: { $0.hasPrefix("ASP.NET_SessionId=") }), sent.contains("TrueHomeCheckCookie=") else {
+            return html(200, "<html>This site will not operate without Cookies enabled.</html>")
         }
         guard fields["UserName"] == account.username, fields["Password"] == account.password else {
             return html(200, "<html><div class=\"validation-summary-errors\">The email or password provided is incorrect.</div></html>")

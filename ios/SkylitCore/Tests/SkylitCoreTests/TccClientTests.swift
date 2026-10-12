@@ -55,24 +55,27 @@ final class TccClientTests: XCTestCase {
     func testLoginSendsFormOnceAndCarriesCookiesAfterwards() async throws {
         try await client.signIn(good)
         let calls = server.calls
-        XCTAssertEqual(calls[0].method, "POST")
+        XCTAssertEqual(calls[0].method, "GET")
         XCTAssertEqual(calls[0].url.absoluteString, "https://mytotalconnectcomfort.com/portal")
-        XCTAssertEqual(calls[0].headers["Content-Type"], "application/x-www-form-urlencoded")
-        XCTAssertEqual(calls[0].headers["X-Requested-With"], "XMLHttpRequest")
         XCTAssertNil(calls[0].headers["Cookie"])
-        XCTAssertTrue(calls[0].text.contains("UserName=home%40example.com"))
-        XCTAssertTrue(calls[0].text.contains("Password=demo-password"))
-        XCTAssertTrue(calls[0].text.contains("RememberMe=false"))
-        XCTAssertTrue(calls[0].text.hasPrefix("timeOffset="))
-        XCTAssertNil(calls[0].url.query)
-        XCTAssertEqual(calls.map(\.method), ["POST", "GET", "GET", "GET", "GET"])
-        XCTAssertEqual(calls.map(\.path), ["/portal", "/portal", "/portal/4242/Zones", "/portal", "/portal/4242/Zones"])
-        XCTAssertEqual(calls[1].headers["Cookie"], ".ASPXAUTH_TRUEHOME=SESSION1; ASP.NET_SessionId=abc1; thlang=en-US")
+        XCTAssertEqual(calls[1].method, "POST")
+        XCTAssertEqual(calls[1].url.absoluteString, "https://mytotalconnectcomfort.com/portal")
+        XCTAssertEqual(calls[1].headers["Content-Type"], "application/x-www-form-urlencoded")
+        XCTAssertEqual(calls[1].headers["X-Requested-With"], "XMLHttpRequest")
+        XCTAssertEqual(calls[1].headers["Cookie"], "ASP.NET_SessionId=visit; TrueHomeCheckCookie=")
+        XCTAssertTrue(calls[1].text.contains("UserName=home%40example.com"))
+        XCTAssertTrue(calls[1].text.contains("Password=demo-password"))
+        XCTAssertTrue(calls[1].text.contains("RememberMe=false"))
+        XCTAssertTrue(calls[1].text.hasPrefix("timeOffset="))
+        XCTAssertNil(calls[1].url.query)
+        XCTAssertEqual(calls.map(\.method), ["GET", "POST", "GET", "GET", "GET", "GET"])
+        XCTAssertEqual(calls.map(\.path), ["/portal", "/portal", "/portal", "/portal/4242/Zones", "/portal", "/portal/4242/Zones"])
+        XCTAssertEqual(calls[2].headers["Cookie"], ".ASPXAUTH_TRUEHOME=SESSION1; ASP.NET_SessionId=abc1; TrueHomeCheckCookie=; thlang=en-US")
         let hasSession = await client.hasSession
         XCTAssertTrue(hasSession)
         _ = try await client.thermostat(device())
         XCTAssertEqual(server.loginCount, 1)
-        XCTAssertEqual(server.calls.last?.headers["Cookie"], ".ASPXAUTH_TRUEHOME=SESSION1; ASP.NET_SessionId=abc1; thlang=en-US")
+        XCTAssertEqual(server.calls.last?.headers["Cookie"], ".ASPXAUTH_TRUEHOME=SESSION1; ASP.NET_SessionId=abc1; TrueHomeCheckCookie=; thlang=en-US")
         XCTAssertTrue(server.calls.allSatisfy { $0.url.scheme == "https" && $0.url.host == "mytotalconnectcomfort.com" })
     }
 
@@ -132,11 +135,11 @@ final class TccClientTests: XCTestCase {
         server.setLogin(.tooManyAttempts)
         let failure = await tccFailure { try await self.client.signIn(self.good) }
         XCTAssertEqual(failure, .locked(until: clock.now.addingTimeInterval(600)))
-        XCTAssertEqual(server.calls.count, 1)
+        XCTAssertEqual(server.calls.count, 2)
         server.setLogin(.normal)
         let refused = await tccFailure { try await self.client.signIn(self.good) }
         XCTAssertEqual(refused, .locked(until: clock.now.addingTimeInterval(600)))
-        XCTAssertEqual(server.calls.count, 1)
+        XCTAssertEqual(server.calls.count, 2)
     }
 
     func testEmptyAuthCookieAndUnauthorizedCountAsLoginFailures() async {
@@ -167,7 +170,7 @@ final class TccClientTests: XCTestCase {
             let failure = await tccFailure { try await self.client.signIn(self.good) }
             XCTAssertEqual(failure, .foreignHost, target)
         }
-        XCTAssertEqual(server.calls.count, 6)
+        XCTAssertEqual(server.calls.count, 12)
         XCTAssertTrue(server.calls.allSatisfy { $0.url.host == "mytotalconnectcomfort.com" && $0.url.scheme == "https" })
         let state = await client.loginGuard
         XCTAssertEqual(state.failures, 0)
@@ -198,7 +201,7 @@ final class TccClientTests: XCTestCase {
         let reading = try await client.thermostat(device())
         XCTAssertEqual(reading.name, "Level-0")
         XCTAssertEqual(server.loginCount, 2)
-        XCTAssertEqual(server.calls.last?.headers["Cookie"], ".ASPXAUTH_TRUEHOME=SESSION2; ASP.NET_SessionId=abc2; thlang=en-US")
+        XCTAssertEqual(server.calls.last?.headers["Cookie"], ".ASPXAUTH_TRUEHOME=SESSION2; ASP.NET_SessionId=abc2; TrueHomeCheckCookie=; thlang=en-US")
     }
 
     func testReloginIsThrottledToOncePerTenMinutes() async throws {
