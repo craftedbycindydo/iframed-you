@@ -7,20 +7,43 @@ final class ModelTests: XCTestCase {
     }
 
     func testInfo() throws {
-        let info = try decode(FrameInfo.self, ##"{"v":1,"frameId":"f-1","name":"Kitchen","extra":true}"##)
-        XCTAssertEqual(info, FrameInfo(v: 1, frameId: "f-1", name: "Kitchen"))
+        let info = try decode(FrameInfo.self, ##"{"v":2,"frameId":"f-1","name":"Kitchen","pairing":true,"extra":true}"##)
+        XCTAssertEqual(info, FrameInfo(v: 2, frameId: "f-1", name: "Kitchen", pairing: true))
+        XCTAssertFalse(try decode(FrameInfo.self, ##"{"v":2,"frameId":"f-1","name":"Kitchen"}"##).pairing)
     }
 
-    func testPairResult() throws {
-        let result = try decode(PairResult.self, ##"{"token":"ab12","frameId":"f-1","name":"Kitchen"}"##)
-        XCTAssertEqual(result.token, "ab12")
-        XCTAssertEqual(result.frameId, "f-1")
-        XCTAssertEqual(result.name, "Kitchen")
+    func testPairResultCarriesNoToken() throws {
+        let result = try decode(PairResult.self, ##"{"deviceId":"d4","frameId":"f-1","name":"Kitchen","token":"ignored"}"##)
+        XCTAssertEqual(result, PairResult(deviceId: "d4", frameId: "f-1", name: "Kitchen"))
+    }
+
+    func testServerSuppliedNamesAreClampedAndStripped() throws {
+        let long = String(repeating: "n", count: 500)
+        XCTAssertEqual(try decode(FrameInfo.self, ##"{"v":2,"frameId":"f","name":"\##(long)"}"##).name.count, 80)
+        let spoofed = try decode(FrameInfo.self, ##"{"v":2,"frameId":"f","name":"Kitchen\u202E\u0007\n frame "}"##)
+        XCTAssertEqual(spoofed.name, "Kitchen frame")
+        let device = try decode(PairedDevice.self, ##"{"id":"d1","name":"\##(long)","pairedAt":"x"}"##)
+        XCTAssertEqual(device.name.count, 40)
+        XCTAssertFalse(device.isSelf)
+        XCTAssertNil(device.lastSeenDate)
+        XCTAssertEqual(DiscoveredFrame(frameId: "f", name: long).name.count, 80)
+        let album = try decode(ICloudAlbum.self, ##"{"name":"\##(long)","error":"\##(long)"}"##)
+        XCTAssertEqual(album.name.count, 80)
+        XCTAssertEqual(album.error?.count, 200)
+    }
+
+    func testDeviceNameRules() {
+        XCTAssertEqual(Limits.cleanDeviceName("  Karan's iPhone \n"), "Karan's iPhone")
+        XCTAssertEqual(Limits.cleanDeviceName(String(repeating: "n", count: 40))?.count, 40)
+        XCTAssertEqual(Limits.cleanDeviceName("Maya 👩‍👧 phone"), "Maya 👩‍👧 phone")
+        for refused in ["", "   ", String(repeating: "n", count: 41), "Karan\u{202E}enohPi", "Tab\there", "Bell\u{7}", "Mark\u{200F}"] {
+            XCTAssertNil(Limits.cleanDeviceName(refused), refused.debugDescription)
+        }
     }
 
     func testDevicesWithBothTimestampShapes() throws {
         let devices = try decode([PairedDevice].self, """
-            [{"id":"d1","name":"Karan's iPhone","pairedAt":"2026-10-11T19:26:00Z"},
+            [{"id":"d1","name":"Karan's iPhone","pairedAt":"2026-10-11T19:26:00Z","lastSeen":"2026-10-11T19:30:00Z","self":true},
              {"id":"d2","name":"Tablet","pairedAt":"2026-10-11T19:26:00.123+00:00"},
              {"id":"d3","name":"Odd","pairedAt":"yesterday"}]
             """)

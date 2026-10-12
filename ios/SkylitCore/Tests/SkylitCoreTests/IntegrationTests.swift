@@ -2,30 +2,56 @@ import XCTest
 @testable import SkylitCore
 
 final class IntegrationTests: XCTestCase {
-    private static let deviceName = "Skylit iOS integration test"
+    private static let deviceName = "iFramed You integration test"
 
     private func client() async throws -> FrameAPI {
         let environment = ProcessInfo.processInfo.environment
         guard let text = environment["SKYLIT_TEST_URL"], let url = FrameAddress.parse(text) else {
-            throw XCTSkip("Set SKYLIT_TEST_URL (and SKYLIT_TEST_CODE or SKYLIT_TEST_TOKEN) to run against a real frame or dev server")
+            throw XCTSkip("Set SKYLIT_TEST_URL to a frame or dev server whose pairing window is open and which approves the pick")
         }
-        var api = FrameAPI(baseURL: url, transport: URLSessionTransport())
-        if let token = environment["SKYLIT_TEST_TOKEN"] {
-            api.token = token
-        } else if let code = environment["SKYLIT_TEST_CODE"] {
-            api.token = try await api.pairFinish(code: code, deviceName: Self.deviceName).token
-        } else {
-            throw XCTSkip("Set SKYLIT_TEST_CODE (after POST /v1/pair/start) or SKYLIT_TEST_TOKEN")
+        let probe = URLSessionTransport(.probe)
+        let info = try await FrameAPI(baseURL: url, transport: probe).info()
+        XCTAssertEqual(info.v, 2)
+        let probed = try XCTUnwrap(probe.fingerprint)
+        XCTAssertEqual(info.frameId, Pin.frameId(for: probed))
+        if let expected = environment["SKYLIT_TEST_FP"] { XCTAssertEqual(probed, expected) }
+        XCTAssertTrue(info.pairing, "Open the pairing window on the frame or dev server first")
+
+        let transport = URLSessionTransport(.pairing)
+        let pairing = FrameAPI(baseURL: url, transport: transport)
+        let nP = try PairingCrypto.randomBytes(), token = try PairingCrypto.randomBytes()
+        let started = try await pairing.pairStart(commit: PairingCrypto.sha256(nP), tokenHash: PairingCrypto.sha256(token), deviceName: Self.deviceName)
+        let fp = try XCTUnwrap(transport.fingerprint)
+        XCTAssertEqual(fp, probed)
+        do {
+            _ = try await FrameAPI(baseURL: url, transport: URLSessionTransport(.pairing))
+                .pairStart(commit: PairingCrypto.sha256(nP), tokenHash: PairingCrypto.sha256(token), deviceName: "Second")
+            XCTFail("a second start in one window should be 409")
+        } catch {
+            XCTAssertEqual(error as? FrameError, .api(status: 409, code: "pairing_busy"))
         }
-        return api
+        try await pairing.pairReveal(session: started.session, nP: Hex.encode(nP))
+        let derived = PairingCrypto.derive(nP: nP, nF: try XCTUnwrap(Hex.decode(started.nF, bytes: 32)), fpRaw: try XCTUnwrap(Hex.decode(fp, bytes: 32)))
+        print("SKYLIT pairing code \(derived.code) pick \(derived.pick) fingerprint \(fp)")
+        var result: PairResult?
+        for _ in 0..<120 where result == nil {
+            result = try await pairing.pairResult(session: started.session)
+            if result == nil { try await Task.sleep(for: .milliseconds(500)) }
+        }
+        XCTAssertEqual(try XCTUnwrap(result).frameId, Pin.frameId(for: fp))
+
+        let wrongPin = FrameAPI(baseURL: url, token: Hex.encode(token), transport: URLSessionTransport(.pinned(String(repeating: "0", count: 64))))
+        do {
+            _ = try await wrongPin.state()
+            XCTFail("a wrong pin must refuse the handshake")
+        } catch {
+            XCTAssertEqual(error as? FrameError, .pinMismatch)
+        }
+        return FrameAPI(baseURL: url, token: Hex.encode(token), transport: URLSessionTransport(.pinned(fp)))
     }
 
     func testWholeContractAgainstLiveServer() async throws {
         let api = try await client()
-
-        let info = try await api.info()
-        XCTAssertEqual(info.v, 1)
-        XCTAssertFalse(info.frameId.isEmpty)
 
         let initialReply = try await api.state()
         let initial = try XCTUnwrap(initialReply)
@@ -76,13 +102,13 @@ final class IntegrationTests: XCTestCase {
             _ = try await api.addItem(ShoppingDraft(name: "Too many", qty: 500))
             XCTFail("qty 500 should be rejected")
         } catch {
-            guard case .api(400, "bad_request", _) = FrameError.from(error) else { return XCTFail("expected 400 bad_request, got \(error)") }
+            XCTAssertEqual(FrameError.from(error), .api(status: 400, code: "bad_request"))
         }
         do {
             _ = try await api.deleteChore(id: "does-not-exist")
             XCTFail("unknown chore should be 404")
         } catch {
-            guard case .api(404, "not_found", _) = FrameError.from(error) else { return XCTFail("expected 404 not_found, got \(error)") }
+            XCTAssertEqual(FrameError.from(error), .api(status: 404, code: "not_found"))
         }
 
         let jpeg = try ImagePreparation.jpeg(from: makeImage(width: 3000, height: 2000))
@@ -116,15 +142,23 @@ final class IntegrationTests: XCTestCase {
         }
 
         let devices = try await api.devices()
-        XCTAssertFalse(devices.isEmpty)
-        if let mine = devices.first(where: { $0.name == Self.deviceName }) {
-            try await api.revokeDevice(id: mine.id)
+        let mine = try XCTUnwrap(devices.first(where: \.isSelf))
+        XCTAssertEqual(mine.name, Self.deviceName)
+        XCTAssertNotNil(mine.pairedDate)
+        if let other = devices.first(where: { !$0.isSelf }) {
             do {
-                _ = try await api.state()
-                XCTFail("revoked token should be 401")
+                try await api.removeDevice(id: other.id)
+                XCTFail("another device should be 403")
             } catch {
-                XCTAssertEqual(FrameError.from(error), .unauthorized)
+                XCTAssertEqual(FrameError.from(error), .api(status: 403, code: "forbidden"))
             }
+        }
+        try await api.removeDevice(id: mine.id)
+        do {
+            _ = try await api.state()
+            XCTFail("a removed phone's token should be 401")
+        } catch {
+            XCTAssertEqual(FrameError.from(error), .unauthorized)
         }
     }
 }

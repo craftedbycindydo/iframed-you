@@ -24,6 +24,11 @@ struct ConnectScreen: View {
                         .padding(.vertical, Space.s)
                 }
                 .listRowBackground(Color.clear)
+                if let warning = session.warning {
+                    Section {
+                        RowLabel(warning, symbol: "exclamationmark.shield", symbolTint: theme.tint)
+                    }
+                }
                 if let paired = session.paired {
                     reconnecting(paired)
                 } else {
@@ -37,14 +42,14 @@ struct ConnectScreen: View {
             }
             .listSectionSpacing(Space.l)
             .screenHeader("iFramed You", status: session.paired == nil
-                          ? "Manage chores, shopping, photos and setup over Wi-Fi."
+                          ? "Chores, shopping, photos and setup, encrypted between this phone and your frame."
                           : "Getting back in touch with your frame.")
         }
         .overlay(alignment: .bottom) {
             NoticeToast(notice: $session.notice).padding(.bottom, Space.s).stateAnimation(session.notice)
         }
         .sensoryFeedback(.error, trigger: session.notice) { _, new in new != nil }
-        .sheet(isPresented: Binding(get: { session.pairing != nil }, set: { if !$0 { session.cancelPairing() } })) {
+        .sheet(isPresented: Binding(get: { session.pairing != nil }, set: { if !$0 { Task { await session.cancelPairing() } } })) {
             if let flow = session.pairing {
                 PairingSheet(flow: flow)
                     .environment(\.theme, theme)
@@ -112,8 +117,10 @@ struct ConnectScreen: View {
         } header: {
             SectionHeader("Frames nearby")
         } footer: {
-            if session.frames.isEmpty, hasWaited {
-                Text("Check that the frame is on, running Skylit, and on the same Wi-Fi as this phone.")
+            if session.frames.isEmpty {
+                if hasWaited { Text("Check that the frame is on and on the same Wi-Fi as this phone.") }
+            } else {
+                Text("To pair, go to the frame first: open Settings › Phone app and tap Pair a phone. Then choose the frame here.")
             }
         }
     }
@@ -123,7 +130,7 @@ struct ConnectScreen: View {
             RowLabel("Local Network access is off", symbol: "wifi.exclamationmark", symbolTint: theme.tint)
             Button("Open Settings", systemImage: "gear", action: openSettings)
         } footer: {
-            Text("iFramed You talks to your frame over Wi-Fi only. Allow Local Network for iFramed You in Settings.")
+            Text("iFramed You talks only to your frame, encrypted between this phone and your frame. Allow Local Network for iFramed You in Settings.")
         }
     }
 
@@ -182,68 +189,151 @@ struct PairingSheet: View {
     @Environment(\.dismiss) private var dismiss
     let flow: PairingFlow
     @State private var code = ""
+    @State private var name = ""
+    @FocusState private var nameFocused: Bool
+
+    private var title: String {
+        switch flow.step {
+        case .naming, .starting: return "Pair with \(flow.frameName)"
+        case .enteringCode: return "Type the code shown on \(flow.frameName)"
+        case .confirming(let pick): return PairingFlow.tapText(pick)
+        case .paired: return "Paired"
+        case .failed: return "Not paired"
+        }
+    }
+
+    private var guidance: String {
+        switch flow.step {
+        case .naming, .starting: return "First, on the frame, open Settings › Phone app and tap Pair a phone. The frame then waits two minutes."
+        case .enteringCode: return "The code proves this phone is talking to your frame. Only pair phones you trust."
+        case .confirming: return "The frame shows three numbers. Tap this one there. If the frame shows anything else, tap Cancel on the frame."
+        case .paired: return "This phone is paired."
+        case .failed: return "Nothing was saved on this phone."
+        }
+    }
+
+    private var canBegin: Bool {
+        flow.step == .naming && Limits.cleanDeviceName(name) != nil
+    }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.xl) {
+            ThemedList {
+                Section {
                     HStack(alignment: .top, spacing: Space.l) {
                         VStack(alignment: .leading, spacing: Space.s) {
-                            Text("Enter the code on \(flow.frameName)").font(.hero)
-                            Text("The frame shows a 6-digit code for two minutes. Only pair phones you trust.")
-                                .font(.rowSubtitle)
-                                .foregroundStyle(Theme.secondaryLabel)
+                            Text(title).font(.hero)
+                            Text(guidance).font(.rowSubtitle).foregroundStyle(Theme.secondaryLabel)
                         }
+                        Spacer(minLength: 0)
                         FrameHero(width: 96)
                     }
-                    VStack(spacing: Space.l) {
-                        switch flow.step {
-                        case .requestingCode, .idle:
-                            ProgressView("Asking the frame for a code").frame(maxWidth: .infinity, minHeight: 56)
-                        case .failed:
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.largeTitle)
-                                .symbolRenderingMode(.hierarchical)
-                                .foregroundStyle(theme.tint)
-                        default:
-                            CodeEntry(code: $code) { entered in
-                                Task { await session.submit(code: entered) }
-                            }
-                            .disabled(flow.step == .verifying)
-                            .opacity(flow.step == .verifying ? 0.5 : 1)
-                        }
-                        if flow.step == .verifying {
-                            ProgressView("Checking")
-                        }
-                        if let message = flow.message {
-                            Text(message).font(.note).foregroundStyle(theme.tint).multilineTextAlignment(.center)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    Button("Send a new code", systemImage: "arrow.clockwise") {
-                        code = ""
-                        Task { await flow.start() }
-                    }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.capsule)
-                    .frame(maxWidth: .infinity)
-                    .disabled(flow.step == .requestingCode || flow.step == .verifying)
                 }
-                .padding(Space.margin)
+                .listRowBackground(Color.clear)
+                switch flow.step {
+                case .naming, .starting: naming
+                case .enteringCode: codeEntry
+                case .confirming(let pick): confirming(pick)
+                case .paired: EmptyView()
+                case .failed: failed
+                }
             }
-            .background(theme.background.ignoresSafeArea())
             .navigationTitle("Pair with frame")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(flow.step == .failed ? "Close" : "Cancel") { dismiss() }
                 }
             }
         }
         .sensoryFeedback(.error, trigger: flow.message) { _, new in new != nil }
+        .sensoryFeedback(.success, trigger: flow.step) { _, new in
+            if case .confirming = new { return true }
+            return false
+        }
         .onChange(of: flow.message) { _, message in
             if message != nil { code = "" }
         }
+        .onAppear { name = flow.suggestedName }
         .presentationDetents([.large])
+    }
+
+    private var naming: some View {
+        Section {
+            TextField("Name this phone", text: $name, prompt: Text("Maya's iPhone"))
+                .focused($nameFocused)
+                .textInputAutocapitalization(.words)
+                .autocorrectionDisabled()
+                .submitLabel(.go)
+                .onSubmit(begin)
+                .onChange(of: name) { _, new in
+                    if new.count > Limits.deviceNameLength { name = String(new.prefix(Limits.deviceNameLength)) }
+                }
+                .disabled(flow.step == .starting)
+            Button(action: begin) {
+                HStack {
+                    Label("Pair", systemImage: "link")
+                    Spacer()
+                    if flow.step == .starting { ProgressView() }
+                }
+            }
+            .disabled(!canBegin)
+        } header: {
+            SectionHeader("Name this phone")
+        } footer: {
+            if let message = flow.message {
+                Text(message).foregroundStyle(theme.tint)
+            } else {
+                Text("The frame lists paired phones by this name.")
+            }
+        }
+    }
+
+    private var codeEntry: some View {
+        Section {
+            CodeEntry(code: $code) { entered in
+                Task { await session.submit(code: entered) }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Space.s)
+        } footer: {
+            if let message = flow.message {
+                Text(message).foregroundStyle(theme.tint)
+            } else {
+                Text("You have three tries.")
+            }
+        }
+        .listRowBackground(Color.clear)
+    }
+
+    private func confirming(_ pick: String) -> some View {
+        Section {
+            Text(pick)
+                .font(.screenTitle)
+                .monospacedDigit()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Space.l)
+                .accessibilityHidden(true)
+                .listRowSeparator(.hidden)
+            HStack(spacing: Space.m) {
+                ProgressView()
+                Text("Waiting for the tap on the frame")
+            }
+        }
+    }
+
+    private var failed: some View {
+        Section {
+            RowLabel(flow.message ?? PairingFlow.failureText, symbol: "exclamationmark.triangle", symbolTint: theme.tint)
+            Button("Close") { dismiss() }
+        } footer: {
+            Text("To try again, tap Pair a phone on the frame, then choose the frame here.")
+        }
+    }
+
+    private func begin() {
+        guard canBegin else { return }
+        nameFocused = false
+        Task { await session.startPairing(name: name) }
     }
 }

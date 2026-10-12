@@ -128,7 +128,7 @@ final class ICloudAlbumStoreTests: XCTestCase {
         await store.refresh()
         let connected = await store.connectICloudAlbum(link: "https://share.icloud.com/photos/0a1B2c3D4e5F")
         XCTAssertFalse(connected)
-        XCTAssertEqual(store.notice, "That album is not public. Turn on Public Website first.")
+        XCTAssertEqual(store.notice, "The frame couldn't use that album. Turn on Public Website for it in Photos, then copy the link again.")
         XCTAssertNil(store.state?.settings.icloudAlbum)
         XCTAssertEqual(transport.calls.count, 2)
     }
@@ -155,7 +155,7 @@ final class ICloudAlbumStoreTests: XCTestCase {
     func testSyncWithoutAnAlbumExplains() async {
         let store = await loaded()
         await store.syncICloudAlbum()
-        XCTAssertEqual(store.notice, "No iCloud album is connected")
+        XCTAssertEqual(store.notice, "The frame can't do that right now.")
         XCTAssertFalse(store.isAlbumSyncing)
     }
 

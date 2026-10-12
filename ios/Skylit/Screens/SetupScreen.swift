@@ -10,7 +10,6 @@ struct SetupScreen: View {
     @State private var showsCitySearch = false
     @State private var showsCalendarForm = false
     @State private var removingCalendar: CalendarFeed?
-    @State private var revoking: PairedDevice?
     @State private var confirmsUnpair = false
 
     private var settings: FrameSettings { store.state?.settings ?? FrameSettings() }
@@ -157,37 +156,37 @@ struct SetupScreen: View {
     private var devices: some View {
         Section {
             ForEach(store.devices) { device in
-                RowLabel(device.name, subtitle: device.pairedDate.map { "Paired \($0.formatted(date: .abbreviated, time: .omitted))" },
-                         symbol: "iphone", symbolTint: theme.tint)
-                    .swipeActions(edge: .trailing) {
-                        Button("Revoke", systemImage: "xmark.circle", role: .destructive) { revoking = device }
-                    }
-                    .contextMenu {
-                        Button("Revoke", systemImage: "xmark.circle", role: .destructive) { revoking = device }
-                    }
+                RowLabel(device.name, subtitle: detail(device), symbol: "iphone", symbolTint: theme.tint) {
+                    if device.isSelf { RowValue(text: "This phone") }
+                }
             }
+            Button("Unpair this phone", systemImage: "xmark.circle", role: .destructive) { confirmsUnpair = true }
         } header: {
             SectionHeader("Paired phones")
         } footer: {
-            Text("Swipe a phone to revoke it.")
+            Text("To remove another phone, use Settings › Phone app on the frame.")
         }
-        .confirmationDialog("Revoke \(revoking?.name ?? "")? It will need a new code from the frame to pair again.",
-                            isPresented: Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } }), titleVisibility: .visible) {
-            Button("Revoke", role: .destructive) {
-                if let id = revoking?.id { Task { await store.revokeDevice(id: id) } }
+        .confirmationDialog("Unpair this phone from \(store.frame.name)? To pair again you will need to be at the frame.",
+                            isPresented: $confirmsUnpair, titleVisibility: .visible) {
+            Button("Unpair", role: .destructive) {
+                Task { await session.unpair() }
             }
         }
+    }
+
+    private func detail(_ device: PairedDevice) -> String? {
+        let parts = [device.pairedDate.map { "Paired \($0.formatted(date: .abbreviated, time: .omitted))" },
+                     device.lastSeenDate.map { "Last seen \($0.formatted(date: .abbreviated, time: .omitted))" }].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private var connection: some View {
         Section {
             Button("Use a different frame", systemImage: "arrow.triangle.2.circlepath") { session.leave() }
-            Button("Forget this frame on this phone", systemImage: "trash", role: .destructive) { confirmsUnpair = true }
         } header: {
             SectionHeader("This phone")
-        }
-        .confirmationDialog("Forget \(store.frame.name)? This phone will need a new code to pair again.", isPresented: $confirmsUnpair, titleVisibility: .visible) {
-            Button("Forget", role: .destructive) { session.forget() }
+        } footer: {
+            Text("Everything iFramed You sends is encrypted between this phone and your frame.")
         }
     }
 }

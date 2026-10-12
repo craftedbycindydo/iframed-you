@@ -9,7 +9,7 @@ public struct DiscoveredFrame: Equatable, Identifiable, Sendable {
 
     public init(frameId: String, name: String) {
         self.frameId = frameId
-        self.name = name
+        self.name = Limits.display(name)
     }
 
     public static func unique(_ frames: [DiscoveredFrame]) -> [DiscoveredFrame] {
@@ -35,7 +35,7 @@ public enum FrameAddress {
 
     public static func url(host: String, port: Int) -> URL? {
         var components = URLComponents()
-        components.scheme = "http"
+        components.scheme = "https"
         components.host = host.split(separator: "%").first.map(String.init) ?? host
         components.port = port
         return components.url
@@ -44,8 +44,8 @@ public enum FrameAddress {
     public static func parse(_ text: String) -> URL? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !trimmed.contains(" ") else { return nil }
-        guard let components = URLComponents(string: trimmed.contains("://") ? trimmed : "http://\(trimmed)"),
-              components.scheme == "http", components.user == nil,
+        guard let components = URLComponents(string: trimmed.contains("://") ? trimmed : "https://\(trimmed)"),
+              components.scheme == "https", components.user == nil,
               let host = components.host, !host.isEmpty else { return nil }
         let port = components.port ?? defaultPort
         guard (1...65535).contains(port) else { return nil }

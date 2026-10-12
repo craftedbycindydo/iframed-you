@@ -84,7 +84,7 @@ public final class FrameStore {
         switch failure {
         case .unauthorized:
             onUnauthorized?()
-        case .timeout, .offline, .connectionLost:
+        case .timeout, .offline, .connectionLost, .pinMismatch:
             link = .offline
         case .cancelled:
             break
@@ -105,10 +105,10 @@ public final class FrameStore {
             let result = try await call(api)
             link = .online
             guard var current = state else { return true }
-            let expected = current.rev + 1
+            let (expected, overflowed) = current.rev.addingReportingOverflow(1)
             if tempId == nil { optimistic(&current) }
             let settled = Self.settle(&current, result, tempId: tempId)
-            if settled, result.rev == expected {
+            if settled, !overflowed, result.rev == expected {
                 current.rev = expected
                 state = current
             } else {
@@ -277,6 +277,9 @@ public final class FrameStore {
             _ = try await api.connectICloudAlbum(url: url)
             await refresh()
             return true
+        } catch FrameError.api(400, _) {
+            notice = "The frame couldn't use that album. Turn on Public Website for it in Photos, then copy the link again."
+            return false
         } catch {
             handle(error)
             return false
@@ -340,7 +343,7 @@ public final class FrameStore {
             } catch {
                 failed += 1
                 let failure = handle(error)
-                if failure == .unauthorized || failure.isConnectivity { break }
+                if failure == .unauthorized || failure == .pinMismatch || failure.isConnectivity { break }
             }
         }
         upload = nil
@@ -372,13 +375,19 @@ public final class FrameStore {
         }
     }
 
-    public func revokeDevice(id: String) async {
+    public var thisDevice: PairedDevice? {
+        devices.first(where: \.isSelf)
+    }
+
+    @discardableResult
+    public func unpairThisPhone() async -> Bool {
         do {
-            try await api.revokeDevice(id: id)
-            devices.removeAll { $0.id == id }
-            await loadDevices()
+            if thisDevice == nil { devices = try await api.devices() }
+            guard let mine = thisDevice else { return false }
+            try await api.removeDevice(id: mine.id)
+            return true
         } catch {
-            handle(error)
+            return false
         }
     }
 }

@@ -101,7 +101,7 @@ struct PhotosScreen: View {
                         ContentUnavailableView {
                             Label("No photos from a phone yet", systemImage: "photo.on.rectangle.angled")
                         } description: {
-                            Text("Photos you add join the frame's slideshow, resized and sent over Wi-Fi only.")
+                            Text("Photos you add join the frame's slideshow. They are resized, then sent encrypted between this phone and your frame.")
                         } actions: {
                             PhotosPicker(selection: $picks, maxSelectionCount: 30, matching: .images) {
                                 Text("Add photos")

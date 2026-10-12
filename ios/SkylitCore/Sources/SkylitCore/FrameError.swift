@@ -1,8 +1,9 @@
 import Foundation
 
 public enum FrameError: Error, Equatable, Sendable {
-    case api(status: Int, code: String, message: String)
+    case api(status: Int, code: String)
     case unauthorized
+    case pinMismatch
     case timeout
     case offline
     case connectionLost
@@ -18,6 +19,8 @@ public enum FrameError: Error, Equatable, Sendable {
         switch self {
         case .unauthorized:
             return "This phone is no longer paired with the frame."
+        case .pinMismatch:
+            return "Another device on this Wi-Fi is claiming to be your frame. Nothing was sent."
         case .timeout:
             return "The frame took too long to answer. Check that it is on."
         case .uploadRejected:
@@ -28,12 +31,15 @@ public enum FrameError: Error, Equatable, Sendable {
             return "Cancelled."
         case .invalidResponse:
             return "The frame sent something this app doesn't understand. Update the frame or the app."
-        case .api(let status, let code, let message):
+        case .api(let status, let code):
             switch code {
+            case "bad_request": return "The frame didn't accept that. Check what you entered."
+            case "forbidden": return "This phone isn't allowed to do that."
             case "not_found": return "That no longer exists on the frame."
+            case "conflict", "pairing_busy": return "The frame can't do that right now."
             case "too_large": return "That is too large for the frame."
-            case "rate_limited": return message.isEmpty ? "Too many attempts. Wait a few minutes and try again." : message
-            default: return message.isEmpty ? "The frame refused that (\(status))." : message
+            case "rate_limited": return "Too many attempts. Wait a few minutes and try again."
+            default: return "The frame refused that (\(status))."
             }
         }
     }
@@ -55,11 +61,11 @@ public enum FrameError: Error, Equatable, Sendable {
         struct Envelope: Decodable {
             struct Detail: Decodable {
                 let code: String?
-                let message: String?
             }
             let error: Detail
         }
-        let detail = (try? JSONDecoder().decode(Envelope.self, from: body))?.error
-        return .api(status: status, code: detail?.code ?? "http_\(status)", message: detail?.message ?? "")
+        let code = (try? JSONDecoder().decode(Envelope.self, from: body))?.error.code ?? ""
+        let known = code.count <= 32 && !code.isEmpty && code.utf8.allSatisfy { (97...122).contains($0) || $0 == 95 }
+        return .api(status: status, code: known ? code : "http_\(status)")
     }
 }

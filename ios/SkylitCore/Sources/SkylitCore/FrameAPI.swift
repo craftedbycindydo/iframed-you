@@ -12,22 +12,33 @@ public struct FrameAPI: Sendable {
     }
 
     public func info() async throws -> FrameInfo {
-        try await decode(send("GET", "/v1/info", authorized: false))
+        try await decode(send("GET", "/v2/info", authorized: false))
     }
 
-    public func pairStart() async throws {
-        _ = try await send("POST", "/v1/pair/start", authorized: false)
+    public func pairStart(commit: String, tokenHash: String, deviceName: String) async throws -> PairSession {
+        try await decode(send("POST", "/v2/pair/start", json: ["commit": commit, "tokenHash": tokenHash, "deviceName": deviceName], authorized: false))
     }
 
-    public func pairFinish(code: String, deviceName: String) async throws -> PairResult {
-        try await decode(send("POST", "/v1/pair/finish", json: ["code": code, "deviceName": deviceName], authorized: false))
+    public func pairReveal(session: String, nP: String) async throws {
+        _ = try await send("POST", "/v2/pair/reveal", json: ["session": session, "nP": nP], authorized: false)
+    }
+
+    public func pairCancel(session: String) async throws {
+        _ = try await send("POST", "/v2/pair/cancel", json: ["session": session], authorized: false)
+    }
+
+    public func pairResult(session: String) async throws -> PairResult? {
+        let (data, status) = try await exchange("GET", "/v2/pair/result", query: [URLQueryItem(name: "session", value: session)], authorized: false)
+        guard status != 202 else { return nil }
+        guard status == 200 else { throw FrameError.invalidResponse }
+        return try decode(data)
     }
 
     public func devices() async throws -> [PairedDevice] {
         try await decode(send("GET", "/v1/devices"))
     }
 
-    public func revokeDevice(id: String) async throws {
+    public func removeDevice(id: String) async throws {
         _ = try await send("DELETE", "/v1/devices/\(escaped(id))")
     }
 
@@ -127,7 +138,7 @@ public struct FrameAPI: Sendable {
 
     public func uploadPhoto(_ jpeg: Data, onProgress: (@Sendable (Double) -> Void)? = nil) async throws -> MutationResult {
         guard jpeg.count <= Limits.photoBytes else {
-            throw FrameError.api(status: 413, code: "too_large", message: "")
+            throw FrameError.api(status: 413, code: "too_large")
         }
         var request = try request("POST", "/v1/photos", query: nil, authorized: true)
         request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
@@ -170,7 +181,7 @@ public struct FrameAPI: Sendable {
     }
 
     private func request(_ method: String, _ path: String, query: [URLQueryItem]?, authorized: Bool) throws -> URLRequest {
-        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { throw FrameError.invalidResponse }
+        guard baseURL.scheme == "https", var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { throw FrameError.offline }
         components.percentEncodedPath = path
         components.queryItems = query
         guard let url = components.url else { throw FrameError.invalidResponse }

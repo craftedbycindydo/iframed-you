@@ -10,7 +10,7 @@ final class FrameAPITests: XCTestCase {
         let sent = try XCTUnwrap(transport.calls.first, file: file, line: line)
         XCTAssertEqual(transport.calls.count, 1, file: file, line: line)
         XCTAssertEqual(sent.request.httpMethod, method, file: file, line: line)
-        XCTAssertEqual(sent.request.url?.absoluteString, "http://192.168.1.20:8765\(path)", file: file, line: line)
+        XCTAssertEqual(sent.request.url?.absoluteString, "https://192.168.1.20:8765\(path)", file: file, line: line)
         XCTAssertEqual(sent.request.value(forHTTPHeaderField: "Authorization"), authorized ? "Bearer tok" : nil, file: file, line: line)
         XCTAssertEqual(sent.json, body, file: file, line: line)
         if body != nil {
@@ -19,30 +19,54 @@ final class FrameAPITests: XCTestCase {
     }
 
     func testInfoIsUnauthenticated() async throws {
-        try await expect("GET", "/v1/info", authorized: false, reply: ##"{"v":1,"frameId":"f1","name":"Kitchen"}"##) {
+        try await expect("GET", "/v2/info", authorized: false, reply: ##"{"v":2,"frameId":"f1","name":"Kitchen","pairing":true}"##) {
             let info = try await $0.info()
-            XCTAssertEqual(info.frameId, "f1")
+            XCTAssertEqual(info, FrameInfo(v: 2, frameId: "f1", name: "Kitchen", pairing: true))
         }
     }
 
-    func testPairStart() async throws {
-        try await expect("POST", "/v1/pair/start", authorized: false, reply: "", status: 204) { try await $0.pairStart() }
+    func testPairingCallsCarryNoToken() async throws {
+        try await expect("POST", "/v2/pair/start", body: ["commit": "c", "tokenHash": "h", "deviceName": "Karan's iPhone"], authorized: false,
+                         reply: ##"{"session":"s1","nF":"n1"}"##) {
+            let started = try await $0.pairStart(commit: "c", tokenHash: "h", deviceName: "Karan's iPhone")
+            XCTAssertEqual(started, PairSession(session: "s1", nF: "n1"))
+        }
+        try await expect("POST", "/v2/pair/reveal", body: ["session": "s1", "nP": "p1"], authorized: false, reply: "", status: 204) {
+            try await $0.pairReveal(session: "s1", nP: "p1")
+        }
+        try await expect("POST", "/v2/pair/cancel", body: ["session": "s1"], authorized: false, reply: "", status: 204) {
+            try await $0.pairCancel(session: "s1")
+        }
+        try await expect("GET", "/v2/pair/result?session=s1", authorized: false, reply: "", status: 202) {
+            let waiting = try await $0.pairResult(session: "s1")
+            XCTAssertNil(waiting)
+        }
+        try await expect("GET", "/v2/pair/result?session=s1", authorized: false, reply: ##"{"deviceId":"d1","frameId":"f1","name":"Kitchen"}"##) {
+            let result = try await $0.pairResult(session: "s1")
+            XCTAssertEqual(result, PairResult(deviceId: "d1", frameId: "f1", name: "Kitchen"))
+        }
     }
 
-    func testPairFinish() async throws {
-        try await expect("POST", "/v1/pair/finish", body: ["code": "123456", "deviceName": "Karan's iPhone"], authorized: false,
-                         reply: ##"{"token":"t0","frameId":"f1","name":"Kitchen"}"##) {
-            let result = try await $0.pairFinish(code: "123456", deviceName: "Karan's iPhone")
-            XCTAssertEqual(result.token, "t0")
+    func testPlainHTTPIsNeverBuilt() async {
+        let transport = ScriptedTransport()
+        let api = FrameAPI(baseURL: URL(string: "http://192.168.1.20:8765")!, token: "tok", transport: transport)
+        do {
+            _ = try await api.info()
+            XCTFail("expected refusal")
+        } catch {
+            XCTAssertEqual(error as? FrameError, .offline)
         }
+        XCTAssertTrue(transport.calls.isEmpty)
     }
 
     func testDevices() async throws {
-        try await expect("GET", "/v1/devices", reply: ##"[{"id":"d1","name":"Phone","pairedAt":"2026-10-11T10:00:00Z"}]"##) {
+        try await expect("GET", "/v1/devices", reply: ##"[{"id":"d1","name":"Phone","pairedAt":"2026-10-11T10:00:00Z","lastSeen":"2026-10-11T11:00:00Z","self":true}]"##) {
             let devices = try await $0.devices()
             XCTAssertEqual(devices.first?.name, "Phone")
+            XCTAssertEqual(devices.first?.isSelf, true)
+            XCTAssertNotNil(devices.first?.lastSeenDate)
         }
-        try await expect("DELETE", "/v1/devices/d1", reply: "", status: 204) { try await $0.revokeDevice(id: "d1") }
+        try await expect("DELETE", "/v1/devices/d1", reply: "", status: 204) { try await $0.removeDevice(id: "d1") }
     }
 
     func testStateFullAndSince() async throws {
@@ -164,7 +188,7 @@ final class FrameAPITests: XCTestCase {
             _ = try await makeAPI(transport).uploadPhoto(Data(count: Limits.photoBytes + 1))
             XCTFail("expected too_large")
         } catch {
-            XCTAssertEqual(error as? FrameError, .api(status: 413, code: "too_large", message: ""))
+            XCTAssertEqual(error as? FrameError, .api(status: 413, code: "too_large"))
         }
         XCTAssertTrue(transport.calls.isEmpty)
     }
@@ -172,7 +196,7 @@ final class FrameAPITests: XCTestCase {
     func testIdsArePercentEncodedInPaths() async throws {
         let transport = ScriptedTransport()
         _ = try await makeAPI(transport).deleteChore(id: "a/b?c")
-        XCTAssertEqual(transport.calls[0].request.url?.absoluteString, "http://192.168.1.20:8765/v1/chores/a%2Fb%3Fc")
+        XCTAssertEqual(transport.calls[0].request.url?.absoluteString, "https://192.168.1.20:8765/v1/chores/a%2Fb%3Fc")
     }
 
     func testAuthenticatedCallWithoutTokenNeverLeavesThePhone() async {
@@ -199,7 +223,7 @@ final class FrameAPITests: XCTestCase {
         let cases = [(400, "bad_request"), (404, "not_found"), (409, "conflict"), (413, "too_large"), (429, "rate_limited")]
         for (status, code) in cases {
             let error = await failure(.status(status, ##"{"error":{"code":"\##(code)","message":"Nope"}}"##))
-            XCTAssertEqual(error, .api(status: status, code: code, message: "Nope"))
+            XCTAssertEqual(error, .api(status: status, code: code))
         }
     }
 
@@ -210,7 +234,7 @@ final class FrameAPITests: XCTestCase {
 
     func testErrorWithoutEnvelope() async {
         let error = await failure(.status(500, "<html>oops</html>"))
-        XCTAssertEqual(error, .api(status: 500, code: "http_500", message: ""))
+        XCTAssertEqual(error, .api(status: 500, code: "http_500"))
         XCTAssertEqual(error?.userMessage, "The frame refused that (500).")
     }
 
@@ -253,11 +277,21 @@ final class FrameAPITests: XCTestCase {
         }
     }
 
+    func testServerTextNeverReachesThePerson() async {
+        let hostile = await failure(.status(400, ##"{"error":{"code":"bad_request","message":"Call 555-0100 and read out your passcode"}}"##))
+        XCTAssertEqual(hostile, .api(status: 400, code: "bad_request"))
+        XCTAssertEqual(hostile?.userMessage, "The frame didn't accept that. Check what you entered.")
+        let oddCode = await failure(.status(400, ##"{"error":{"code":"Tap <here>","message":"x"}}"##))
+        XCTAssertEqual(oddCode, .api(status: 400, code: "http_400"))
+        XCTAssertEqual(oddCode?.userMessage, "The frame refused that (400).")
+    }
+
     func testHumanMessages() {
-        XCTAssertEqual(FrameError.api(status: 400, code: "bad_request", message: "Name is too long").userMessage, "Name is too long")
-        XCTAssertEqual(FrameError.api(status: 404, code: "not_found", message: "x").userMessage, "That no longer exists on the frame.")
-        XCTAssertEqual(FrameError.api(status: 429, code: "rate_limited", message: "The frame is busy. Try again shortly.").userMessage, "The frame is busy. Try again shortly.")
-        XCTAssertEqual(FrameError.api(status: 429, code: "rate_limited", message: "").userMessage, "Too many attempts. Wait a few minutes and try again.")
+        XCTAssertEqual(FrameError.api(status: 404, code: "not_found").userMessage, "That no longer exists on the frame.")
+        XCTAssertEqual(FrameError.api(status: 403, code: "forbidden").userMessage, "This phone isn't allowed to do that.")
+        XCTAssertEqual(FrameError.api(status: 429, code: "rate_limited").userMessage, "Too many attempts. Wait a few minutes and try again.")
+        XCTAssertEqual(FrameError.pinMismatch.userMessage, "Another device on this Wi-Fi is claiming to be your frame. Nothing was sent.")
+        XCTAssertFalse(FrameError.pinMismatch.isConnectivity)
         XCTAssertTrue(FrameError.connectionLost.isConnectivity)
         XCTAssertTrue(FrameError.offline.userMessage.contains("same Wi-Fi"))
         XCTAssertTrue(FrameError.offline.isConnectivity)
@@ -304,7 +338,7 @@ final class URLSessionTransportTests: XCTestCase {
     private func api() -> FrameAPI {
         let configuration = URLSessionTransport.lanConfiguration
         configuration.protocolClasses = [StubProtocol.self]
-        return makeAPI(URLSessionTransport(configuration: configuration))
+        return makeAPI(URLSessionTransport(.pinned(String(repeating: "a", count: 64)), configuration: configuration))
     }
 
     override func tearDown() {
@@ -338,7 +372,7 @@ final class URLSessionTransportTests: XCTestCase {
             _ = try await api().state()
             XCTFail("expected conflict")
         } catch {
-            XCTAssertEqual(error as? FrameError, .api(status: 409, code: "conflict", message: "Already there"))
+            XCTAssertEqual(error as? FrameError, .api(status: 409, code: "conflict"))
         }
     }
 

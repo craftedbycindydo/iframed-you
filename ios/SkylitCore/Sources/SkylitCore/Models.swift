@@ -1,23 +1,65 @@
 import Foundation
 
-public struct FrameInfo: Codable, Equatable, Sendable {
+public struct FrameInfo: Decodable, Equatable, Sendable {
     public let v: Int
     public let frameId: String
     public let name: String
+    public let pairing: Bool
+
+    public init(v: Int, frameId: String, name: String, pairing: Bool = false) {
+        self.v = v
+        self.frameId = frameId
+        self.name = name
+        self.pairing = pairing
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case v, frameId, name, pairing
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        v = try c.decode(Int.self, forKey: .v)
+        frameId = try c.decode(String.self, forKey: .frameId)
+        name = Limits.display(try c.decode(String.self, forKey: .name))
+        pairing = try c.decodeIfPresent(Bool.self, forKey: .pairing) ?? false
+    }
 }
 
-public struct PairResult: Codable, Equatable, Sendable {
-    public let token: String
+public struct PairSession: Decodable, Equatable, Sendable {
+    public let session: String
+    public let nF: String
+}
+
+public struct PairResult: Decodable, Equatable, Sendable {
+    public let deviceId: String
     public let frameId: String
     public let name: String
 }
 
-public struct PairedDevice: Codable, Equatable, Identifiable, Sendable {
+public struct PairedDevice: Decodable, Equatable, Identifiable, Sendable {
     public let id: String
     public let name: String
     public let pairedAt: String
+    public let lastSeen: String?
+    public let isSelf: Bool
 
     public var pairedDate: Date? { ISO8601.date(pairedAt) }
+    public var lastSeenDate: Date? { lastSeen.flatMap(ISO8601.date) }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, pairedAt, lastSeen
+        case isSelf = "self"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = Limits.display(try c.decode(String.self, forKey: .name), limit: Limits.deviceNameLength)
+        pairedAt = try c.decodeIfPresent(String.self, forKey: .pairedAt) ?? ""
+        lastSeen = try c.decodeIfPresent(String.self, forKey: .lastSeen)
+        isSelf = try c.decodeIfPresent(Bool.self, forKey: .isSelf) ?? false
+    }
 }
 
 public struct Person: Codable, Hashable, Identifiable, Sendable {
@@ -130,11 +172,11 @@ public struct ICloudAlbum: Codable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        name = Limits.display(try c.decodeIfPresent(String.self, forKey: .name) ?? "")
         count = try c.decodeIfPresent(Int.self, forKey: .count) ?? 0
         lastSync = try c.decodeIfPresent(String.self, forKey: .lastSync)
         syncing = try c.decodeIfPresent(Bool.self, forKey: .syncing) ?? false
-        error = try c.decodeIfPresent(String.self, forKey: .error).flatMap { $0.isEmpty ? nil : $0 }
+        error = try c.decodeIfPresent(String.self, forKey: .error).map { Limits.display($0, limit: Limits.noteLength) }.flatMap { $0.isEmpty ? nil : $0 }
     }
 }
 
@@ -313,6 +355,32 @@ public enum Limits {
     public static let quantity = 1...99
     public static let photoBytes = 15 * 1024 * 1024
     public static let photoEdge = 2560
+    public static let deviceNameLength = 40
+    public static let noteLength = 200
+    public static let jsonResponseBytes = 1024 * 1024
+    public static let photoResponseBytes = 16 * 1024 * 1024
+
+    private static let directionMarks: Set<UInt32> = [0x061C, 0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069]
+
+    private static func isUnsafe(_ scalar: Unicode.Scalar) -> Bool {
+        scalar.properties.generalCategory == .control || directionMarks.contains(scalar.value)
+    }
+
+    public static func display(_ text: String, limit: Int = nameLength) -> String {
+        let kept = String(String.UnicodeScalarView(text.unicodeScalars.filter { !isUnsafe($0) }))
+        return String(kept.trimmingCharacters(in: .whitespacesAndNewlines).prefix(limit))
+    }
+
+    public static func cleanDeviceName(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (1...deviceNameLength).contains(trimmed.count), !trimmed.unicodeScalars.contains(where: isUnsafe) else { return nil }
+        return trimmed
+    }
+
+    public static func responseBytes(for request: URLRequest) -> Int {
+        let isPhoto = (request.httpMethod ?? "GET") == "GET" && (request.url?.path ?? "").hasPrefix("/v1/photos/")
+        return isPhoto ? photoResponseBytes : jsonResponseBytes
+    }
 
     public static func cleanName(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

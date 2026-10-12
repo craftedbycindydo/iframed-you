@@ -159,7 +159,7 @@ final class FrameStoreTests: XCTestCase {
         let added = await store.addItem(ShoppingDraft(name: "Too many", qty: 500))
         XCTAssertFalse(added)
         XCTAssertEqual(store.state, before)
-        XCTAssertEqual(store.notice, "A field is missing or out of range")
+        XCTAssertEqual(store.notice, "The frame didn't accept that. Check what you entered.")
         XCTAssertEqual(store.link, .online)
     }
 
@@ -183,7 +183,7 @@ final class FrameStoreTests: XCTestCase {
         var asked = 0
         store.relocate = {
             asked += 1
-            return URL(string: "http://192.168.1.77:9000")
+            return URL(string: "https://192.168.1.77:9000")
         }
         await store.poll()
         XCTAssertEqual(asked, 1)
@@ -281,7 +281,7 @@ final class FrameStoreTests: XCTestCase {
         let rejected = await store.addCalendar(name: "Bad", color: "#526747", url: "http://example.com/feed")
         XCTAssertFalse(rejected)
         XCTAssertEqual(store.state?.calendars.count, 3)
-        XCTAssertEqual(store.notice, "That is not a calendar link the frame can use")
+        XCTAssertEqual(store.notice, "The frame didn't accept that. Check what you entered.")
         await store.deleteCalendar(id: "k1")
         XCTAssertEqual(store.state?.calendars.map(\.name), ["School", "Work"])
         await store.refresh()
@@ -346,17 +346,60 @@ final class FrameStoreTests: XCTestCase {
         XCTAssertEqual(store.link, .offline)
     }
 
-    func testDevicesListAndRevoke() async {
+    func testDevicesMarkThisPhoneAndOnlyItCanBeRemoved() async throws {
         let store = await loaded()
         await store.loadDevices()
         XCTAssertEqual(store.devices.map(\.name), ["Karan's iPhone", "Hallway tablet"])
-        await store.revokeDevice(id: "d2")
-        XCTAssertEqual(store.devices.map(\.id), ["d1"])
-        XCTAssertEqual(server.requests.suffix(2).map(\.method), ["DELETE", "GET"])
+        XCTAssertEqual(store.devices.map(\.isSelf), [true, false])
+        XCTAssertEqual(store.thisDevice?.id, "d1")
+        XCTAssertNotNil(store.thisDevice?.lastSeenDate)
+        let api = FrameAPI(baseURL: DemoFrameServer.address, token: DemoFrameServer.demoToken, transport: server)
+        do {
+            try await api.removeDevice(id: "d2")
+            XCTFail("another phone must not be removable from the app")
+        } catch {
+            XCTAssertEqual(error as? FrameError, .api(status: 403, code: "forbidden"))
+        }
+        let unpaired = await store.unpairThisPhone()
+        XCTAssertTrue(unpaired)
+        XCTAssertEqual(server.requests.last?.method, "DELETE")
+        XCTAssertEqual(server.requests.last?.path, "/v1/devices/d1")
         var revoked = false
         store.onUnauthorized = { revoked = true }
-        await store.revokeDevice(id: "d1")
+        await store.poll()
         XCTAssertTrue(revoked)
+    }
+
+    func testUnpairLoadsDevicesFirstWhenNeeded() async {
+        let store = await loaded()
+        let unpaired = await store.unpairThisPhone()
+        XCTAssertTrue(unpaired)
+        XCTAssertEqual(server.requests.suffix(2).map(\.method), ["GET", "DELETE"])
+    }
+
+    func testRevisionAtTheIntegerLimitDoesNotTrap() async {
+        let transport = ScriptedTransport([
+            .status(200, #"{"rev":9223372036854775807,"shopping":[{"id":"s1","name":"Milk","qty":1,"note":"","done":false}]}"#),
+            .status(200, #"{"rev":1,"item":{"id":"s1","name":"Milk","qty":1,"note":"","done":true}}"#),
+            .status(200, #"{"rev":1,"shopping":[{"id":"s1","name":"Milk","qty":1,"note":"","done":true}]}"#),
+        ])
+        let store = await loaded(transport)
+        XCTAssertEqual(store.state?.rev, Int.max)
+        let ticked = await store.setItem(id: "s1", done: true)
+        XCTAssertTrue(ticked)
+        XCTAssertEqual(store.state?.rev, 1)
+        XCTAssertEqual(transport.calls.count, 3)
+    }
+
+    func testPinMismatchMidSessionGoesOfflineAndKeepsEverything() async {
+        let transport = ScriptedTransport([.status(200, #"{"rev":5}"#), .failure(FrameError.pinMismatch)])
+        let store = await loaded(transport)
+        var revoked = false
+        store.onUnauthorized = { revoked = true }
+        await store.poll()
+        XCTAssertEqual(store.link, .offline)
+        XCTAssertFalse(revoked)
+        XCTAssertEqual(store.state?.rev, 5)
     }
 
     func testPollingLoopStopsWhenCancelled() async {

@@ -4,11 +4,13 @@ import SkylitCore
 @main
 struct SkylitApp: App {
     @State private var session = Launch.makeSession()
+    @State private var climate = Launch.makeClimate()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(session)
+                .environment(climate)
         }
     }
 }
@@ -19,8 +21,8 @@ enum Launch {
         #if DEBUG
         if let demo = Demo.session() { return demo }
         #endif
-        return FrameSession(browser: BonjourFrameBrowser(), transport: URLSessionTransport(), tokens: KeychainTokenStore(),
-                            pairedStore: PairedFrameStore(), deviceName: UIDevice.current.name)
+        return FrameSession(browser: BonjourFrameBrowser(), connector: TLSConnector(), tokens: KeychainTokenStore(),
+                            pairedStore: PairedFrameStore(), deviceNames: DeviceNameStore(fallback: UIDevice.current.model))
     }
 }
 
@@ -28,6 +30,7 @@ enum MainTab: String {
     case shopping
     case photos
     case chores
+    case climate
     case setup
 }
 
@@ -35,6 +38,7 @@ struct RootView: View {
     @Environment(FrameSession.self) private var session
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
+    @State private var awayTab: MainTab = Launch.initialTab == .climate ? .climate : .setup
 
     private var appearance: FrameAppearance {
         session.store?.state?.settings.appearance ?? .standard
@@ -75,8 +79,15 @@ struct RootView: View {
             MainTabs(store: store)
                 .transition(.opacity)
         } else {
-            ConnectScreen()
-                .transition(.opacity)
+            TabView(selection: $awayTab) {
+                ConnectScreen()
+                    .tabItem { Label("Frame", systemImage: "sun.max") }
+                    .tag(MainTab.setup)
+                ClimateScreen()
+                    .tabItem { Label("Climate", systemImage: "thermometer.medium") }
+                    .tag(MainTab.climate)
+            }
+            .transition(.opacity)
         }
     }
 }
@@ -98,6 +109,9 @@ struct MainTabs: View {
             ChoresScreen(store: store)
                 .tabItem { Label("Chores", systemImage: "checklist") }
                 .tag(MainTab.chores)
+            ClimateScreen()
+                .tabItem { Label("Climate", systemImage: "thermometer.medium") }
+                .tag(MainTab.climate)
             SetupScreen(store: store)
                 .tabItem { Label("Frame", systemImage: "sun.max") }
                 .tag(MainTab.setup)
@@ -135,7 +149,6 @@ enum Demo {
     @MainActor
     static func session() -> FrameSession? {
         guard isOn else { return nil }
-        let frame = DiscoveredFrame(frameId: "demo-frame", name: "Kitchen frame")
         let unpaired = ["connect", "pairing", "denied", "searching"].contains(screen ?? "")
         let events: [BrowseEvent]
         switch screen {
@@ -147,16 +160,23 @@ enum Demo {
         defaults.removePersistentDomain(forName: "skylit.demo")
         let paired = PairedFrameStore(defaults: defaults)
         let tokens = InMemoryTokenStore()
-        if !unpaired {
-            tokens.save(DemoFrameServer.demoToken, for: frame.frameId)
-            paired.current = PairedFrame(frameId: frame.frameId, name: frame.name)
-        }
         let server: DemoFrameServer
         if UserDefaults.standard.bool(forKey: "demoEmpty") {
             server = DemoFrameServer()
             server.authorize(token: DemoFrameServer.demoToken, deviceName: "Karan's iPhone")
         } else {
             server = DemoFrameServer.sample()
+        }
+        let frame = DiscoveredFrame(frameId: server.frameId, name: "Kitchen frame")
+        if !unpaired {
+            tokens.save(server.credential)
+            paired.current = PairedFrame(frameId: frame.frameId, name: frame.name)
+        }
+        let network = DemoNetwork(server)
+        if screen == "impostor" {
+            let impostor = DemoFrameServer(identity: "impostor", name: frame.name)
+            impostor.claimFrameId(server.frameId)
+            network.place(impostor, at: DemoFrameServer.address.host ?? "")
         }
         if UserDefaults.standard.bool(forKey: "demoOffline") {
             Task {
@@ -172,11 +192,19 @@ enum Demo {
         default: break
         }
         let session = FrameSession(browser: StaticFrameBrowser(events: events, addresses: ["Skylit": DemoFrameServer.address]),
-                                   transport: server, tokens: tokens, pairedStore: paired, deviceName: "Karan's iPhone")
+                                   connector: network, tokens: tokens, pairedStore: paired,
+                                   deviceNames: DeviceNameStore(defaults: defaults, fallback: "Karan's iPhone"))
         if screen == "pairing" {
+            let stage = UserDefaults.standard.string(forKey: "demoPairing") ?? "name"
+            server.openPairingWindow()
+            server.setBystander(stage == "failed" ? .tapsDecoy : .waits)
             Task {
                 try? await Task.sleep(for: .milliseconds(900))
                 await session.select(frame)
+                guard stage != "name" else { return }
+                await session.startPairing(name: "Karan's iPhone")
+                guard stage != "code", let code = server.shownCode else { return }
+                await session.submit(code: code)
             }
         }
         return session

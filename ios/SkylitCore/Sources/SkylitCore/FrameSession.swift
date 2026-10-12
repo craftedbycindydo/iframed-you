@@ -10,37 +10,59 @@ public final class FrameSession {
         case failed(String)
     }
 
+    public nonisolated static let updatedText = "The frame was updated. Pair again for a secure connection."
+
+    public nonisolated static func impostorText(_ name: String) -> String {
+        "Another device on this Wi-Fi is claiming to be \(name). Nothing was sent."
+    }
+
     public private(set) var frames: [DiscoveredFrame] = []
     public private(set) var discovery: Discovery = .searching
     public private(set) var paired: PairedFrame?
     public private(set) var store: FrameStore?
     public private(set) var pairing: PairingFlow?
     public private(set) var isBusy = false
+    public private(set) var warning: String?
     public var notice: String?
 
+    private struct Advert {
+        let url: URL
+        let info: FrameInfo
+        let fp: String
+
+        var isConsistent: Bool { info.frameId == Pin.frameId(for: fp) }
+    }
+
     private let browser: FrameBrowsing
-    private let transport: HTTPTransport
+    private let connector: FrameConnecting
     private let tokens: TokenStoring
     private let pairedStore: PairedFrameStore
-    private let deviceName: String
-    private var manualURLs: [String: URL] = [:]
-    private var services: [String: String] = [:]
+    private let deviceNames: DeviceNameStore
+    private let pollInterval: Duration
+    private var adverts: [Advert] = []
+    private var manual: [String: URL] = [:]
     private var pairingURL: URL?
 
-    public init(browser: FrameBrowsing, transport: HTTPTransport, tokens: TokenStoring,
-                pairedStore: PairedFrameStore, deviceName: String) {
+    public init(browser: FrameBrowsing, connector: FrameConnecting, tokens: TokenStoring,
+                pairedStore: PairedFrameStore, deviceNames: DeviceNameStore, pollInterval: Duration = .seconds(1)) {
         self.browser = browser
-        self.transport = transport
+        self.connector = connector
         self.tokens = tokens
         self.pairedStore = pairedStore
-        self.deviceName = deviceName
-        if let saved = pairedStore.current, tokens.token(for: saved.frameId) != nil {
-            paired = saved
+        self.deviceNames = deviceNames
+        self.pollInterval = pollInterval
+        if tokens.removeLegacy() { warning = Self.updatedText }
+        if let saved = pairedStore.current {
+            if tokens.credential(for: saved.frameId) != nil {
+                paired = saved
+            } else {
+                pairedStore.current = nil
+            }
         }
     }
 
     public func hasToken(for frame: DiscoveredFrame) -> Bool {
-        tokens.token(for: frame.frameId) != nil
+        tokens.credential(for: frame.frameId) != nil
     }
 
     public func run() async {
@@ -54,18 +76,16 @@ public final class FrameSession {
         case .permissionDenied:
             discovery = .permissionDenied
         case .failed(let reason):
-            discovery = .failed(reason)
+            discovery = .failed(Limits.display(reason, limit: Limits.noteLength))
         case .services(let names):
             discovery = .searching
-            var found: [DiscoveredFrame] = []
-            var owners: [String: String] = [:]
+            var found: [Advert] = []
             for name in names {
-                guard let (info, _) = await identify(service: name) else { continue }
-                found.append(DiscoveredFrame(frameId: info.frameId, name: info.name))
-                if owners[info.frameId] == nil { owners[info.frameId] = name }
+                guard let url = try? await browser.resolve(service: name), let advert = await probe(url) else { continue }
+                found.append(advert)
             }
-            services = owners
-            frames = DiscoveredFrame.unique(found)
+            adverts = found
+            frames = DiscoveredFrame.unique(found.filter(\.isConsistent).map { DiscoveredFrame(frameId: $0.info.frameId, name: $0.info.name) })
             if store == nil {
                 await connectPaired()
             } else if store?.link == .offline {
@@ -74,41 +94,71 @@ public final class FrameSession {
         }
     }
 
-    private func locate(_ frameId: String) async -> URL? {
-        if let service = services[frameId], let (info, url) = await identify(service: service), info.frameId == frameId {
-            return url
-        }
-        return manualURLs[frameId]
+    private func probe(_ url: URL) async -> Advert? {
+        let transport = connector.probe()
+        guard let info = try? await FrameAPI(baseURL: url, transport: transport).info(),
+              let fp = transport.fingerprint, Pin.isValid(fp) else { return nil }
+        return Advert(url: url, info: info, fp: fp)
     }
 
-    private func identify(service: String) async -> (FrameInfo, URL)? {
-        guard let url = try? await browser.resolve(service: service),
-              let info = try? await FrameAPI(baseURL: url, transport: transport).info() else { return nil }
-        return (info, url)
+    private func candidates(_ frameId: String) -> [URL] {
+        var urls = adverts.filter { $0.info.frameId == frameId }.map(\.url)
+        if let url = manual[frameId], !urls.contains(url) { urls.append(url) }
+        return urls
+    }
+
+    private func locate(_ frame: PairedFrame, pin: String) async -> URL? {
+        let transport = connector.pinned(pin)
+        var match: URL?
+        var mismatch = false
+        for url in candidates(frame.frameId) {
+            do {
+                _ = try await FrameAPI(baseURL: url, transport: transport).info()
+                match = match ?? url
+            } catch FrameError.pinMismatch {
+                mismatch = true
+            } catch {
+                continue
+            }
+        }
+        if mismatch {
+            let text = Self.impostorText(frame.name)
+            if warning != text { store?.notice = text }
+            warning = text
+        } else if match != nil {
+            warning = nil
+        }
+        return match
     }
 
     private func connectPaired() async {
-        guard let paired, store == nil, let token = tokens.token(for: paired.frameId),
-              let url = await locate(paired.frameId) else { return }
-        await open(paired, url: url, token: token)
+        guard let paired, store == nil, let credential = tokens.credential(for: paired.frameId),
+              let url = await locate(paired, pin: credential.fp) else { return }
+        await open(paired, url: url, credential: credential)
     }
 
     public func select(_ frame: DiscoveredFrame) async {
         isBusy = true
         defer { isBusy = false }
-        guard let url = await locate(frame.frameId) else {
-            notice = "Couldn't reach \(frame.name). Make sure it is on and on the same Wi-Fi."
+        let unreachable = "Couldn't reach \(frame.name). Make sure it is on and on the same Wi-Fi."
+        if let credential = tokens.credential(for: frame.frameId) {
+            let target = PairedFrame(frameId: frame.frameId, name: frame.name)
+            if let url = await locate(target, pin: credential.fp) {
+                await open(target, url: url, credential: credential)
+            } else if warning != Self.impostorText(frame.name) {
+                notice = unreachable
+            }
             return
         }
-        if let token = tokens.token(for: frame.frameId) {
-            await open(PairedFrame(frameId: frame.frameId, name: frame.name), url: url, token: token)
-        } else {
-            pairingURL = url
-            let flow = PairingFlow(frameName: frame.name, api: FrameAPI(baseURL: url, transport: transport),
-                                   deviceName: deviceName, tokens: tokens)
-            pairing = flow
-            await flow.start()
+        guard let url = candidates(frame.frameId).first else {
+            notice = unreachable
+            return
         }
+        let transport = connector.pairing()
+        pairingURL = url
+        pairing = PairingFlow(frameName: frame.name, api: FrameAPI(baseURL: url, transport: transport),
+                              probe: FrameAPI(baseURL: url, transport: connector.probe()),
+                              fingerprint: { transport.fingerprint }, tokens: tokens, names: deviceNames, pollInterval: pollInterval)
     }
 
     public func connect(manualAddress text: String) async {
@@ -117,50 +167,68 @@ public final class FrameSession {
             return
         }
         isBusy = true
-        do {
-            let info = try await FrameAPI(baseURL: url, transport: transport).info()
-            manualURLs[info.frameId] = url
-            isBusy = false
-            await select(DiscoveredFrame(frameId: info.frameId, name: info.name))
-        } catch {
-            isBusy = false
+        let advert = await probe(url)
+        isBusy = false
+        guard let advert, advert.isConsistent || tokens.credential(for: advert.info.frameId) != nil else {
             notice = "No frame answered at that address. Check it and try again."
+            return
         }
+        manual[advert.info.frameId] = url
+        await select(DiscoveredFrame(frameId: advert.info.frameId, name: advert.info.name))
+    }
+
+    public func startPairing(name: String) async {
+        await pairing?.begin(name: name)
     }
 
     public func submit(code: String) async {
-        guard let flow = pairing, let url = pairingURL, let result = await flow.submit(code: code) else { return }
+        guard let flow = pairing, let url = pairingURL else { return }
+        await flow.submit(code: code)
+        guard let result = await flow.awaitResult(), pairing === flow else { return }
         pairing = nil
-        await open(PairedFrame(frameId: result.frameId, name: result.name), url: url, token: result.token)
-        if tokens.token(for: result.frameId) == nil {
-            notice = "Paired, but this phone couldn't save the pairing. You'll need a new code next time."
+        pairingURL = nil
+        warning = nil
+        await open(result.frame, url: url, credential: result.credential)
+        if tokens.credential(for: result.frame.frameId) == nil {
+            notice = "Paired, but this phone couldn't save the pairing. You'll need to pair again next time."
         }
     }
 
-    public func cancelPairing() {
+    public func cancelPairing() async {
+        let flow = pairing
         pairing = nil
         pairingURL = nil
+        await flow?.abandon()
     }
 
-    private func open(_ frame: PairedFrame, url: URL, token: String) async {
+    private func open(_ frame: PairedFrame, url: URL, credential: FrameCredential) async {
         paired = frame
         pairedStore.current = frame
-        let opened = FrameStore(frame: frame, api: FrameAPI(baseURL: url, token: token, transport: transport))
+        let opened = FrameStore(frame: frame, api: FrameAPI(baseURL: url, token: credential.token, transport: connector.pinned(credential.fp)))
         opened.onUnauthorized = { [weak self] in self?.handleRevoked() }
-        opened.relocate = { [weak self] in await self?.locate(frame.frameId) }
+        opened.relocate = { [weak self] in await self?.locate(frame, pin: credential.fp) }
         store = opened
         await opened.refresh()
+        if let warning { opened.notice = warning }
     }
 
     private func handleRevoked() {
         guard let frame = paired else { return }
-        tokens.removeToken(for: frame.frameId)
+        tokens.remove(for: frame.frameId)
         leave()
         notice = "This phone was removed from \(frame.name). Pair again to continue."
     }
 
+    public func unpair() async {
+        if let store {
+            store.onUnauthorized = nil
+            await store.unpairThisPhone()
+        }
+        forget()
+    }
+
     public func forget() {
-        if let frame = paired { tokens.removeToken(for: frame.frameId) }
+        if let frame = paired { tokens.remove(for: frame.frameId) }
         leave()
     }
 

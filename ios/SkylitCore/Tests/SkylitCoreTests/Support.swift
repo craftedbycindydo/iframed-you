@@ -48,7 +48,7 @@ final class ScriptedTransport: HTTPTransport, @unchecked Sendable {
     }
 }
 
-let testURL = URL(string: "http://192.168.1.20:8765")!
+let testURL = URL(string: "https://192.168.1.20:8765")!
 
 func makeAPI(_ transport: HTTPTransport, token: String? = "tok") -> FrameAPI {
     FrameAPI(baseURL: testURL, token: token, transport: transport)

@@ -41,7 +41,7 @@ public final class StaticFrameBrowser: FrameBrowsing, @unchecked Sendable {
 }
 
 public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
-    public static let address = URL(string: "http://demo-frame.local:8765")!
+    public static let address = URL(string: "https://demo-frame.local:8765")!
 
     public struct Recorded: Sendable {
         public let url: URL
@@ -50,6 +50,33 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
         public let query: String?
         public let headers: [String: String]
         public let body: Data?
+    }
+
+    public enum Bystander: Sendable {
+        case waits
+        case tapsPick
+        case tapsDecoy
+        case tapsCancel
+        case letsItExpire
+    }
+
+    private enum Outcome {
+        case waiting
+        case approved
+        case denied
+        case expired
+    }
+
+    private struct Attempt {
+        let session: String
+        let commit: String
+        let tokenHash: String
+        let deviceName: String
+        let nF: Data
+        var code: String?
+        var pick: String?
+        var outcome = Outcome.waiting
+        var deviceId = ""
     }
 
     private struct Device {
@@ -66,7 +93,9 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
     }
 
     private let lock = NSLock()
-    private let frameId: String
+    public let certificate: Data
+    public let fingerprint: String
+    public let frameId: String
     private let name: String
     private var rev = 1
     private var nextId = 1
@@ -78,19 +107,40 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
     private var appearance: [String: Any] = ["palette": "linen", "mode": "auto"]
     private var photos: [Photo] = []
     private var devices: [Device] = []
-    private var activeCode: String?
-    private var wrongAttempts = 0
-    private var exhausted = false
+    private var windowOpen = false
+    private var windowUsed = false
+    private var attempt: Attempt?
+    private var bystander = Bystander.tapsPick
+    private var claimedFrameId: String?
     private var recorded: [Recorded] = []
     private var unreachable = false
     private var icloud: [String: Any]?
     private var supportsICloud = true
 
-    public var pairingCode = "123456"
-
-    public init(frameId: String = "demo-frame", name: String = "Kitchen frame") {
-        self.frameId = frameId
+    public init(identity: String = "demo-frame", name: String = "Kitchen frame") {
+        certificate = Data(identity.utf8)
+        fingerprint = Pin.fingerprint(ofCertificate: certificate)
+        frameId = Pin.frameId(for: fingerprint)
         self.name = name
+    }
+
+    public var credential: FrameCredential { FrameCredential(token: Self.demoToken, fp: fingerprint) }
+    public var shownCode: String? { lock.withLock { attempt?.code } }
+    public var shownPick: String? { lock.withLock { attempt?.pick } }
+
+    public func openPairingWindow() {
+        lock.withLock {
+            windowOpen = true
+            windowUsed = false
+        }
+    }
+
+    public func setBystander(_ value: Bystander) {
+        lock.withLock { bystander = value }
+    }
+
+    public func claimFrameId(_ value: String?) {
+        lock.withLock { claimedFrameId = value }
     }
 
     public var requests: [Recorded] { lock.withLock { recorded } }
@@ -102,8 +152,12 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
 
     public func authorize(token: String, deviceName: String) {
         lock.withLock {
-            devices.append(Device(id: "d\(devices.count + 1)", name: deviceName, pairedAt: Self.timestamp(), tokenHash: Self.hash(token)))
+            devices.append(Device(id: "d\(devices.count + 1)", name: deviceName, pairedAt: Self.timestamp(), tokenHash: Self.hash(token) ?? ""))
         }
+    }
+
+    fileprivate func checkReachable() throws {
+        if lock.withLock({ unreachable }) { throw URLError(.cannotConnectToHost) }
     }
 
     public func revokeAll() {
@@ -156,7 +210,7 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
     private func route(_ request: URLRequest, _ components: URLComponents, _ body: Data?) -> (Int, Any?, Data?) {
         let method = request.httpMethod ?? "GET"
         let parts = components.path.split(separator: "/").map(String.init)
-        guard parts.first == "v1" else { return failure(404, "not_found", "No such route") }
+        guard let version = parts.first, version == "v1" || version == "v2" else { return failure(404, "not_found", "No such route") }
         let route = Array(parts.dropFirst())
         let isPhotoUpload = method == "POST" && route == ["photos"]
         if (body?.count ?? 0) > (isPhotoUpload ? 15 * 1024 * 1024 : 64 * 1024) {
@@ -170,30 +224,37 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
             json = parsed
         }
 
-        switch (method, route.first, route.count) {
-        case ("GET", "info", 1):
-            return (200, ["v": 1, "frameId": frameId, "name": name], nil)
-        case ("POST", "pair", 2) where route[1] == "start":
-            activeCode = pairingCode
-            wrongAttempts = 0
-            exhausted = false
-            return (204, nil, nil)
-        case ("POST", "pair", 2) where route[1] == "finish":
-            return finishPairing(json)
-        default:
-            break
+        if version == "v2" {
+            switch (method, route.first, route.count) {
+            case ("GET", "info", 1):
+                return (200, ["v": 2, "frameId": claimedFrameId ?? frameId, "name": name, "pairing": windowOpen && !windowUsed], nil)
+            case ("POST", "pair", 2) where route[1] == "start":
+                return startPairing(json)
+            case ("POST", "pair", 2) where route[1] == "reveal":
+                return revealPairing(json)
+            case ("POST", "pair", 2) where route[1] == "cancel":
+                guard attempt?.session == json["session"] as? String else { return failure(404, "not_found", "No such session") }
+                attempt?.outcome = .denied
+                return (204, nil, nil)
+            case ("GET", "pair", 2) where route[1] == "result":
+                return pairingResult(components.queryItems?.first { $0.name == "session" }?.value)
+            default:
+                return failure(404, "not_found", "No such route")
+            }
         }
 
-        let token = request.value(forHTTPHeaderField: "Authorization").flatMap { $0.hasPrefix("Bearer ") ? String($0.dropFirst(7)) : nil }
-        guard let token, devices.contains(where: { $0.tokenHash == Self.hash(token) }) else {
+        let caller = request.value(forHTTPHeaderField: "Authorization")
+            .flatMap { $0.hasPrefix("Bearer ") ? Self.hash(String($0.dropFirst(7))) : nil }
+        guard let caller, devices.contains(where: { $0.tokenHash == caller }) else {
             return failure(401, "unauthorized", "Pair this phone first")
         }
 
         switch (method, route.first ?? "", route.count) {
         case ("GET", "devices", 1):
-            return (200, devices.map { ["id": $0.id, "name": $0.name, "pairedAt": $0.pairedAt] }, nil)
+            return (200, devices.map { ["id": $0.id, "name": $0.name, "pairedAt": $0.pairedAt, "lastSeen": $0.pairedAt, "self": $0.tokenHash == caller] }, nil)
         case ("DELETE", "devices", 2):
-            guard devices.contains(where: { $0.id == route[1] }) else { return failure(404, "not_found", "No such device") }
+            guard let device = devices.first(where: { $0.id == route[1] }) else { return failure(404, "not_found", "No such device") }
+            guard device.tokenHash == caller else { return failure(403, "forbidden", "Remove other phones on the frame") }
             devices.removeAll { $0.id == route[1] }
             return (204, nil, nil)
         case ("GET", "state", 1):
@@ -292,27 +353,59 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
         }
     }
 
-    private func finishPairing(_ json: [String: Any]) -> (Int, Any?, Data?) {
-        guard let code = json["code"] as? String, PairingFlow.isValid(code: code), Self.validName(json["deviceName"]) else {
-            return failure(400, "bad_request", "Needs a 6-digit code and a device name")
+    private func startPairing(_ json: [String: Any]) -> (Int, Any?, Data?) {
+        guard windowOpen else { return failure(409, "conflict", "Pairing is not open") }
+        guard !windowUsed else { return failure(409, "pairing_busy", "Pairing is busy") }
+        windowUsed = true
+        guard let commit = json["commit"] as? String, Hex.isValid(commit, bytes: 32),
+              let tokenHash = json["tokenHash"] as? String, Hex.isValid(tokenHash, bytes: 32),
+              let deviceName = (json["deviceName"] as? String).flatMap(Limits.cleanDeviceName) else {
+            return failure(400, "bad_request", "Needs commit, tokenHash and deviceName")
         }
-        guard let active = activeCode else {
-            return exhausted ? failure(429, "rate_limited", "Too many wrong codes. Start pairing again later.")
-                : failure(409, "conflict", "No pairing code is active. Start pairing again.")
+        let nF = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
+        let session = Hex.encode((0..<16).map { _ in UInt8.random(in: 0...255) })
+        attempt = Attempt(session: session, commit: commit, tokenHash: tokenHash, deviceName: deviceName, nF: nF)
+        return (200, ["session": session, "nF": Hex.encode(nF)], nil)
+    }
+
+    private func revealPairing(_ json: [String: Any]) -> (Int, Any?, Data?) {
+        guard let current = attempt, current.session == json["session"] as? String, current.code == nil else {
+            return failure(404, "not_found", "No such session")
         }
-        guard code == active else {
-            wrongAttempts += 1
-            if wrongAttempts >= 5 {
-                activeCode = nil
-                exhausted = true
-                return failure(429, "rate_limited", "Too many wrong codes. Start pairing again later.")
+        guard let nP = (json["nP"] as? String).flatMap({ Hex.decode($0, bytes: 32) }), PairingCrypto.sha256(nP) == current.commit,
+              let fpRaw = Hex.decode(fingerprint, bytes: Pin.bytes) else {
+            attempt = nil
+            return failure(400, "bad_request", "The reveal does not match the commit")
+        }
+        let derived = PairingCrypto.derive(nP: nP, nF: current.nF, fpRaw: fpRaw)
+        attempt?.code = derived.code
+        attempt?.pick = derived.pick
+        return (204, nil, nil)
+    }
+
+    private func pairingResult(_ session: String?) -> (Int, Any?, Data?) {
+        guard var current = attempt, current.session == session else { return failure(404, "not_found", "No such session") }
+        if current.outcome == .waiting, current.code != nil {
+            switch bystander {
+            case .waits:
+                break
+            case .tapsPick:
+                current.outcome = .approved
+                current.deviceId = makeId("d")
+                devices.append(Device(id: current.deviceId, name: current.deviceName, pairedAt: Self.timestamp(), tokenHash: current.tokenHash))
+            case .tapsDecoy, .tapsCancel:
+                current.outcome = .denied
+            case .letsItExpire:
+                current.outcome = .expired
             }
-            return failure(401, "unauthorized", "That code is not correct.")
+            attempt = current
         }
-        activeCode = nil
-        let token = (0..<32).map { _ in String(format: "%02x", UInt8.random(in: 0...255)) }.joined()
-        devices.append(Device(id: makeId("d"), name: json["deviceName"] as! String, pairedAt: Self.timestamp(), tokenHash: Self.hash(token)))
-        return (200, ["token": token, "frameId": frameId, "name": name], nil)
+        switch current.outcome {
+        case .waiting: return (202, nil, Data())
+        case .approved: return (200, ["deviceId": current.deviceId, "frameId": claimedFrameId ?? frameId, "name": name], nil)
+        case .denied: return failure(403, "forbidden", "Pairing was cancelled")
+        case .expired: return failure(410, "gone", "Pairing expired")
+        }
     }
 
     private func markDone(_ id: String, _ json: [String: Any]) -> (Int, Any?, Data?) {
@@ -389,8 +482,8 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
         (value as? String).flatMap(Limits.cleanName) != nil
     }
 
-    private static func hash(_ token: String) -> String {
-        SHA256.hash(data: Data(token.utf8)).map { String(format: "%02x", $0) }.joined()
+    private static func hash(_ token: String) -> String? {
+        Hex.decode(token, bytes: 32).map(PairingCrypto.sha256)
     }
 
     private static func timestamp() -> String {
@@ -398,15 +491,66 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
     }
 }
 
+public final class DemoNetwork: FrameConnecting, @unchecked Sendable {
+    private let lock = NSLock()
+    private var hosts: [String: DemoFrameServer]
+
+    public init(_ hosts: [String: DemoFrameServer] = [:]) {
+        self.hosts = hosts
+    }
+
+    public convenience init(_ server: DemoFrameServer) {
+        self.init([DemoFrameServer.address.host ?? "": server])
+    }
+
+    public func place(_ server: DemoFrameServer?, at host: String) {
+        lock.withLock { hosts[host] = server }
+    }
+
+    public func probe() -> FrameTransport {
+        DemoLink(network: self, gate: TrustGate(.probe))
+    }
+
+    public func pairing() -> FrameTransport {
+        DemoLink(network: self, gate: TrustGate(.pairing))
+    }
+
+    public func pinned(_ fp: String) -> HTTPTransport {
+        DemoLink(network: self, gate: TrustGate(.pinned(fp)))
+    }
+
+    fileprivate func server(for request: URLRequest) throws -> DemoFrameServer {
+        guard let url = request.url, url.scheme == "https", let server = lock.withLock({ hosts[url.host ?? ""] }) else {
+            throw URLError(.cannotConnectToHost)
+        }
+        return server
+    }
+}
+
+private struct DemoLink: FrameTransport {
+    let network: DemoNetwork
+    let gate: TrustGate
+
+    var fingerprint: String? { gate.fingerprint }
+
+    func send(_ request: URLRequest, body: Data?, onProgress: (@Sendable (Double) -> Void)?) async throws -> (Data, HTTPURLResponse) {
+        let server = try network.server(for: request)
+        try server.checkReachable()
+        guard gate.accepts(leaf: server.certificate) else { throw FrameError.pinMismatch }
+        return try await server.send(request, body: body, onProgress: onProgress)
+    }
+}
+
 public extension DemoFrameServer {
-    static let demoToken = "demo-token"
+    static let demoToken = String(repeating: "d", count: 64)
+    static let otherToken = String(repeating: "e", count: 64)
 
     static func sample(now: Date = Date()) -> DemoFrameServer {
         let server = DemoFrameServer()
         let zone = TimeZone(identifier: "America/Edmonton") ?? .current
         let today = ChoreLogic.dateString(now, timeZone: zone)
         server.authorize(token: demoToken, deviceName: "Karan's iPhone")
-        server.authorize(token: "other-token", deviceName: "Hallway tablet")
+        server.authorize(token: otherToken, deviceName: "Hallway tablet")
         server.lock.withLock {
             server.people = [
                 ["id": "p1", "name": "Maya", "color": "#00A36C"],
