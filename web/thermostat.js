@@ -238,10 +238,17 @@
     renderSettings();
   }
 
+  const reveal = shown => {
+    $('thermostat-password').type = shown ? 'text' : 'password';
+    $('thermostat-show').textContent = shown ? 'Hide password' : 'Show password';
+    $('thermostat-show').setAttribute('aria-pressed', String(shown));
+  };
+  $('thermostat-show').onclick = () => reveal($('thermostat-password').type === 'password');
   $('thermostat-form').onsubmit = event => {
     event.preventDefault();
     const email = $('thermostat-email').value.trim(), password = $('thermostat-password').value;
     $('thermostat-password').value = '';
+    reveal(false);
     if (!supported || !email || !password) return;
     const result = parse(call('thermostatSignIn', email, password));
     notice = result && result.ok === true ? '' : result && text(result.error, 200) || 'Could not start signing in. Try again.';

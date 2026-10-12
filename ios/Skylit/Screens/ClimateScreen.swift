@@ -7,6 +7,7 @@ struct ClimateScreen: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var email = ""
     @State private var password = ""
+    @State private var showsPassword = false
     @FocusState private var focus: Field?
 
     private enum Field {
@@ -105,13 +106,29 @@ struct ClimateScreen: View {
                 .focused($focus, equals: .email)
                 .submitLabel(.next)
                 .onSubmit { focus = .password }
-            SecureField("Password", text: $password)
+            HStack {
+                Group {
+                    if showsPassword {
+                        TextField("Password", text: $password)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    } else {
+                        SecureField("Password", text: $password)
+                    }
+                }
                 .touchTarget()
                 .onTapGesture { focus = .password }
                 .textContentType(.password)
                 .focused($focus, equals: .password)
                 .submitLabel(.go)
                 .onSubmit(submit)
+                Button { showsPassword.toggle() } label: {
+                    Image(systemName: showsPassword ? "eye.slash" : "eye")
+                        .touchTarget(footprint: Size.touch)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(showsPassword ? "Hide password" : "Show password")
+            }
             Button(action: submit) {
                 HStack {
                     Text(store.isSigningIn ? "Signing In" : "Sign In").fontWeight(.semibold)
