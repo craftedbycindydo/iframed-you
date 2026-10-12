@@ -25,7 +25,7 @@
   let mode=period()==='night'?'sleepy':period()==='morning'?'yawn':'hello',started=performance.now(),until=started+3000,nextIdle=started+9000;
   let lastInput=started,lastGaze=0,lookX=0,lookY=0,gazeX=0,gazeY=0,scrollKick=0;
   let nextBlink=started+2400,blinkStart=-10000,hatIndex=1,nextHat=started+90000;
-  let manualIndex=0,paused=false,raf=0,lastFrame=0,frames=0,pointerBounds=null;
+  let manualIndex=0,paused=false,raf=0,nap=0,lastFrame=0,frames=0,pointerBounds=null;
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
   const quiet=()=>prefs.motion==='still'||reduced.matches;
   function persist(){try{localStorage.setItem('skylit.momo',JSON.stringify(prefs));}catch(_) {caption.textContent='Could not save Momo’s preferences.';}}
@@ -61,12 +61,12 @@
     else round(-w/2,-h/2,w,h,w/2,palette.eye,null);
     ctx.restore();
   }
-  function react(name,user=false){mode=name;started=performance.now();until=started+(name==='sleepy'?7500:name==='dance'?4500:3000);nextIdle=until+5000+Math.random()*8000;if(user){lastInput=started;caption.textContent=labels[name];}wake();}
+  function react(name,user=false){mode=name;started=performance.now();until=started+(name==='sleepy'?7500:name==='dance'?4500:3000);nextIdle=until+(started-lastInput>60000?60000+Math.random()*60000:5000+Math.random()*8000);if(user){lastInput=started;caption.textContent=labels[name];}wake();}
   function resize(){const dpr=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(210*dpr);canvas.height=Math.round(155*dpr);pointerBounds=null;draw(performance.now());wake();}
   function draw(now,preview){
     const surface=preview?preview.canvas:canvas,previousContext=ctx;
     if(preview)ctx=surface.getContext('2d');
-    const still=!!preview||quiet(),t=still?0:now/1000,age=(now-started)/1000;
+    const still=!!preview||quiet(),t=0,age=(now-started)/1000;
     const resting=period()==='night'?'sleepy':period()==='morning'||period()==='evening'?'drowsy':'neutral';
     const active=preview?'neutral':still?resting:now<until?mode:resting;
     const lively=prefs.motion==='lively'?1:.38;
@@ -117,8 +117,9 @@
       }
       draw(now);
     }
-    if(!quiet())wake();
+    if(!quiet()){if(busy(now))wake();else{clearTimeout(nap);nap=setTimeout(wake,Math.max(50,Math.min(nextBlink,nextIdle,prefs.hat==='auto'?nextHat:Infinity)-now));}}
   }
+  function busy(now){return now<until||now-blinkStart<170||Math.abs(lookX-gazeX)>.01||Math.abs(scrollKick)>.01||(now-lastGaze>2800&&Math.abs(lookX)>.01);}
   function wake(){if(!raf&&!paused&&!document.hidden)raf=requestAnimationFrame(step);}
   function suspend(value){paused=!!value;if(raf){cancelAnimationFrame(raf);raf=0;}lastFrame=0;if(!paused){refreshCalendar();lastInput=performance.now();nextIdle=lastInput+8000;wake();}}
   button.addEventListener('click',()=>react(moods[manualIndex++%moods.length],true));
