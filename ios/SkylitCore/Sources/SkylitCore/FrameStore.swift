@@ -287,6 +287,14 @@ public final class FrameStore {
         await perform(optimistic: { $0.calendars.removeAll { $0.id == id } }) { try await $0.deleteCalendar(id: id) }
     }
 
+    public func thermostatAccount() async throws -> TccCredentials? {
+        try await api.thermostatAccount()
+    }
+
+    public func giveThermostatAccount(_ account: TccCredentials) async throws {
+        try await api.setThermostatAccount(account)
+    }
+
     @discardableResult
     public func connectICloudAlbum(link: String) async -> Bool {
         guard let url = ICloudLink.normalized(link) else {

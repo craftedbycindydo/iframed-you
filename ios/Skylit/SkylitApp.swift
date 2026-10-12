@@ -95,6 +95,7 @@ struct RootView: View {
 struct MainTabs: View {
     @Environment(\.theme) private var theme
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(ClimateStore.self) private var climate
     @Bindable var store: FrameStore
     @State private var tab = Launch.initialTab
 
@@ -129,6 +130,9 @@ struct MainTabs: View {
             .stateAnimation(store.removedItem)
         }
         .sensoryFeedback(.error, trigger: store.notice) { _, new in new != nil }
+        .task(id: "\(scenePhase) \(climate.phase == .signedOut)") {
+            if scenePhase == .active { await climate.share(with: store) }
+        }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await store.refresh()

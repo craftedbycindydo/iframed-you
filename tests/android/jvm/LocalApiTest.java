@@ -882,6 +882,29 @@ public final class LocalApiTest {
     same(12L, rev(), "rejected bridge calls change nothing");
   }
 
+  static void thermostatAccount() throws Exception {
+    fresh();
+    same(404, call("GET", "/v1/settings/thermostat-account", null).status, "no account without a thermostat link");
+    same(409, call("PUT", "/v1/settings/thermostat-account", "{\"email\":\"home@example.com\",\"password\":\"secret\"}").status, "no sign-in without a thermostat link");
+    final String[][] held = {null};
+    api.climate = new LocalApi.Climate() {
+      @Override public String[] account() {
+        return held[0];
+      }
+
+      @Override public boolean signIn(String email, String password) {
+        held[0] = new String[] {email, password};
+        return true;
+      }
+    };
+    same(404, call("GET", "/v1/settings/thermostat-account", null).status, "nothing to share before a sign-in");
+    same(400, call("PUT", "/v1/settings/thermostat-account", "{\"email\":\"home@example.com\"}").status, "password is required");
+    same(204, call("PUT", "/v1/settings/thermostat-account", "{\"email\":\"home@example.com\",\"password\":\"secret\"}").status, "phone hands the account over");
+    same("{\"email\":\"home@example.com\",\"password\":\"secret\"}", call("GET", "/v1/settings/thermostat-account", null).text(), "another phone picks it up");
+    same(401, send("GET", "/v1/settings/thermostat-account", null, null).status, "unpaired callers get nothing");
+    same(401, send("PUT", "/v1/settings/thermostat-account", "0000000000000000000000000000000000000000000000000000000000000000", "{}").status, "unknown tokens get nothing");
+  }
+
   static void settings() throws Exception {
     fresh();
     Fakes.Reply located = call("PUT", "/v1/settings/location", "{\"name\":\"Denver\",\"latitude\":39.74,\"longitude\":-104.99,\"timezone\":\"America/Denver\"}");
@@ -1388,6 +1411,7 @@ public final class LocalApiTest {
     damaged();
     bridge();
     settings();
+    thermostatAccount();
     settingsTogether();
     calendarsOverHttp();
     photosOverHttp();

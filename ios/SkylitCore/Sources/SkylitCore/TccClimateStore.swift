@@ -44,10 +44,14 @@ public final class ClimateStore {
     private var refreshing: Task<Void, Never>?
     private var refreshAgain = false
     private var savedSession: TccSession?
+    private let defaults: UserDefaults
+    private static let leftKey = "climate.signedOutHere"
 
-    public init(client: TccClient, credentials: TccCredentialStoring, debounce: Duration = .seconds(1), now: @escaping () -> Date = Date.init) {
+    public init(client: TccClient, credentials: TccCredentialStoring, debounce: Duration = .seconds(1), defaults: UserDefaults = .standard,
+                now: @escaping () -> Date = Date.init) {
         self.client = client
         self.credentials = credentials
+        self.defaults = defaults
         self.debounce = debounce
         self.now = now
     }
@@ -95,6 +99,7 @@ public final class ClimateStore {
         do {
             try await client.signIn(entered)
             credentials.save(entered)
+            defaults.removeObject(forKey: Self.leftKey)
             devices = []
             phase = .loading
             await refresh()
@@ -103,11 +108,25 @@ public final class ClimateStore {
         }
     }
 
+    public func share(with frame: FrameStore) async {
+        guard !isSigningIn else { return }
+        do {
+            let theirs = try await frame.thermostatAccount()
+            let mine = credentials.load()
+            if let mine, theirs == nil {
+                try await frame.giveThermostatAccount(mine)
+            } else if mine == nil, let theirs, !defaults.bool(forKey: Self.leftKey) {
+                await signIn(username: theirs.username, password: theirs.password)
+            }
+        } catch {}
+    }
+
     public func signOut() async {
         sends.values.forEach { $0.cancel() }
         sends = [:]
         pending = [:]
         credentials.clear()
+        defaults.set(true, forKey: Self.leftKey)
         savedSession = nil
         await client.signOut()
         devices = []

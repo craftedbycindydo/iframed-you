@@ -124,6 +124,20 @@ public struct FrameAPI: Sendable {
         _ = try await send("POST", "/v1/settings/icloud-album/sync")
     }
 
+    public func thermostatAccount() async throws -> TccCredentials? {
+        do {
+            let found = try JSONSerialization.jsonObject(with: try await send("GET", "/v1/settings/thermostat-account")) as? [String: Any]
+            guard let email = found?["email"] as? String, let password = found?["password"] as? String else { throw FrameError.invalidResponse }
+            return TccCredentials(username: email, password: password)
+        } catch FrameError.api(404, _) {
+            return nil
+        }
+    }
+
+    public func setThermostatAccount(_ account: TccCredentials) async throws {
+        _ = try await send("PUT", "/v1/settings/thermostat-account", json: ["email": account.username, "password": account.password])
+    }
+
     public func addCalendar(name: String, color: String, url: String) async throws -> MutationResult {
         try await mutate("POST", "/v1/calendars", ["name": name, "color": color, "url": url])
     }

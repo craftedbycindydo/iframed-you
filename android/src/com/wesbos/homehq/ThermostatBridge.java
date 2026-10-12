@@ -19,10 +19,12 @@ final class ThermostatBridge {
   private String account;
   private String shown;
   private String noted;
+  private final TccSync.Secrets stored;
 
   ThermostatBridge(TccClient client, final TccSync.Secrets secrets, FrameTime.Clock clock, FrameTime.Uptime uptime, TccSync.Runner runner, TccSync.Timer timer, Output output) {
     this.runner = runner;
     this.output = output;
+    stored = secrets;
     TccSync.Secrets remembering = new TccSync.Secrets() {
       @Override public String[] load() {
         String[] saved = secrets.load();
@@ -158,6 +160,10 @@ final class ThermostatBridge {
       }
     });
     return Json.write(Json.object("ok", true, "pending", true));
+  }
+
+  String[] account() {
+    return stored.load();
   }
 
   boolean signOut() {

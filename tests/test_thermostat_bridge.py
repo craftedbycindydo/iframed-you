@@ -31,7 +31,7 @@ class ThermostatBridgeTest(unittest.TestCase):
         self.assertIn('"skylit_thermostat_v1"',secret)
         self.assertNotIn('skylit_photo_mail',secret)
         self.assertIn('cipher.updateAAD(account.getBytes(StandardCharsets.UTF_8))',secret)
-        self.assertNotIn('thermostat',(MAIN/'LocalApi.java').read_text().lower())
+        self.assertEqual(sorted(set(re.findall(r'"[^"]*thermostat[^"]*"',(MAIN/'LocalApi.java').read_text().lower()))),['"get /v1/settings/thermostat-account"','"no thermostat account on this frame"','"put /v1/settings/thermostat-account"'])
         for name in ('ThermostatBridge','Thermostats','TccSecret'):
             source=re.sub(r'"(\\.|[^"\\])*"','""',(MAIN/f'{name}.java').read_text())
             self.assertIsNone(re.search(r'//|/\*',source),name)

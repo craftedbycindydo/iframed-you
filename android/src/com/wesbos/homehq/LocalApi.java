@@ -29,6 +29,12 @@ final class LocalApi {
     boolean remove(String id);
   }
 
+  interface Climate {
+    String[] account();
+
+    boolean signIn(String email, String password);
+  }
+
   interface Events {
     void householdChanged(String snapshot);
 
@@ -69,6 +75,7 @@ final class LocalApi {
   private final Identity identity;
   private Map<String, Object> settings;
   private String observed;
+  volatile Climate climate;
 
   LocalApi(KeyValue storage, FrameTime.Clock clock, FrameTime.Uptime uptime, Calendars calendars, Photos photos, ICloudSync icloud, final Events events) {
     this.storage = storage;
@@ -320,6 +327,19 @@ final class LocalApi {
         return LocalHttp.Response.json(200, Json.object("rev", observe()));
       case "POST /v1/settings/icloud-album/sync":
         if (!icloud.request(true)) throw ApiException.conflict("No shared album is connected");
+        return LocalHttp.Response.empty(204);
+      case "GET /v1/settings/thermostat-account":
+        String[] account = climate == null ? null : climate.account();
+        if (account == null) throw ApiException.notFound("No thermostat account on this frame");
+        return LocalHttp.Response.json(200, Json.object("email", account[0], "password", account[1]));
+      case "PUT /v1/settings/thermostat-account":
+        Map<String, Object> entered = fields(body);
+        if (entered == null) throw ApiException.badRequest("account must be an object");
+        Object secret = entered.get("password");
+        if (!(secret instanceof String) || ((String) secret).isEmpty()) throw ApiException.badRequest("password must be text");
+        if (climate == null || !climate.signIn(Fields.text(entered, "email", 3, 255), (String) secret)) {
+          throw ApiException.conflict("The frame cannot sign in right now");
+        }
         return LocalHttp.Response.empty(204);
       case "POST /v1/calendars":
         return addCalendar(fields(body));

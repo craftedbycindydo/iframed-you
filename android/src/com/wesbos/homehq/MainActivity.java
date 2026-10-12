@@ -59,6 +59,10 @@ public class MainActivity extends Activity {
     root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(238,232,221));setContentView(root);
     phone=new PhoneLink(this,calendars,photos,photoMail,script->{if(dashboard==null)return false;dashboard.evaluateJavascript(Json.scriptSafe(script),null);return true;});phone.start();
     thermostats=new Thermostats(this,script->{if(dashboard==null)return false;dashboard.evaluateJavascript(Json.scriptSafe(script),null);return true;},()->overviewShowing&&foreground&&remote==null&&!localPhotosOpen&&!quietOpen);thermostats.start();
+    phone.api.climate=new LocalApi.Climate(){
+      @Override public String[] account(){return thermostats.bridge.account();}
+      @Override public boolean signIn(String email,String password){return thermostats.bridge.signIn(email,password).contains("\"pending\":true");}
+    };
     createDashboard();handler.post(photoCheckTask);
   }
   private boolean debugging(Intent intent){return (getApplicationInfo().flags&ApplicationInfo.FLAG_DEBUGGABLE)!=0&&intent.getBooleanExtra("debug",false);}

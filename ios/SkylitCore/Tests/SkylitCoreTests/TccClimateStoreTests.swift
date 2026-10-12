@@ -16,7 +16,7 @@ final class TccClimateStoreTests: XCTestCase {
     private func makeStore() -> ClimateStore {
         let clock = clock!
         let client = TccClient(transport: server, defaults: tccDefaults(), now: { clock.now })
-        return ClimateStore(client: client, credentials: saved, debounce: .milliseconds(60), now: { clock.now })
+        return ClimateStore(client: client, credentials: saved, debounce: .milliseconds(60), defaults: tccDefaults(), now: { clock.now })
     }
 
     private func loaded() async -> ClimateStore {
@@ -28,6 +28,58 @@ final class TccClimateStoreTests: XCTestCase {
 
     private func settle(_ milliseconds: Int = 400) async {
         try? await Task.sleep(for: .milliseconds(milliseconds))
+    }
+
+    private func frame(_ transport: ScriptedTransport) -> FrameStore {
+        FrameStore(frame: PairedFrame(frameId: "f", name: "Kitchen"), api: makeAPI(transport))
+    }
+
+    func testSignedInPhoneGivesItsAccountToAFrameWithoutOne() async {
+        let transport = ScriptedTransport([.status(404, ##"{"error":{"code":"not_found","message":"none"}}"##), .status(204, "")])
+        let store = await loaded()
+        await store.share(with: frame(transport))
+        XCTAssertEqual(transport.calls.map { $0.request.httpMethod }, ["GET", "PUT"])
+        XCTAssertEqual(transport.calls[1].request.url?.path, "/v1/settings/thermostat-account")
+        XCTAssertEqual(transport.calls[1].json, ["email": FakeTccServer.demoCredentials.username, "password": FakeTccServer.demoCredentials.password])
+    }
+
+    func testSignedOutPhoneSignsInWithTheFramesAccount() async {
+        saved.clear()
+        let account = FakeTccServer.demoCredentials
+        let transport = ScriptedTransport([.status(200, "{\"email\":\"\(account.username)\",\"password\":\"\(account.password)\"}")])
+        let store = makeStore()
+        await store.start()
+        await store.share(with: frame(transport))
+        XCTAssertEqual(transport.calls.count, 1)
+        XCTAssertEqual(store.phase, .ready)
+        XCTAssertEqual(saved.load(), account)
+    }
+
+    func testNothingIsSharedWhenBothOrNeitherHaveAnAccount() async {
+        let account = FakeTccServer.demoCredentials
+        let both = ScriptedTransport([.status(200, "{\"email\":\"\(account.username)\",\"password\":\"\(account.password)\"}")])
+        let store = await loaded()
+        let before = server.calls.count
+        await store.share(with: frame(both))
+        XCTAssertEqual(both.calls.count, 1)
+        XCTAssertEqual(server.calls.count, before)
+        saved.clear()
+        let neither = ScriptedTransport([.status(404, ##"{"error":{"code":"not_found","message":"none"}}"##)])
+        let empty = makeStore()
+        await empty.start()
+        await empty.share(with: frame(neither))
+        XCTAssertEqual(neither.calls.count, 1)
+        XCTAssertEqual(empty.phase, .signedOut)
+    }
+
+    func testSigningOutOnThePhoneIsNotUndoneByTheFrame() async {
+        let account = FakeTccServer.demoCredentials
+        let transport = ScriptedTransport([.status(200, "{\"email\":\"\(account.username)\",\"password\":\"\(account.password)\"}")])
+        let store = await loaded()
+        await store.signOut()
+        await store.share(with: frame(transport))
+        XCTAssertEqual(store.phase, .signedOut)
+        XCTAssertNil(saved.load())
     }
 
     func testSignInFlowFromSignedOutToReady() async {

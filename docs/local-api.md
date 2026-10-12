@@ -245,6 +245,8 @@ This relies on the unofficial `sharedstreams` web endpoints Apple's own album pa
 | `PUT /v1/settings/icloud-album` | `{"url":"https://www.icloud.com/sharedalbum/#<token>"}` | `{"rev":N}`; a first sync starts |
 | `DELETE /v1/settings/icloud-album` | | `{"rev":N}`; album pictures are removed, phone and email pictures stay |
 | `POST /v1/settings/icloud-album/sync` | | `204`; starts a sync now |
+| `GET /v1/settings/thermostat-account` | | `{"email","password"}`, or `404` when the frame has no thermostat account |
+| `PUT /v1/settings/thermostat-account` | `{"email","password"}` | `204`; the frame starts signing in. `409` when it cannot start |
 
 - Only `https://www.icloud.com/sharedalbum/#<token>` links are accepted (an optional locale
   segment such as `/sharedalbum/en-gb/` is allowed); anything else, including
@@ -316,7 +318,9 @@ Dashboard → native (`window.Skylit.*`, all return a JSON string or boolean):
   saved: the phone is refused until the frame restarts, and the dashboard says it could not remove it.
 
 Thermostats (Honeywell Total Connect Comfort) are reached only through the bridge. The frame's
-native code signs in and polls; there are no thermostat routes in the phone API.
+native code signs in and polls. The phone API carries only the account hand-over
+(`/v1/settings/thermostat-account`): a paired phone gives its sign-in to a frame that has none, or
+takes the frame's when the phone has none. Any paired device can therefore read the account.
 
 - Native → dashboard: `SkylitThermostat.receive(snapshot)` on every change. `snapshot` is
   `{"configured","status","controllable","polledAt","retryAt","units","outdoor","account","message","signIn","thermostats":[…]}`.
