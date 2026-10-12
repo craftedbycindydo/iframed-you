@@ -14,9 +14,25 @@ final class Fields {
       throw ApiException.badRequest(key + " must be " + minimum + " to " + maximum + " characters");
     }
     for (int i = 0; i < trimmed.length(); i++) {
-      if (Character.isISOControl(trimmed.charAt(i))) throw ApiException.badRequest(key + " has control characters");
+      if (forbidden(trimmed, i)) throw ApiException.badRequest(key + " has characters that cannot be shown");
     }
     return trimmed;
+  }
+
+  static boolean forbidden(String text, int index) {
+    char c = text.charAt(index);
+    boolean lonelyHigh = Character.isHighSurrogate(c) && (index + 1 >= text.length() || !Character.isLowSurrogate(text.charAt(index + 1)));
+    boolean lonelyLow = Character.isLowSurrogate(c) && (index == 0 || !Character.isHighSurrogate(text.charAt(index - 1)));
+    boolean directional = c >= 0x202A && c <= 0x202E || c >= 0x2066 && c <= 0x2069;
+    return Character.isISOControl(c) || c == 0xFFFE || c == 0xFFFF || directional || lonelyHigh || lonelyLow;
+  }
+
+  static String tidy(String text, int maximum) {
+    StringBuilder kept = new StringBuilder();
+    for (int i = 0; i < text.length(); i++) if (!forbidden(text, i)) kept.append(text.charAt(i));
+    String clean = kept.toString().trim();
+    int length = clean.codePointCount(0, clean.length());
+    return length <= maximum ? clean : clean.substring(0, clean.offsetByCodePoints(0, maximum));
   }
 
   static String color(Map<String, Object> fields, String key) throws ApiException {

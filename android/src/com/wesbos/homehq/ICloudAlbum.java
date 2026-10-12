@@ -160,8 +160,8 @@ final class ICloudAlbum {
       photos.add(new Photo(guid, checksum, created > 0 ? created : FrameTime.instant(row.get("batchDateCreated"))));
     }
     Object name = stream.get("streamName");
-    String label = name instanceof String ? ((String) name).trim() : "";
-    return new Listing(label.length() > 80 ? label.substring(0, 80) : label, (String) stream.get("X-Apple-MMe-Host"), photos);
+    String label = name instanceof String ? Fields.tidy((String) name, 80) : "";
+    return new Listing(label, (String) stream.get("X-Apple-MMe-Host"), photos);
   }
 
   private static long number(Object value) {

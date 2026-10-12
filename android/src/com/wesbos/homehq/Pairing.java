@@ -4,6 +4,7 @@ import java.security.SecureRandom;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -18,6 +19,8 @@ final class Pairing {
   static final long CODE_LIFETIME = 120000L;
   static final int MAX_WRONG = 5;
   static final int MAX_STARTS = 5;
+  static final int MAX_STARTS_EVERYONE = 30;
+  static final int MAX_SOURCES = 64;
   static final long START_WINDOW = 600000L;
   static final long FIRST_LOCKOUT = 300000L;
   static final long LONGEST_LOCKOUT = 3600000L;
@@ -29,6 +32,8 @@ final class Pairing {
   private final Listener listener;
   private final SecureRandom random = new SecureRandom();
   private final ArrayDeque<Long> starts = new ArrayDeque<>();
+  private final ArrayDeque<Long> misses = new ArrayDeque<>();
+  private final LinkedHashMap<String, ArrayDeque<Long>> startsBySource = new LinkedHashMap<>();
   private List<Object> devices = new ArrayList<>();
   private String code;
   private long expiresAt;
@@ -50,12 +55,22 @@ final class Pairing {
     }
   }
 
-  synchronized void start() throws ApiException {
+  private static void forget(ArrayDeque<Long> times, long before) {
+    while (!times.isEmpty() && times.peekFirst() <= before) times.removeFirst();
+  }
+
+  synchronized void start(String source) throws ApiException {
     long now = clock.now();
-    while (!starts.isEmpty() && starts.peekFirst() <= now - START_WINDOW) starts.removeFirst();
-    if (now < lockedUntil || starts.size() >= MAX_STARTS) {
+    forget(starts, now - START_WINDOW);
+    ArrayDeque<Long> mine = startsBySource.remove(source);
+    if (mine == null) mine = new ArrayDeque<>();
+    forget(mine, now - START_WINDOW);
+    startsBySource.put(source, mine);
+    if (startsBySource.size() > MAX_SOURCES) startsBySource.remove(startsBySource.keySet().iterator().next());
+    if (now < lockedUntil || mine.size() >= MAX_STARTS || starts.size() >= MAX_STARTS_EVERYONE) {
       throw ApiException.rateLimited("Too many pairing attempts. Try again later.");
     }
+    mine.addLast(now);
     starts.addLast(now);
     code = String.format(Locale.ROOT, "%06d", random.nextInt(1000000));
     expiresAt = now + CODE_LIFETIME;
@@ -76,7 +91,10 @@ final class Pairing {
       throw ApiException.conflict("No pairing code is active. Start pairing again.");
     }
     if (!Digests.same(code, (String) offered)) {
-      if (++wrong < MAX_WRONG) throw ApiException.unauthorized("That code is not correct.");
+      forget(misses, clock.now() - START_WINDOW);
+      misses.addLast(clock.now());
+      if (++wrong < MAX_WRONG && misses.size() < MAX_WRONG) throw ApiException.unauthorized("That code is not correct.");
+      misses.clear();
       exhausted = true;
       lockedUntil = clock.now() + Math.min(LONGEST_LOCKOUT, FIRST_LOCKOUT << Math.min(exhaustedCodes++, 4));
       clear();
@@ -86,6 +104,7 @@ final class Pairing {
     if (devices.size() >= MAX_DEVICES) throw ApiException.conflict("Too many paired devices. Remove one on the frame.");
     exhaustedCodes = 0;
     lockedUntil = 0;
+    misses.clear();
     String token = secret(32);
     Map<String, Object> device = Json.object("id", secret(8), "name", name,
         "pairedAt", FrameTime.iso(clock.now()), "hash", Digests.sha256(token.getBytes(java.nio.charset.StandardCharsets.US_ASCII)));

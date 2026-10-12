@@ -53,6 +53,7 @@ final class ICloudSync {
   private int generation;
   private boolean syncing;
   private boolean again;
+  private boolean queued;
   private Map<String, String> known = new HashMap<>();
   private Set<String> rejected = new HashSet<>();
 
@@ -146,10 +147,18 @@ final class ICloudSync {
   boolean request(final boolean force) {
     synchronized (this) {
       if (token == null) return false;
-      if (!force && !due()) return true;
+      if (!force && !due() || queued) return true;
+      if (syncing) {
+        again = true;
+        return true;
+      }
+      queued = true;
     }
     runner.start(new Runnable() {
       @Override public void run() {
+        synchronized (ICloudSync.this) {
+          queued = false;
+        }
         sync();
       }
     });
@@ -231,7 +240,7 @@ final class ICloudSync {
           boolean kept;
           synchronized (pictures) {
             if (stale(started)) return;
-            kept = library.add(image, plan.times.get(photo.guid));
+            kept = PhotoPolicy.jpeg(image) && library.add(image, plan.times.get(photo.guid));
           }
           mapping.put(photo.guid, id);
           if (!kept && !excluded.contains(id) && !library.excluded().contains(id)) refused.add(photo.guid);
@@ -242,7 +251,7 @@ final class ICloudSync {
       failure = problem.getMessage();
     } catch (IOException offline) {
       failure = OFFLINE;
-    } catch (RuntimeException unexpected) {
+    } catch (Throwable unexpected) {
       failure = "The album could not be synced.";
     }
     synchronized (this) {

@@ -144,7 +144,7 @@ final class PhoneLink implements LocalApi.Events {
       }
 
       @Override public void put(String key, String value) {
-        saved.edit().putString(key, value).commit();
+        if (!saved.edit().putString(key, value).commit()) Log.e(TAG, "Could not save phone link data: " + key);
       }
     };
     FrameTime.Clock clock = new FrameTime.Clock() {

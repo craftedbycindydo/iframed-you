@@ -1,0 +1,90 @@
+{
+  "fill": {
+    "automatic-gradient": "extended-srgb:0.23137,0.16471,0.13333,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "name": "nail",
+          "image-name": "1-nail.svg",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.2
+      }
+    },
+    {
+      "layers": [
+        {
+          "name": "people",
+          "image-name": "2-people.svg",
+          "glass": true
+        },
+        {
+          "name": "photo",
+          "image-name": "3-photo.svg",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.3
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.4
+      }
+    },
+    {
+      "layers": [
+        {
+          "name": "frame",
+          "image-name": "4-frame.svg",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.3
+      }
+    },
+    {
+      "layers": [
+        {
+          "name": "wire",
+          "image-name": "5-wire.svg",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.15
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.9
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}

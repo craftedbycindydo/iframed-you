@@ -52,6 +52,7 @@ final class LocalApi {
 
   static final String NAME = "Skylit";
   static final int MAX_JSON = 64 * 1024;
+  static final int MAX_UNPAIRED_JSON = 4 * 1024;
   static final int MAX_PHOTO = 15 * 1024 * 1024;
   static final int MAX_CALENDARS = 6;
   private static final int UPLOAD_WAIT_SECONDS = 20;
@@ -254,10 +255,10 @@ final class LocalApi {
       case "GET /v1/info":
         return LocalHttp.Response.json(200, Json.object("v", 1, "frameId", frameId, "name", NAME));
       case "POST /v1/pair/start":
-        pairing.start();
+        pairing.start(request.peer);
         return LocalHttp.Response.empty(204);
       case "POST /v1/pair/finish":
-        Map<String, Object> paired = pairing.finish(fields(body));
+        Map<String, Object> paired = pairing.finish(fields(body, MAX_UNPAIRED_JSON));
         return LocalHttp.Response.json(200, Json.object("token", paired.get("token"), "frameId", frameId, "name", NAME));
       default:
         break;
@@ -343,10 +344,17 @@ final class LocalApi {
   }
 
   private static Map<String, Object> fields(LocalHttp.Body body) throws ApiException, IOException {
+    return fields(body, MAX_JSON);
+  }
+
+  private static Map<String, Object> fields(LocalHttp.Body body, int limit) throws ApiException, IOException {
     try {
-      Map<String, Object> fields = Json.map(Json.parse(new String(body.read(MAX_JSON), java.nio.charset.StandardCharsets.UTF_8)));
+      String text = java.nio.charset.StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(body.read(limit))).toString();
+      Map<String, Object> fields = Json.map(Json.parse(text));
       if (fields == null) throw ApiException.badRequest("Expected a JSON object");
       return fields;
+    } catch (java.nio.charset.CharacterCodingException notText) {
+      throw ApiException.badRequest("The body is not UTF-8 text");
     } catch (Json.Malformed malformed) {
       throw ApiException.badRequest("Malformed JSON: " + malformed.getMessage());
     }
@@ -436,8 +444,7 @@ final class LocalApi {
     }
     try {
       byte[] jpeg = body.read(MAX_PHOTO);
-      boolean looksJpeg = jpeg.length > 3 && (jpeg[0] & 255) == 0xFF && (jpeg[1] & 255) == 0xD8 && (jpeg[2] & 255) == 0xFF;
-      if (!looksJpeg) throw ApiException.badRequest("The body is not a JPEG image");
+      if (!PhotoPolicy.jpeg(jpeg)) throw ApiException.badRequest("The body is not a JPEG image");
       String id = Digests.sha256(jpeg);
       Photo saved = photo(id);
       if (saved == null) {

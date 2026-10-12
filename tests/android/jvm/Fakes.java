@@ -19,6 +19,11 @@ import java.util.Map;
 import java.util.Set;
 
 final class Fakes {
+  static volatile String peer = "192.168.1.50";
+  static final LocalHttp.Pace UNPACED = new LocalHttp.Pace() {
+    @Override public void readWithin(int millis) {}
+  };
+
   private Fakes() {}
 
   static final class Storage implements KeyValue {
@@ -358,7 +363,7 @@ final class Fakes {
   }
 
   static byte[] request(String method, String target, String token, String contentType, byte[] body) {
-    StringBuilder head = new StringBuilder(method + " " + target + " HTTP/1.1\r\nHost: frame\r\n");
+    StringBuilder head = new StringBuilder(method + " " + target + " HTTP/1.1\r\nHost: 192.168.1.20:8765\r\n");
     if (token != null) head.append("Authorization: Bearer ").append(token).append("\r\n");
     if (contentType != null) head.append("Content-Type: ").append(contentType).append("\r\n");
     if (body != null) head.append("Content-Length: ").append(body.length).append("\r\n");
@@ -383,7 +388,8 @@ final class Fakes {
     LocalHttp.Response response;
     try {
       LocalHttp.Request request = LocalHttp.readHead(in);
-      response = api.handle(request, LocalHttp.body(request, in, out));
+      request.peer = peer;
+      response = api.handle(request, LocalHttp.body(request, in, out, UNPACED));
     } catch (ApiException malformed) {
       response = LocalHttp.Response.error(malformed);
     }
@@ -392,7 +398,11 @@ final class Fakes {
   }
 
   static Reply overSocket(int port, byte[] raw) throws IOException {
-    try (Socket socket = new Socket(InetAddress.getLoopbackAddress(), port)) {
+    return overSocket(InetAddress.getLoopbackAddress(), port, raw);
+  }
+
+  static Reply overSocket(InetAddress address, int port, byte[] raw) throws IOException {
+    try (Socket socket = new Socket(address, port)) {
       socket.setSoTimeout(20000);
       OutputStream out = socket.getOutputStream();
       out.write(raw);

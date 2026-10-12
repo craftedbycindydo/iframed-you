@@ -14,8 +14,17 @@ final class LocalHttp {
   static final int MAX_HEAD = 8192;
   static final int MAX_HEADERS = 64;
 
+  static final int BODY_GRACE_MILLIS = 3000;
+  static final int BODY_BYTES_PER_SECOND = 64 * 1024;
+  private static final int LONGEST_READ_MILLIS = 5000;
+  private static final String HOSTS = "([0-9]{1,3}(\\.[0-9]{1,3}){3}|\\[[0-9A-Fa-f:.]+(%25[A-Za-z0-9._\\-]+)?\\]|[A-Za-z0-9\\-]+(\\.[A-Za-z0-9\\-]+)*\\.local\\.?)(:[0-9]{1,5})?";
+
   interface Body {
     byte[] read(int limit) throws ApiException, IOException;
+  }
+
+  interface Pace {
+    void readWithin(int millis) throws IOException;
   }
 
   static final class Request {
@@ -23,6 +32,7 @@ final class LocalHttp {
     final String path;
     final Map<String, String> query;
     final Map<String, String> headers;
+    String peer = "";
 
     Request(String method, String path, Map<String, String> query, Map<String, String> headers) {
       this.method = method;
@@ -108,10 +118,12 @@ final class LocalHttp {
     }
     if (headers.containsKey("transfer-encoding")) throw ApiException.badRequest("Send a Content-Length body");
     if (headers.containsKey("origin")) throw ApiException.badRequest("Browser requests are not accepted");
+    String host = headers.get("host");
+    if (host == null || !host.matches(HOSTS)) throw ApiException.badRequest("Address the frame by its IP address or .local name");
     return new Request(start[0], mark < 0 ? target : target.substring(0, mark), query, headers);
   }
 
-  static Body body(final Request request, final InputStream in, final OutputStream out) {
+  static Body body(final Request request, final InputStream in, final OutputStream out, final Pace pace) {
     return new Body() {
       private boolean consumed;
 
@@ -129,7 +141,13 @@ final class LocalHttp {
         }
         byte[] content = new byte[(int) length];
         int filled = 0;
+        long started = System.nanoTime();
+        long allowed = BODY_GRACE_MILLIS + length * 1000 / BODY_BYTES_PER_SECOND;
         while (filled < content.length) {
+          long elapsed = (System.nanoTime() - started) / 1000000L;
+          boolean behind = filled < (elapsed - BODY_GRACE_MILLIS) * BODY_BYTES_PER_SECOND / 1000;
+          if (elapsed >= allowed || behind) throw new java.net.SocketTimeoutException("Request body arrived too slowly");
+          pace.readWithin((int) Math.min(LONGEST_READ_MILLIS, allowed - elapsed));
           int count = in.read(content, filled, content.length - filled);
           if (count < 0) throw new EOFException();
           filled += count;

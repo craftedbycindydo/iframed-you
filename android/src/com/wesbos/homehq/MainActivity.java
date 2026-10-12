@@ -3,6 +3,7 @@ package com.wesbos.homehq;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -50,13 +51,14 @@ public class MainActivity extends Activity {
     super.onCreate(state);
     prefs=getSharedPreferences("skylit",MODE_PRIVATE);
     calendars=new CalendarStore(getSharedPreferences("skylit-calendars",MODE_PRIVATE));
-    photos=new PhotoStore(this);photoMail=new PhotoMail(this,photos,()->{if(dashboard!=null)dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.receive("+photoMail.status().toString()+")",null);});
+    photos=new PhotoStore(this);photoMail=new PhotoMail(this,photos,()->{if(dashboard!=null)dashboard.evaluateJavascript(Json.scriptSafe("window.SkylitPhotos&&window.SkylitPhotos.receive("+photoMail.status().toString()+")"),null);});
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON|WindowManager.LayoutParams.FLAG_FULLSCREEN);
-    WebView.setWebContentsDebuggingEnabled(getIntent().getBooleanExtra("debug",false));
+    WebView.setWebContentsDebuggingEnabled(debugging(getIntent()));
     root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(238,232,221));setContentView(root);
-    phone=new PhoneLink(this,calendars,photos,photoMail,script->{if(dashboard==null)return false;dashboard.evaluateJavascript(script,null);return true;});phone.start();
+    phone=new PhoneLink(this,calendars,photos,photoMail,script->{if(dashboard==null)return false;dashboard.evaluateJavascript(Json.scriptSafe(script),null);return true;});phone.start();
     createDashboard();handler.post(photoCheckTask);
   }
+  private boolean debugging(Intent intent){return (getApplicationInfo().flags&ApplicationInfo.FLAG_DEBUGGABLE)!=0&&intent.getBooleanExtra("debug",false);}
   private void settings(WebView web){WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setUseWideViewPort(true);s.setLoadWithOverviewMode(true);s.setMediaPlaybackRequiresUserGesture(false);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);}
   private void createDashboard(){
     calendars.resetRequests();
@@ -64,9 +66,9 @@ public class MainActivity extends Activity {
     // The privileged bridge exists only in this local, navigation-restricted view.
     dashboard.addJavascriptInterface(new DashboardBridge(),"Skylit");
     dashboard.setWebViewClient(new WebViewClient(){
-      @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
-        Uri target=request.getUrl();return !"https".equals(target.getScheme())||!"appassets.androidplatform.net".equals(target.getHost());
-      }
+      private boolean leavesDashboard(Uri target){return !"https".equals(target.getScheme())||!"appassets.androidplatform.net".equals(target.getHost());}
+      @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){return leavesDashboard(request.getUrl());}
+      @Override public boolean shouldOverrideUrlLoading(WebView view,String url){return leavesDashboard(Uri.parse(url));}
       @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
         Uri u=request.getUrl();if(!"https".equals(u.getScheme())||!"appassets.androidplatform.net".equals(u.getHost()))return null;
         String path=u.getPath();if(path==null||"/".equals(path))path="/index.html";
@@ -97,7 +99,7 @@ public class MainActivity extends Activity {
     @JavascriptInterface public String calendarAdd(String name,String color,String url){return calendars.add(name,color,url);}
     @JavascriptInterface public boolean calendarMetadata(String id,String name,String color){return calendars.metadata(id,name,color);}
     @JavascriptInterface public boolean calendarRemove(String id){return calendars.remove(id);}
-    @JavascriptInterface public void calendarRefresh(String id){calendars.refresh(id,result->runOnUiThread(()->{if(dashboard!=null)dashboard.evaluateJavascript("window.SkylitCalendar&&window.SkylitCalendar.receive("+result+")",null);}));}
+    @JavascriptInterface public void calendarRefresh(String id){calendars.refresh(id,result->runOnUiThread(()->{if(dashboard!=null)dashboard.evaluateJavascript(Json.scriptSafe("window.SkylitCalendar&&window.SkylitCalendar.receive("+result+")"),null);}));}
     @JavascriptInterface public boolean calendarAccept(String id,String request,boolean valid){return calendars.accept(id,request,valid);}
 
     @JavascriptInterface public String householdSnapshot(){return phone.api.householdSnapshot();}
@@ -151,7 +153,9 @@ public class MainActivity extends Activity {
     // No JavaScript bridge or account credentials are injected into remote pages.
     CookieManager.getInstance().setAcceptCookie(true);
     remote.setWebViewClient(new WebViewClient(){
-      @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest req){Uri destination=req.getUrl();boolean blocked=!RemoteNavigation.allows(destination.getScheme(),destination.getHost(),youtube);if(blocked&&req.isForMainFrame()){Log.w(TAG,"Blocked remote destination: "+destination.getHost());Toast.makeText(MainActivity.this,"This page tried to open an unsupported destination. Use Skylit to return and try again.",Toast.LENGTH_LONG).show();}return blocked;}
+      @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest req){return blocksRemote(req.getUrl(),req.isForMainFrame());}
+      @Override public boolean shouldOverrideUrlLoading(WebView view,String url){return blocksRemote(Uri.parse(url),true);}
+      private boolean blocksRemote(Uri destination,boolean mainFrame){boolean blocked=!RemoteNavigation.allows(destination.getScheme(),destination.getHost(),youtube);if(blocked&&mainFrame){Log.w(TAG,"Blocked remote destination: "+destination.getHost());Toast.makeText(MainActivity.this,"This page tried to open an unsupported destination. Use Skylit to return and try again.",Toast.LENGTH_LONG).show();}return blocked;}
       @Override public void onPageFinished(WebView view,String url){
         Log.i(TAG,"Remote page loaded: "+Uri.parse(url).getHost());
         if(photos&&!slideshowScheduled&&"photos.google.com".equals(Uri.parse(url).getHost())){slideshowScheduled=true;handler.postDelayed(()->startSlideshow(generation,0),6000);}
@@ -213,7 +217,7 @@ public class MainActivity extends Activity {
   private void pauseMomo(boolean paused){if(dashboard!=null)dashboard.evaluateJavascript("window.Momo&&window.Momo.setPaused("+paused+")",null);}
   @Override protected void onResume(){super.onResume();foreground=true;pauseMomo(remote!=null||localPhotosOpen||quietOpen);if(photoMail!=null)photoMail.maybeSync();resetIdle();hideBars();}
   @Override protected void onPause(){foreground=false;pauseMomo(true);handler.removeCallbacks(idleTask);handler.removeCallbacks(exitTask);super.onPause();}
-  @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);WebView.setWebContentsDebuggingEnabled(intent.getBooleanExtra("debug",false));if(remote!=null)closeRemote();if(localPhotosOpen&&dashboard!=null)dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.close()",null);}
+  @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);WebView.setWebContentsDebuggingEnabled(debugging(intent));if(remote!=null)closeRemote();if(localPhotosOpen&&dashboard!=null)dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.close()",null);}
   @Override public void onBackPressed(){if(quietOpen&&dashboard!=null){dashboard.evaluateJavascript("window.SkylitWorkspace&&window.SkylitWorkspace.restore()",null);return;}if(remote!=null)closeRemote();else if(localPhotosOpen&&dashboard!=null)dashboard.evaluateJavascript("window.SkylitPhotos&&window.SkylitPhotos.close()",null);else if(dashboard!=null)dashboard.evaluateJavascript("window.SkylitApp&&window.SkylitApp.back()",null);}
   @Override public void onWindowFocusChanged(boolean hasFocus){super.onWindowFocusChanged(hasFocus);if(hasFocus)hideBars();}
   private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}

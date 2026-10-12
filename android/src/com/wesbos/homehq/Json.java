@@ -14,8 +14,10 @@ final class Json {
   }
 
   private static final int MAX_DEPTH = 16;
+  static final int MAX_VALUES = 400000;
   private final String text;
   private int at;
+  private int values;
 
   private Json(String text) {
     this.text = text;
@@ -58,6 +60,10 @@ final class Json {
       return result;
     }
     return value;
+  }
+
+  static String scriptSafe(String script) {
+    return script.replace(String.valueOf((char) 0x2028), "\\u2028").replace(String.valueOf((char) 0x2029), "\\u2029");
   }
 
   static String write(Object value) {
@@ -129,6 +135,7 @@ final class Json {
 
   private Object value(int depth) throws Malformed {
     if (depth > MAX_DEPTH) throw new Malformed("JSON is nested too deeply");
+    if (++values > MAX_VALUES) throw new Malformed("JSON has too many values");
     skipSpace();
     if (at >= text.length()) throw new Malformed("Unexpected end of JSON");
     char c = text.charAt(at);

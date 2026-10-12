@@ -674,6 +674,109 @@ public final class ICloudTest {
     same(posts + 1, album.posts.size(), "bridge sync without an album does nothing");
   }
 
+  static void robustness() throws Exception {
+    fresh();
+    album.rawStream = "{\"streamName\":\"Fa‮mily \ud83d" + new String(new char[100]).replace("\0", "😀") + "\",\"photos\":[]}";
+    ICloudAlbum.Listing listing = ICloudAlbum.list(album, TOKEN, null);
+    same(80, listing.name.codePointCount(0, listing.name.length()), "album names are cut to eighty code points");
+    check(listing.name.startsWith("Family ") && listing.name.endsWith("😀"), "without direction overrides or half characters");
+    for (int i = 0; i < listing.name.length(); i++) check(!Fields.forbidden(listing.name, i), "album name character " + i + " is safe");
+
+    fresh();
+    byte[] png = image(21);
+    png[0] = (byte) 0x89;
+    png[1] = 'P';
+    png[2] = 'N';
+    album.add(guid(21), day(21), png, 2048);
+    byte[] gif = image(22);
+    System.arraycopy("GIF89a".getBytes("US-ASCII"), 0, gif, 0, 6);
+    album.add(guid(22), day(22), gif, 2048);
+    sync.connect(LINK);
+    same(4L, ((Number) status().get("count")).longValue(), "only JPEG downloads reach the picture decoder");
+    same(4, photos.albumDownloads, "non-JPEG downloads are never handed to the library");
+    same(null, status().get("error"), "a non-JPEG picture is skipped quietly");
+    int downloads = album.downloads;
+    sync.request(true);
+    same(downloads, album.downloads, "and is not fetched again");
+
+    fresh();
+    StringBuilder bomb = new StringBuilder(ICloudHttp.MAX_ANSWER).append("{\"photos\":[");
+    while (bomb.length() < ICloudHttp.MAX_ANSWER - 8) bomb.append("{},");
+    album.rawStream = bomb.append("{}]}").toString();
+    check(ICloudHttp.MAX_ANSWER <= 2 * 1024 * 1024, "answers are capped at two mebibytes");
+    final Throwable[] escaped = new Throwable[1];
+    final ICloudSync bombed = sync;
+    Thread worker = new Thread(new Runnable() {
+      @Override public void run() {
+        try {
+          bombed.connect(LINK);
+        } catch (ApiException impossible) {
+          throw new IllegalStateException(impossible);
+        }
+      }
+    });
+    worker.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+      @Override public void uncaughtException(Thread thread, Throwable problem) {
+        escaped[0] = problem;
+      }
+    });
+    worker.start();
+    worker.join();
+    same(null, escaped[0], "an answer made of empty objects does not escape the worker");
+    same(Boolean.FALSE, status().get("syncing"), "syncing ends after the hostile answer");
+    check(status().get("error") != null, "and it is recorded as a failure");
+
+    for (final Throwable thrown : new Throwable[] {new OutOfMemoryError("test"), new StackOverflowError(), new IllegalStateException("test")}) {
+      fresh();
+      final boolean[] failing = {false};
+      Fakes.Album fragile = new Fakes.Album() {
+        @Override public synchronized ICloudAlbum.Reply post(String url, String body) throws IOException {
+          if (failing[0] && thrown instanceof Error) throw (Error) thrown;
+          if (failing[0]) throw (RuntimeException) thrown;
+          return super.post(url, body);
+        }
+      };
+      fragile.add(guid(1), day(1), image(1), 2048);
+      ICloudSync survivor = new ICloudSync(storage, clock, fragile, photos.library, Fakes.inline(), events.album);
+      survivor.connect(LINK);
+      failing[0] = true;
+      survivor.request(true);
+      same("The album could not be synced.", survivor.status().get("error"), thrown.getClass().getSimpleName() + " is recorded as a failure");
+      same(Boolean.FALSE, survivor.status().get("syncing"), "syncing ends after " + thrown.getClass().getSimpleName());
+      same(1L, ((Number) survivor.status().get("count")).longValue(), "pictures survive " + thrown.getClass().getSimpleName());
+      check(!survivor.due(), "and the failure backs off");
+      failing[0] = false;
+      survivor.request(true);
+      same(null, survivor.status().get("error"), "the next sync recovers");
+    }
+
+    fresh();
+    final List<Runnable> queued = new ArrayList<>();
+    final ICloudSync[] busy = new ICloudSync[1];
+    final int[] passes = {0};
+    Fakes.Album counted = new Fakes.Album() {
+      @Override public synchronized ICloudAlbum.Reply post(String url, String body) throws IOException {
+        if (url.endsWith("/webstream") && passes[0]++ == 0) for (int i = 0; i < 5; i++) busy[0].request(true);
+        return super.post(url, body);
+      }
+    };
+    counted.add(guid(1), day(1), image(1), 2048);
+    busy[0] = new ICloudSync(storage, clock, counted, photos.library, new ICloudSync.Runner() {
+      @Override public void start(Runnable work) {
+        queued.add(work);
+      }
+    }, events.album);
+    busy[0].connect(LINK);
+    for (int i = 0; i < 20; i++) busy[0].request(true);
+    busy[0].request(false);
+    same(1, queued.size(), "requests while one sync is pending queue nothing more");
+    queued.get(0).run();
+    same(1, queued.size(), "requests while a sync runs queue nothing more");
+    same(2, passes[0], "they fold into one follow-up pass");
+    busy[0].request(true);
+    same(2, queued.size(), "a request after it finished queues the next sync");
+  }
+
   public static void main(String[] args) throws Exception {
     java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
     links();
@@ -682,6 +785,7 @@ public final class ICloudTest {
     planning();
     syncing();
     endpoints();
+    robustness();
     System.out.println("ICloud: " + checks + " checks passed");
   }
 }

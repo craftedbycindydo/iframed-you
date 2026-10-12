@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse, json, shutil, subprocess, tempfile, time, urllib.request
 
 ROOT=Path(__file__).resolve().parents[1]
-PURE_SOURCES=('ApiException','CalendarFeed','Digests','Fields','FrameTime','HouseholdStore','ICloudAlbum','ICloudHttp','ICloudSync','Json','KeyValue','LocalApi','LocalHttp','LocalServer','Pairing')
+PURE_SOURCES=('ApiException','CalendarFeed','Digests','Fields','FrameTime','HouseholdStore','ICloudAlbum','ICloudHttp','ICloudSync','Json','KeyValue','LocalApi','LocalHttp','LocalServer','Pairing','PhotoPolicy')
 
 def jdk():
     config=ROOT/'.local/build.json'

@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
 import javax.net.ssl.HttpsURLConnection;
 
 final class ICloudHttp implements ICloudAlbum.Transport {
-  static final int MAX_ANSWER = 8 * 1024 * 1024;
+  static final int MAX_ANSWER = 2 * 1024 * 1024;
   private static final int CONNECT_MILLIS = 15000;
   private static final int READ_MILLIS = 20000;
   private static final long LONGEST_TRANSFER_NANOS = 120000000000L;

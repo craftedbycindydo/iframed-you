@@ -31,6 +31,15 @@ class LocalApiTest(unittest.TestCase):
             self.assertIsNone(re.search(r'\b(android|androidx|org\.json|javax\.mail)\.',source),name)
     def test_android_api_23_library_surface(self):
         newer=r'java\.util\.function|java\.util\.stream|java\.time|\.removeIf\(|\.getOrDefault\(|\.putIfAbsent\(|\.computeIfAbsent\(|\.forEach\(|String\.join\(|List\.of\(|Map\.of\(|Math\.floorMod\(|newKeySet\('
+        activity=(ROOT/'android/src/com/wesbos/homehq/MainActivity.java').read_text()
+        modern=len(re.findall(r'boolean shouldOverrideUrlLoading\(WebView \w+,WebResourceRequest \w+\)',activity))
+        legacy=len(re.findall(r'boolean shouldOverrideUrlLoading\(WebView \w+,String \w+\)',activity))
+        clients=len(re.findall(r'new WebViewClient\(\)',activity))
+        self.assertEqual((modern,legacy),(clients,clients),'every WebViewClient needs both navigation overloads; Android 6 calls only the String one')
+        self.assertEqual(len(re.findall(r'setWebContentsDebuggingEnabled\(debugging\(',activity)),len(re.findall(r'setWebContentsDebuggingEnabled\(',activity)))
+        self.assertIn('FLAG_DEBUGGABLE',activity)
+        for call in re.findall(r'evaluateJavascript\(([^;]*?),(?:null|\w+->)',activity):
+            self.assertTrue('+' not in call or 'Json.scriptSafe(' in call or re.fullmatch(r'"[^"]*"\+\w+\+"[^"]*"(\+\w+\+"[^"]*")*',call),call)
         for name in (*dev_server.PURE_SOURCES,'PhoneLink'):
             source=(ROOT/'android/src/com/wesbos/homehq'/f'{name}.java').read_text()
             self.assertIsNone(re.search(newer,source),name)

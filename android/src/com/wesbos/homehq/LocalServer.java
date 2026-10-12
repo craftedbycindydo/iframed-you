@@ -10,10 +10,12 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Collections;
-import java.util.Set;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -23,15 +25,31 @@ import java.util.concurrent.TimeUnit;
 
 final class LocalServer {
   static final int PREFERRED_PORT = 8765;
-  private static final int WORKERS = 4;
-  private static final int WAITING_CONNECTIONS = 8;
-  private static final int READ_TIMEOUT_MILLIS = 10000;
-  private static final int HEAD_SECONDS = 15;
-  private static final int EXCHANGE_SECONDS = 150;
+  static final int WORKERS = 4;
+  static final int SERVED_PER_SOURCE = 3;
+  static final int WAITING_PER_SOURCE = 12;
+  static final int WAITING_EVERYONE = 32;
+  static final int WAIT_SECONDS = 15;
+  static final int HEAD_SECONDS = 5;
+  static final int EXCHANGE_SECONDS = 20;
+  static final int UPLOAD_HANDLING_SECONDS = 60;
+  private static final long DRAIN_NANOS = 1500000000L;
   private static final int DRAIN_BYTES = 256 * 1024;
 
+  private static final class Connection {
+    final Socket socket;
+    final InetAddress source;
+    ScheduledFuture<?> limit;
+
+    Connection(Socket socket) {
+      this.socket = socket;
+      this.source = socket.getInetAddress();
+    }
+  }
+
   private final LocalApi api;
-  private final Set<Socket> open = Collections.newSetFromMap(new ConcurrentHashMap<Socket, Boolean>());
+  private final List<Connection> waiting = new ArrayList<>();
+  private final List<Connection> served = new ArrayList<>();
   private final ThreadFactory threads = new ThreadFactory() {
     @Override public Thread newThread(Runnable work) {
       Thread thread = new Thread(work, "skylit-local-api");
@@ -58,8 +76,7 @@ final class LocalServer {
       socket = new ServerSocket();
       socket.bind(new InetSocketAddress(address, 0), 16);
     }
-    workers = new ThreadPoolExecutor(WORKERS, WORKERS, 30, TimeUnit.SECONDS,
-        new ArrayBlockingQueue<Runnable>(WAITING_CONNECTIONS), threads);
+    workers = new ThreadPoolExecutor(WORKERS, WORKERS, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), threads);
     workers.allowCoreThreadTimeOut(true);
     watchdog = new ScheduledThreadPoolExecutor(1, threads);
     watchdog.setRemoveOnCancelPolicy(true);
@@ -85,7 +102,9 @@ final class LocalServer {
     close(current);
     workers.shutdownNow();
     watchdog.shutdownNow();
-    for (Socket socket : open) close(socket);
+    for (Connection connection : waiting) close(connection.socket);
+    for (Connection connection : served) close(connection.socket);
+    waiting.clear();
   }
 
   static boolean local(InetAddress peer) {
@@ -97,26 +116,58 @@ final class LocalServer {
   private void accept(ServerSocket accepting) {
     while (listener == accepting) {
       try {
-        final Socket socket = accepting.accept();
-        if (!local(socket.getInetAddress())) {
-          close(socket);
-          continue;
-        }
-        open.add(socket);
-        try {
-          workers.execute(new Runnable() {
-            @Override public void run() {
-              serve(socket);
-            }
-          });
-        } catch (RejectedExecutionException busy) {
-          open.remove(socket);
-          close(socket);
-        }
-      } catch (IOException closedOrFailed) {
+        Socket socket = accepting.accept();
+        if (!local(socket.getInetAddress())) close(socket);
+        else admit(new Connection(socket));
+      } catch (IOException | RuntimeException closedOrFailed) {
         if (listener != accepting) return;
       }
     }
+  }
+
+  private static int from(List<Connection> connections, InetAddress source) {
+    int count = 0;
+    for (Connection connection : connections) if (connection.source.equals(source)) count++;
+    return count;
+  }
+
+  private synchronized void admit(Connection connection) {
+    if (listener == null || waiting.size() >= WAITING_EVERYONE || from(waiting, connection.source) >= WAITING_PER_SOURCE) {
+      close(connection.socket);
+      return;
+    }
+    connection.limit = closeAfter(connection.socket, WAIT_SECONDS);
+    waiting.add(connection);
+    dispatch();
+  }
+
+  private synchronized void dispatch() {
+    for (Iterator<Connection> queue = waiting.iterator(); queue.hasNext();) if (queue.next().socket.isClosed()) queue.remove();
+    for (Iterator<Connection> queue = waiting.iterator(); queue.hasNext() && served.size() < WORKERS;) {
+      final Connection next = queue.next();
+      if (from(served, next.source) >= SERVED_PER_SOURCE) continue;
+      queue.remove();
+      served.add(next);
+      try {
+        workers.execute(new Runnable() {
+          @Override public void run() {
+            try {
+              serve(next);
+            } finally {
+              finished(next);
+            }
+          }
+        });
+      } catch (RejectedExecutionException stopping) {
+        served.remove(next);
+        close(next.socket);
+      }
+    }
+  }
+
+  private synchronized void finished(Connection connection) {
+    served.remove(connection);
+    if (listener != null) dispatch();
   }
 
   private ScheduledFuture<?> closeAfter(final Socket socket, int seconds) {
@@ -127,33 +178,47 @@ final class LocalServer {
     }, seconds, TimeUnit.SECONDS);
   }
 
-  private void serve(Socket socket) {
-    ScheduledFuture<?> limit = null;
+  private static int exchangeSeconds(LocalHttp.Request request) {
+    String declared = request.headers.get("content-length");
+    boolean upload = request.method.equals("POST") && request.path.equals("/v1/photos") && declared != null && declared.matches("[0-9]{1,9}");
+    if (!upload) return EXCHANGE_SECONDS;
+    long bytes = Math.min(LocalApi.MAX_PHOTO, Long.parseLong(declared));
+    return EXCHANGE_SECONDS + UPLOAD_HANDLING_SECONDS + (int) (bytes / LocalHttp.BODY_BYTES_PER_SECOND);
+  }
+
+  private void serve(Connection connection) {
+    final Socket socket = connection.socket;
     try {
-      limit = closeAfter(socket, HEAD_SECONDS);
-      socket.setSoTimeout(READ_TIMEOUT_MILLIS);
+      connection.limit.cancel(false);
+      connection.limit = closeAfter(socket, HEAD_SECONDS);
+      socket.setSoTimeout(HEAD_SECONDS * 1000);
       InputStream in = new BufferedInputStream(socket.getInputStream(), 16384);
       OutputStream out = new BufferedOutputStream(socket.getOutputStream(), 16384);
       LocalHttp.Response response;
       try {
         LocalHttp.Request request = LocalHttp.readHead(in);
-        limit.cancel(false);
-        limit = closeAfter(socket, EXCHANGE_SECONDS);
-        response = api.handle(request, LocalHttp.body(request, in, out));
+        request.peer = connection.source.getHostAddress();
+        connection.limit.cancel(false);
+        connection.limit = closeAfter(socket, exchangeSeconds(request));
+        response = api.handle(request, LocalHttp.body(request, in, out, new LocalHttp.Pace() {
+          @Override public void readWithin(int millis) throws IOException {
+            socket.setSoTimeout(Math.max(1, millis));
+          }
+        }));
       } catch (ApiException malformed) {
         response = LocalHttp.Response.error(malformed);
       }
       LocalHttp.write(out, response);
       socket.shutdownOutput();
-      socket.setSoTimeout(1000);
+      socket.setSoTimeout(500);
+      long until = System.nanoTime() + DRAIN_NANOS;
       byte[] unread = new byte[8192];
-      for (int drained = 0, count; drained < DRAIN_BYTES && (count = in.read(unread)) >= 0;) drained += count;
+      for (int drained = 0, count; drained < DRAIN_BYTES && System.nanoTime() < until && (count = in.read(unread)) >= 0;) drained += count;
     } catch (IOException | RuntimeException droppedConnection) {
       close(socket);
     } finally {
-      if (limit != null) limit.cancel(false);
+      connection.limit.cancel(false);
       close(socket);
-      open.remove(socket);
     }
   }
 

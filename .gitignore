@@ -22,3 +22,4 @@ __pycache__/
 *.hprof
 *.db
 *.sqlite*
+design/logo/build-test/
