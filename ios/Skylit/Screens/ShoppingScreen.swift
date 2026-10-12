@@ -7,6 +7,7 @@ struct ShoppingScreen: View {
     @State private var newName = ""
     @State private var editing: ShoppingItem?
     @State private var confirmsClear = false
+    @State private var removed: ShoppingItem?
     @FocusState private var addFocused: Bool
 
     private var items: [ShoppingItem] { store.state?.shopping ?? [] }
@@ -15,48 +16,62 @@ struct ShoppingScreen: View {
     private var isFull: Bool { items.count >= Limits.shoppingItems }
 
     var body: some View {
-        Screen(title: "Shopping", store: store) {
-            EmptyView()
-        } content: {
-            HStack(spacing: 10) {
-                TextField("Add an item", text: $newName)
-                    .focused($addFocused)
-                    .submitLabel(.done)
-                    .onSubmit(add)
-                    .onChange(of: newName) { _, new in
-                        if new.count > Limits.nameLength { newName = String(new.prefix(Limits.nameLength)) }
+        NavigationStack {
+            ThemedList {
+                Section {
+                    InlineAddField(prompt: "Add an item", text: $newName, focus: $addFocused, limit: Limits.nameLength, onSubmit: add)
+                        .disabled(isFull)
+                } footer: {
+                    if isFull {
+                        Text("The list holds up to \(Limits.shoppingItems) items.")
                     }
-                    .modifier(PanelField())
-                IconButton(symbol: "plus", label: "Add item", filled: true, action: add)
-                    .disabled(Limits.cleanName(newName) == nil || isFull)
-                    .opacity(Limits.cleanName(newName) == nil || isFull ? 0.45 : 1)
-            }
-            if isFull {
-                Text("The list holds up to \(Limits.shoppingItems) items. Clear some first.").textStyle(.caption).foregroundStyle(theme.muted)
-            }
-            if items.isEmpty {
-                Card {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("The list is empty").textStyle(.heading).foregroundStyle(theme.ink)
-                        Text("Anything you add here shows on the frame straight away.").textStyle(.caption).foregroundStyle(theme.muted)
+                }
+                if items.isEmpty {
+                    Section {
+                        ContentUnavailableView {
+                            Label("The list is empty", systemImage: "basket")
+                        } description: {
+                            Text("Anything you add shows on the frame straight away.")
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                }
+                if !open.isEmpty {
+                    Section {
+                        ForEach(open) { row($0) }
+                    } header: {
+                        SectionHeader("To buy", count: "\(open.count)")
+                    }
+                }
+                if !ticked.isEmpty {
+                    Section {
+                        ForEach(ticked) { row($0) }
+                    } header: {
+                        SectionHeader("In the basket") {
+                            Button("Clear completed") { confirmsClear = true }
+                        }
                     }
                 }
             }
-            if !open.isEmpty {
-                section("To buy", open)
-            }
-            if !ticked.isEmpty {
-                section("In the basket", ticked)
-                Button("Clear \(ticked.count) completed") { confirmsClear = true }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .confirmationDialog("Remove every ticked item from the list?", isPresented: $confirmsClear, titleVisibility: .visible) {
-                        Button("Clear completed", role: .destructive) {
-                            Task { await store.clearDoneItems() }
-                        }
-                    }
+            .stateAnimation(items)
+            .refreshable { await store.refresh() }
+            .screenHeader("Shopping", status: store.connectionStatus, statusSymbol: store.connectionSymbol)
+            .sensoryFeedback(.success, trigger: items.count) { old, new in new > old }
+            .confirmationDialog("Remove every ticked item from the list?", isPresented: $confirmsClear, titleVisibility: .visible) {
+                Button("Clear \(ticked.count) Completed", role: .destructive) {
+                    Task { await store.clearDoneItems() }
+                }
             }
         }
-        .animation(Motion.settle, value: items)
+        .overlay(alignment: .bottom) {
+            NoticeToast(notice: Binding(get: { removed.map { "Removed \($0.name)" } }, set: { if $0 == nil { removed = nil } }),
+                        actionLabel: "Undo") {
+                guard let item = removed else { return }
+                Task { await store.addItem(ShoppingDraft(name: item.name, qty: item.qty, note: item.note)) }
+            }
+            .padding(.bottom, Space.s)
+            .stateAnimation(removed)
+        }
         .sheet(item: $editing) { item in
             ItemEditor(store: store, item: item).environment(\.theme, theme)
         }
@@ -74,78 +89,43 @@ struct ShoppingScreen: View {
         Task { await store.addItem(ShoppingDraft(name: name)) }
     }
 
-    @ViewBuilder private func section(_ title: String, _ rows: [ShoppingItem]) -> some View {
-        Eyebrow(text: "\(title) · \(rows.count)").padding(.top, 6)
-        Card(padding: 0) {
-            VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, item in
-                    if index > 0 { Divider().overlay(theme.line).padding(.leading, 56) }
-                    HStack(spacing: 0) {
-                        Button {
-                            Task { await store.setItem(id: item.id, done: !item.done) }
-                        } label: {
-                            CheckCircle(isOn: item.done)
-                                .frame(width: 56, height: 60)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .sensoryFeedback(.selection, trigger: item.done)
-                        .accessibilityLabel(item.done ? "Untick \(item.name)" : "Tick \(item.name)")
-                        Button {
-                            editing = item
-                        } label: {
-                            HStack(spacing: 10) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.name)
-                                        .textStyle(.body)
-                                        .foregroundStyle(item.done ? theme.muted : theme.ink)
-                                        .strikethrough(item.done, color: theme.muted)
-                                        .multilineTextAlignment(.leading)
-                                    if !item.note.isEmpty {
-                                        Text(item.note).textStyle(.caption).foregroundStyle(theme.muted).lineLimit(2)
-                                    }
-                                }
-                                Spacer()
-                                if item.qty > 1 {
-                                    Text("×\(item.qty)")
-                                        .textStyle(.label)
-                                        .foregroundStyle(theme.ink)
-                                        .monospacedDigit()
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 5)
-                                        .background(theme.soft, in: Capsule())
-                                }
-                            }
-                            .padding(.trailing, 16)
-                            .padding(.vertical, 8)
-                            .frame(minHeight: 60)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Edits this item")
-                    }
-                }
+    private func remove(_ item: ShoppingItem) {
+        removed = item
+        Task { await store.deleteItem(id: item.id) }
+    }
+
+    private func row(_ item: ShoppingItem) -> some View {
+        Button {
+            Task { await store.setItem(id: item.id, done: !item.done) }
+        } label: {
+            RowLabel(title: item.name, subtitle: item.note, isDimmed: item.done) {
+                DoneMark(isOn: item.done)
+            } trailing: {
+                if item.qty > 1 { RowValue(text: "×\(item.qty)") }
             }
+        }
+        .buttonStyle(RowButtonStyle())
+        .sensoryFeedback(.success, trigger: item.done) { _, done in done }
+        .accessibilityLabel(item.qty > 1 ? "\(item.name), \(item.qty)" : item.name)
+        .accessibilityValue(item.done ? "In the basket" : "To buy")
+        .accessibilityHint(item.done ? "Moves back to the list" : "Marks as bought")
+        .swipeActions(edge: .leading) {
+            Button("Edit", systemImage: "pencil") { editing = item }.tint(theme.tint)
+        }
+        .swipeActions(edge: .trailing) {
+            Button("Delete", systemImage: "trash", role: .destructive) { remove(item) }
+        }
+        .contextMenu {
+            Button("Edit", systemImage: "pencil") { editing = item }
+            Button(item.done ? "Put Back" : "Mark Bought", systemImage: item.done ? "arrow.uturn.backward" : "checkmark") {
+                Task { await store.setItem(id: item.id, done: !item.done) }
+            }
+            Button("Delete", systemImage: "trash", role: .destructive) { remove(item) }
         }
     }
 }
 
-private struct PanelField: ViewModifier {
-    @Environment(\.theme) private var theme
-
-    func body(content: Content) -> some View {
-        content
-            .textStyle(.body)
-            .foregroundStyle(theme.ink)
-            .padding(.horizontal, 16)
-            .frame(minHeight: Metrics.controlHeight)
-            .background(theme.panel, in: RoundedRectangle(cornerRadius: Metrics.controlRadius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Metrics.controlRadius, style: .continuous).strokeBorder(theme.line, lineWidth: 1))
-    }
-}
-
 struct ItemEditor: View {
-    @Environment(\.theme) private var theme
     @Environment(\.dismiss) private var dismiss
     let store: FrameStore
     let item: ShoppingItem
@@ -154,36 +134,31 @@ struct ItemEditor: View {
     @State private var note = ""
 
     var body: some View {
-        SheetScaffold(title: "Edit item", canConfirm: Limits.cleanName(name) != nil, onConfirm: save) {
-            Card {
-                VStack(alignment: .leading, spacing: 10) {
-                    FieldLabel(text: "Item")
-                    TextField("Milk", text: $name)
-                        .fieldStyle()
+        NavigationStack {
+            ThemedList {
+                Section {
+                    TextField("Item", text: $name)
                         .onChange(of: name) { _, new in
                             if new.count > Limits.nameLength { name = String(new.prefix(Limits.nameLength)) }
                         }
                     Stepper(value: $qty, in: Limits.quantity) {
-                        HStack {
-                            Text("Quantity").textStyle(.body).foregroundStyle(theme.ink)
-                            Spacer()
-                            Text("\(qty)").textStyle(.heading).foregroundStyle(theme.ink).monospacedDigit()
-                        }
+                        LabeledContent("Quantity", value: "\(qty)")
                     }
-                    .padding(.vertical, 6)
-                    FieldLabel(text: "Note")
-                    TextField("Brand, size, shop", text: $note)
-                        .fieldStyle()
+                    TextField("Note", text: $note, prompt: Text("Brand, size, shop"))
                         .onChange(of: note) { _, new in
                             if new.count > Limits.nameLength { note = String(new.prefix(Limits.nameLength)) }
                         }
                 }
+                Section {
+                    Button("Delete Item", role: .destructive) {
+                        Task { await store.deleteItem(id: item.id) }
+                        dismiss()
+                    }
+                }
             }
-            Button("Delete item") {
-                Task { await store.deleteItem(id: item.id) }
-                dismiss()
-            }
-            .buttonStyle(SecondaryButtonStyle(destructive: true))
+            .navigationTitle("Edit Item")
+            .navigationBarTitleDisplayMode(.inline)
+            .editorToolbar(canConfirm: Limits.cleanName(name) != nil, onConfirm: save)
         }
         .onAppear {
             name = item.name

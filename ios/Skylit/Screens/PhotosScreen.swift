@@ -17,6 +17,7 @@ final class ThumbnailCache {
 
 struct FramePhoto: View {
     @Environment(\.theme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let store: FrameStore
     let id: String
     let maxEdge: Int
@@ -28,16 +29,16 @@ struct FramePhoto: View {
 
     var body: some View {
         ZStack {
-            theme.soft.opacity(0.6)
+            theme.fill
             if let image {
                 Image(decorative: image, scale: 1)
                     .resizable()
                     .aspectRatio(contentMode: fills ? .fill : .fit)
                     .transition(.opacity)
             } else if failed {
-                Image(systemName: "photo").foregroundStyle(theme.muted)
+                Image(systemName: "photo").foregroundStyle(Theme.secondaryLabel)
             } else {
-                ProgressView().tint(theme.muted)
+                ProgressView()
             }
         }
         .task(id: key) {
@@ -56,7 +57,7 @@ struct FramePhoto: View {
                 return
             }
             ThumbnailCache.shared.store(decoded, key)
-            withAnimation(Motion.fade) { image = decoded }
+            withAnimation(reduceMotion ? Motion.reduced : Motion.state) { image = decoded }
         }
     }
 }
@@ -67,76 +68,87 @@ struct PhotosScreen: View {
     let openSetup: () -> Void
     @State private var picks: [PhotosPickerItem] = []
     @State private var viewing: PhotoRef?
+    @State private var removing: PhotoRef?
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 3)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: Space.xs), count: 3)
 
     var body: some View {
-        Screen(title: "Photos", store: store) {
-            EmptyView()
-        } content: {
-            Text(countLine).textStyle(.body).foregroundStyle(theme.muted)
-            if let upload = store.upload {
-                Card {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Sending photo \(upload.index + 1) of \(upload.total)").textStyle(.label).foregroundStyle(theme.ink)
-                        ProgressView(value: upload.overall).tint(theme.accent)
-                        Text("Keep Skylit open until this finishes.").textStyle(.caption).foregroundStyle(theme.muted)
+        NavigationStack {
+            ThemedList {
+                if let upload = store.upload {
+                    Section {
+                        ProgressView(value: upload.overall) {
+                            Text("Sending photo \(upload.index + 1) of \(upload.total)").font(.rowTitle)
+                        } currentValueLabel: {
+                            Text("Keep the app open until this finishes.").font(.rowSubtitle).foregroundStyle(Theme.secondaryLabel)
+                        }
+                        .tint(theme.tint)
                     }
                 }
-                .transition(.opacity)
-            } else {
+                if store.state?.settings.supportsICloudAlbum == true {
+                    Section {
+                        Button(action: openSetup) {
+                            RowLabel(albumTitle, subtitle: albumDetail, symbol: "icloud", symbolTint: theme.tint) {
+                                RowChevron()
+                            }
+                        }
+                        .buttonStyle(RowButtonStyle())
+                        .accessibilityHint("Opens the Frame tab")
+                    }
+                }
+                if store.photos.isEmpty, store.upload == nil {
+                    Section {
+                        ContentUnavailableView {
+                            Label("No photos from a phone yet", systemImage: "photo.on.rectangle.angled")
+                        } description: {
+                            Text("Photos you add join the frame's slideshow, resized and sent over Wi-Fi only.")
+                        } actions: {
+                            PhotosPicker(selection: $picks, maxSelectionCount: 30, matching: .images) {
+                                Text("Add photos")
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                } else {
+                    Section {
+                        LazyVGrid(columns: columns, spacing: Space.xs) {
+                            ForEach(store.photos) { photo in
+                                Button {
+                                    viewing = photo
+                                } label: {
+                                    Color.clear
+                                        .aspectRatio(1, contentMode: .fit)
+                                        .overlay(FramePhoto(store: store, id: photo.id, maxEdge: 360))
+                                        .clipShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                                }
+                                .buttonStyle(RowButtonStyle())
+                                .contextMenu {
+                                    Button("Remove from Frame", systemImage: "trash", role: .destructive) { removing = photo }
+                                }
+                                .accessibilityLabel("Photo added \(added(photo))")
+                            }
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                }
+            }
+            .listSectionSpacing(Space.l)
+            .refreshable {
+                await store.refresh()
+                await store.loadPhotos()
+            }
+            .screenHeader("Photos", status: store.connectionStatus ?? countLine,
+                          statusSymbol: store.connectionSymbol ?? "photo.on.rectangle.angled") {
                 PhotosPicker(selection: $picks, maxSelectionCount: 30, matching: .images) {
                     Label("Add photos", systemImage: "plus")
                 }
-                .buttonStyle(PrimaryButtonStyle())
-            }
-            if store.state?.settings.supportsICloudAlbum == true {
-                Button(action: openSetup) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "icloud")
-                            .foregroundStyle(theme.accent)
-                            .frame(width: 36, height: 36)
-                            .background(theme.soft, in: Circle())
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(albumTitle).textStyle(.label).foregroundStyle(theme.ink).multilineTextAlignment(.leading)
-                            Text(albumDetail).textStyle(.caption).foregroundStyle(theme.muted).multilineTextAlignment(.leading)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(theme.muted)
-                    }
-                    .padding(14)
-                    .background(theme.panel, in: RoundedRectangle(cornerRadius: Metrics.cardRadius, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius, style: .continuous).strokeBorder(theme.line, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-            }
-            if store.photos.isEmpty, store.upload == nil {
-                Card {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("No photos sent from a phone yet").textStyle(.heading).foregroundStyle(theme.ink)
-                        Text("Photos you add join the frame's slideshow. They are resized to fit the frame and sent over your Wi-Fi only.")
-                            .textStyle(.caption)
-                            .foregroundStyle(theme.muted)
-                    }
-                }
-            } else {
-                LazyVGrid(columns: columns, spacing: 6) {
-                    ForEach(store.photos) { photo in
-                        Button {
-                            viewing = photo
-                        } label: {
-                            Color.clear
-                                .aspectRatio(1, contentMode: .fit)
-                                .overlay(FramePhoto(store: store, id: photo.id, maxEdge: 360))
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Photo added \(added(photo))")
-                    }
-                }
+                .headerAction(prominent: true)
+                .disabled(store.upload != nil)
             }
         }
-        .animation(Motion.settle, value: store.upload == nil)
+        .stateAnimation(store.upload == nil)
         .task(id: store.state?.photos.count) { await store.loadPhotos() }
         .onChange(of: picks) { _, selected in
             guard !selected.isEmpty else { return }
@@ -150,6 +162,12 @@ struct PhotosScreen: View {
         .sheet(item: $viewing) { photo in
             PhotoViewer(store: store, photo: photo, added: added(photo)).environment(\.theme, theme)
         }
+        .confirmationDialog("Remove this photo from the frame? It stays in your phone's library.",
+                            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            Button("Remove", role: .destructive) {
+                if let id = removing?.id { Task { await store.deletePhoto(id: id) } }
+            }
+        }
     }
 
     private var albumTitle: String {
@@ -158,7 +176,7 @@ struct PhotosScreen: View {
     }
 
     private var albumDetail: String {
-        guard let album = store.state?.settings.icloudAlbum else { return "Set it up once in Frame and it stays in sync by itself." }
+        guard let album = store.state?.settings.icloudAlbum else { return "Set it up once in Frame." }
         if album.syncing { return "Syncing with iCloud" }
         if album.error != nil { return "Needs attention in Frame" }
         return album.count == 1 ? "1 picture from iCloud" : "\(album.count) pictures from iCloud"
@@ -183,16 +201,20 @@ struct PhotoViewer: View {
     @State private var confirmsDelete = false
 
     var body: some View {
-        SheetScaffold(title: "Photo") {
+        NavigationStack {
             FramePhoto(store: store, id: photo.id, maxEdge: 1600, fills: false)
-                .frame(maxWidth: .infinity)
-                .frame(height: 380)
-                .clipShape(RoundedRectangle(cornerRadius: Metrics.cardRadius, style: .continuous))
-            if !added.isEmpty {
-                Text("Added \(added)").textStyle(.caption).foregroundStyle(theme.muted)
-            }
-            Button("Remove from frame") { confirmsDelete = true }
-                .buttonStyle(SecondaryButtonStyle(destructive: true))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(theme.background.ignoresSafeArea())
+                .navigationTitle(added.isEmpty ? "Photo" : "Added \(added)")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Remove from frame", systemImage: "trash", role: .destructive) { confirmsDelete = true }
+                    }
+                }
                 .confirmationDialog("Remove this photo from the frame? It stays in your phone's library.", isPresented: $confirmsDelete, titleVisibility: .visible) {
                     Button("Remove", role: .destructive) {
                         Task { await store.deletePhoto(id: photo.id) }

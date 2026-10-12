@@ -1,129 +1,329 @@
 import SwiftUI
 import SkylitCore
 
-struct Card<Content: View>: View {
+struct ThemedList<Content: View>: View {
     @Environment(\.theme) private var theme
-    var padding: CGFloat = 18
     @ViewBuilder let content: Content
 
     var body: some View {
-        content
-            .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.panel, in: RoundedRectangle(cornerRadius: Metrics.cardRadius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius, style: .continuous).strokeBorder(theme.line, lineWidth: 1))
-    }
-}
-
-struct Eyebrow: View {
-    @Environment(\.theme) private var theme
-    let text: String
-
-    var body: some View {
-        Text(text.uppercased()).textStyle(.eyebrow).foregroundStyle(theme.muted)
-    }
-}
-
-struct PrimaryButtonStyle: ButtonStyle {
-    @Environment(\.theme) private var theme
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .textStyle(.label)
-            .foregroundStyle(theme.accentInk)
-            .frame(maxWidth: .infinity, minHeight: Metrics.controlHeight)
-            .padding(.horizontal, 18)
-            .background(theme.accent, in: RoundedRectangle(cornerRadius: Metrics.controlRadius, style: .continuous))
-            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(Motion.settle, value: configuration.isPressed)
-    }
-}
-
-struct SecondaryButtonStyle: ButtonStyle {
-    @Environment(\.theme) private var theme
-    @Environment(\.isEnabled) private var isEnabled
-    var destructive = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .textStyle(.label)
-            .foregroundStyle(destructive ? theme.accent : theme.ink)
-            .frame(maxWidth: .infinity, minHeight: Metrics.controlHeight)
-            .padding(.horizontal, 18)
-            .background(theme.soft, in: RoundedRectangle(cornerRadius: Metrics.controlRadius, style: .continuous))
-            .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.45)
-            .animation(Motion.settle, value: configuration.isPressed)
-    }
-}
-
-struct IconButton: View {
-    @Environment(\.theme) private var theme
-    let symbol: String
-    let label: String
-    var filled = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(filled ? theme.accentInk : theme.ink)
-                .frame(width: Metrics.touch, height: Metrics.touch)
-                .background(filled ? theme.accent : theme.soft, in: Circle())
+        List {
+            content.listRowBackground(theme.groupedBackground)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
+        .scrollContentBackground(.hidden)
+        .contentMargins(.top, 0, for: .scrollContent)
+        .background(theme.background.ignoresSafeArea())
+        .scrollDismissesKeyboard(.interactively)
     }
 }
 
-struct FieldStyle: ViewModifier {
+struct ScreenHeader<Actions: View>: View {
     @Environment(\.theme) private var theme
+    let title: String
+    var status: String?
+    var statusSymbol: String?
+    @ViewBuilder let actions: Actions
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.s))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: Space.m))
+        layout {
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(title)
+                    .font(.screenTitle)
+                    .accessibilityAddTraits(.isHeader)
+                if let status {
+                    Label {
+                        Text(status)
+                    } icon: {
+                        if let statusSymbol { Image(systemName: statusSymbol) }
+                    }
+                    .font(.status)
+                    .foregroundStyle(Theme.secondaryLabel)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: Space.s) { actions }
+                .padding(.top, Space.xs)
+        }
+        .padding(.horizontal, Space.margin)
+        .padding(.top, Space.xs)
+        .padding(.bottom, Space.s)
+        .frame(maxWidth: .infinity)
+        .modifier(HeaderSurface())
+    }
+}
+
+private struct HeaderSurface: ViewModifier {
+    @Environment(\.theme) private var theme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     func body(content: Content) -> some View {
-        content
-            .textStyle(.body)
-            .foregroundStyle(theme.ink)
-            .tint(theme.accent)
-            .padding(.horizontal, 14)
-            .frame(minHeight: Metrics.controlHeight)
-            .background(theme.bg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(theme.line, lineWidth: 1))
+        if reduceTransparency {
+            content.background(theme.background)
+        } else {
+            content.background(theme.background.opacity(0.85)).background(.ultraThinMaterial)
+        }
     }
 }
 
 extension View {
-    func fieldStyle() -> some View {
-        modifier(FieldStyle())
+    func screenHeader<Actions: View>(_ title: String, status: String? = nil, statusSymbol: String? = nil,
+                                     @ViewBuilder actions: () -> Actions) -> some View {
+        safeAreaInset(edge: .top, spacing: 0) {
+            ScreenHeader(title: title, status: status, statusSymbol: statusSymbol, actions: actions)
+        }
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    func screenHeader(_ title: String, status: String? = nil, statusSymbol: String? = nil) -> some View {
+        screenHeader(title, status: status, statusSymbol: statusSymbol) { EmptyView() }
     }
 }
 
-struct FieldLabel: View {
-    @Environment(\.theme) private var theme
+extension FrameStore {
+    var connectionStatus: String? {
+        link == .offline ? "\(frame.name) · can't reach it right now" : nil
+    }
+
+    var connectionSymbol: String? {
+        link == .offline ? "wifi.slash" : nil
+    }
+}
+
+struct SectionHeader<Trailing: View>: View {
+    let title: String
+    var person: Person?
+    var showsAvatar = false
+    @ViewBuilder let trailing: Trailing
+
+    init(_ title: String, person: Person? = nil, showsAvatar: Bool = false, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.person = person
+        self.showsAvatar = showsAvatar
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: Space.s) {
+            if showsAvatar { Avatar(person: person, size: 20) }
+            Text(title).foregroundStyle(Theme.secondaryLabel)
+            Spacer(minLength: Space.s)
+            trailing
+        }
+        .font(.sectionTitle)
+        .textCase(nil)
+    }
+}
+
+extension SectionHeader where Trailing == EmptyView {
+    init(_ title: String, person: Person? = nil, showsAvatar: Bool = false) {
+        self.init(title, person: person, showsAvatar: showsAvatar) { EmptyView() }
+    }
+}
+
+extension SectionHeader where Trailing == Text {
+    init(_ title: String, person: Person? = nil, showsAvatar: Bool = false, count: String) {
+        self.init(title, person: person, showsAvatar: showsAvatar) { Text(count).monospacedDigit().foregroundStyle(Theme.secondaryLabel) }
+    }
+}
+
+struct RowLabel<Leading: View, Trailing: View>: View {
+    @ScaledMetric(relativeTo: .title2) private var glyph = Size.glyph
+    let title: String
+    var subtitle: String?
+    var emoji: String?
+    var symbol: String?
+    var symbolTint: Color?
+    var isDimmed = false
+    @ViewBuilder let leading: Leading
+    @ViewBuilder let trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: Space.m) {
+            leading
+            if let emoji {
+                Group {
+                    if emoji.isEmpty {
+                        Image(systemName: "sparkle").foregroundStyle(Theme.tertiaryLabel)
+                    } else {
+                        Text(emoji).font(.title2)
+                    }
+                }
+                .frame(width: glyph, height: glyph)
+                .accessibilityHidden(true)
+            } else if let symbol {
+                Image(systemName: symbol)
+                    .font(.title3)
+                    .foregroundStyle(symbolTint ?? Theme.label)
+                    .frame(width: glyph, height: glyph)
+                    .accessibilityHidden(true)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.rowTitle)
+                    .foregroundStyle(isDimmed ? Theme.secondaryLabel : Theme.label)
+                    .strikethrough(isDimmed)
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle).font(.rowSubtitle).foregroundStyle(Theme.secondaryLabel)
+                }
+            }
+            .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+            trailing
+        }
+    }
+}
+
+extension RowLabel where Leading == EmptyView, Trailing == EmptyView {
+    init(_ title: String, subtitle: String? = nil, emoji: String? = nil, symbol: String? = nil, symbolTint: Color? = nil, isDimmed: Bool = false) {
+        self.init(title: title, subtitle: subtitle, emoji: emoji, symbol: symbol, symbolTint: symbolTint, isDimmed: isDimmed,
+                  leading: { EmptyView() }, trailing: { EmptyView() })
+    }
+}
+
+extension RowLabel where Leading == EmptyView {
+    init(_ title: String, subtitle: String? = nil, emoji: String? = nil, symbol: String? = nil, symbolTint: Color? = nil,
+         isDimmed: Bool = false, @ViewBuilder trailing: () -> Trailing) {
+        self.init(title: title, subtitle: subtitle, emoji: emoji, symbol: symbol, symbolTint: symbolTint, isDimmed: isDimmed,
+                  leading: { EmptyView() }, trailing: trailing)
+    }
+}
+
+struct RowValue: View {
     let text: String
 
     var body: some View {
-        Text(text).textStyle(.caption).foregroundStyle(theme.muted)
+        Text(text).font(.rowValue).foregroundStyle(Theme.secondaryLabel).monospacedDigit()
+    }
+}
+
+struct RowChevron: View {
+    var body: some View {
+        Image(systemName: "chevron.right")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(Theme.tertiaryLabel)
+            .accessibilityHidden(true)
+    }
+}
+
+struct DoneMark: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let isOn: Bool
+    var tint: Color?
+
+    var body: some View {
+        let mark = Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+            .font(.title2)
+            .foregroundStyle(isOn ? (tint ?? theme.tint) : Theme.tertiaryLabel)
+        Group {
+            if reduceMotion {
+                mark
+            } else {
+                mark
+                    .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(.bounce, value: isOn)
+            }
+        }
+        .frame(width: Size.control, height: Size.control)
+        .accessibilityHidden(true)
+    }
+}
+
+struct ProgressSummary: View {
+    @Environment(\.theme) private var theme
+    let done: Int
+    let total: Int
+    let caption: String
+    let headline: String
+
+    var body: some View {
+        HStack(spacing: Space.l) {
+            Gauge(value: total == 0 ? 0 : Double(done) / Double(total)) {
+                Text("Done")
+            } currentValueLabel: {
+                Text("\(done)/\(total)").font(.caption.weight(.semibold)).monospacedDigit()
+            }
+            .gaugeStyle(.accessoryCircularCapacity)
+            .tint(theme.tint)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(caption).font(.rowSubtitle).foregroundStyle(Theme.secondaryLabel)
+                Text(headline).font(.hero)
+            }
+        }
+        .padding(.vertical, Space.xs)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(done) of \(total) done. \(headline)")
+    }
+}
+
+struct InlineAddField: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let prompt: String
+    @Binding var text: String
+    var focus: FocusState<Bool>.Binding
+    let limit: Int
+    let onSubmit: () -> Void
+
+    private var hasText: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
+        HStack(spacing: Space.m) {
+            Button {
+                focus.wrappedValue = true
+            } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(theme.tint)
+                    .frame(width: Size.control, height: Size.control)
+            }
+            .buttonStyle(RowButtonStyle())
+            .accessibilityHidden(true)
+            TextField(prompt, text: $text)
+                .focused(focus)
+                .submitLabel(.next)
+                .onSubmit {
+                    if hasText { onSubmit() } else { focus.wrappedValue = false }
+                }
+                .onChange(of: text) { _, new in
+                    if new.count > limit { text = String(new.prefix(limit)) }
+                }
+            if hasText {
+                Button(action: onSubmit) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(theme.tint)
+                        .frame(width: Size.touch, height: Size.touch)
+                }
+                .buttonStyle(RowButtonStyle())
+                .accessibilityLabel("Add item")
+                .transition(reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
+            }
+        }
+        .stateAnimation(hasText)
     }
 }
 
 struct Avatar: View {
     @Environment(\.theme) private var theme
     let person: Person?
-    var size: CGFloat = 36
+    var size: CGFloat = Size.avatar
 
     var body: some View {
         ZStack {
-            Circle().fill(person.map { Color(hex: $0.color) } ?? theme.soft)
+            Circle().fill(person.map { Color(hex: $0.color) } ?? theme.fill)
             if let person {
                 Text(String(person.name.prefix(1)).uppercased())
-                    .font(.system(size: size * 0.44, weight: .semibold, design: .rounded))
+                    .font(.system(size: size * 0.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white)
             } else {
                 Image(systemName: "person.2.fill")
-                    .font(.system(size: size * 0.36))
-                    .foregroundStyle(theme.muted)
+                    .font(.system(size: size * 0.42))
+                    .foregroundStyle(theme.mutedFigure)
             }
         }
         .frame(width: size, height: size)
@@ -131,67 +331,74 @@ struct Avatar: View {
     }
 }
 
-struct CheckCircle: View {
-    @Environment(\.theme) private var theme
-    let isOn: Bool
-    var tint: Color?
-
-    var body: some View {
-        ZStack {
-            Circle().strokeBorder(isOn ? Color.clear : theme.line, lineWidth: 2)
-            Circle().fill(tint ?? theme.accent).scaleEffect(isOn ? 1 : 0.01).opacity(isOn ? 1 : 0)
-            Image(systemName: "checkmark")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(tint == nil ? theme.accentInk : .white)
-                .scaleEffect(isOn ? 1 : 0.4)
-                .opacity(isOn ? 1 : 0)
-        }
-        .frame(width: 28, height: 28)
-        .animation(Motion.pop, value: isOn)
-    }
-}
-
-struct ProgressRing: View {
-    @Environment(\.theme) private var theme
-    let progress: Double
-    let label: String
-
-    var body: some View {
-        ZStack {
-            Circle().stroke(theme.soft, lineWidth: 8)
-            Circle().trim(from: 0, to: progress)
-                .stroke(theme.accent, style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .animation(Motion.settle, value: progress)
-            Text(label).textStyle(.heading).foregroundStyle(theme.ink).monospacedDigit()
-        }
-        .frame(width: 76, height: 76)
-        .accessibilityHidden(true)
-    }
-}
-
 struct SwatchPicker: View {
-    @Environment(\.theme) private var theme
     @Binding var selection: String
 
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 8), spacing: 8) {
+        HStack(spacing: 0) {
             ForEach(Palettes.swatches, id: \.self) { hex in
                 let isSelected = hex.caseInsensitiveCompare(selection) == .orderedSame
                 Button {
                     selection = hex
                 } label: {
                     Circle().fill(Color(hex: hex))
-                        .frame(width: 30, height: 30)
-                        .padding(4)
-                        .overlay(Circle().strokeBorder(isSelected ? theme.ink : .clear, lineWidth: 2))
-                        .frame(maxWidth: .infinity, minHeight: Metrics.touch)
+                        .frame(width: Size.control, height: Size.control)
+                        .overlay {
+                            Image(systemName: "checkmark")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.white)
+                                .opacity(isSelected ? 1 : 0)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: Size.touch)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(RowButtonStyle())
                 .accessibilityLabel("Colour \(hex)")
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
+        .stateAnimation(selection)
+    }
+}
+
+struct PaletteGrid: View {
+    @Environment(\.theme) private var theme
+    let selected: String
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Space.m), count: 3), spacing: Space.m) {
+            ForEach(Palettes.all) { palette in
+                let isSelected = selected == palette.id
+                let sample = Theme(palette: palette.id, dark: theme.isDark)
+                Button {
+                    onSelect(palette.id)
+                } label: {
+                    VStack(spacing: Space.s) {
+                        HStack(spacing: Space.xs) {
+                            RoundedRectangle(cornerRadius: Space.xs, style: .continuous).fill(sample.groupedBackground)
+                            RoundedRectangle(cornerRadius: Space.xs, style: .continuous).fill(sample.tint)
+                            RoundedRectangle(cornerRadius: Space.xs, style: .continuous).fill(sample.fill)
+                        }
+                        .padding(Space.s)
+                        .frame(height: 40)
+                        .background(sample.background, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                            .strokeBorder(isSelected ? theme.tint : Theme.separator, lineWidth: isSelected ? 2 : 1))
+                        Text(palette.name)
+                            .font(.caption)
+                            .foregroundStyle(isSelected ? Theme.label : Theme.secondaryLabel)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                }
+                .buttonStyle(RowButtonStyle())
+                .accessibilityLabel(palette.name)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(.vertical, Space.xs)
+        .stateAnimation(selected)
     }
 }
 
@@ -216,29 +423,25 @@ struct CodeEntry: View {
                     if clean.count == count, old.count < count { onComplete(clean) }
                 }
                 .accessibilityLabel("Pairing code")
-            HStack(spacing: 8) {
+            HStack(spacing: Space.s) {
                 ForEach(0..<count, id: \.self) { index in
                     let isCurrent = index == code.count
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(theme.bg)
+                    RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                        .fill(theme.groupedBackground)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(isCurrent ? theme.accent : theme.line, lineWidth: isCurrent ? 2 : 1)
+                            RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                                .strokeBorder(isCurrent ? theme.tint : Theme.separator, lineWidth: isCurrent ? 2 : 1)
                         )
-                        .overlay(
-                            Text(digit(index))
-                                .font(.custom("Georgia", size: 28))
-                                .foregroundStyle(theme.ink)
-                        )
+                        .overlay(Text(digit(index)).font(.hero))
                         .frame(maxWidth: 48)
-                        .frame(height: 58)
+                        .frame(height: 56)
                 }
             }
             .contentShape(Rectangle())
             .onTapGesture { focused = true }
             .accessibilityHidden(true)
         }
-        .animation(Motion.fade, value: code)
+        .stateAnimation(code)
         .task {
             try? await Task.sleep(for: .milliseconds(450))
             focused = true
@@ -250,123 +453,133 @@ struct CodeEntry: View {
     }
 }
 
-struct Screen<Trailing: View, Content: View>: View {
-    @Environment(\.theme) private var theme
-    let title: String
-    let store: FrameStore
-    @ViewBuilder let trailing: Trailing
-    @ViewBuilder let content: Content
+struct EditorToolbar: ViewModifier {
+    @Environment(\.dismiss) private var dismiss
+    let confirmLabel: String
+    let canConfirm: Bool
+    let onConfirm: () -> Void
 
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Metrics.gap) {
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 7) {
-                            Circle().fill(store.link == .offline ? theme.muted : Color(hex: "#6B9B6A")).frame(width: 7, height: 7)
-                            Eyebrow(text: store.link == .offline ? "\(store.frame.name) · offline" : store.frame.name)
-                        }
-                        Text(title).textStyle(.display).foregroundStyle(theme.ink)
-                    }
-                    Spacer(minLength: 12)
-                    HStack(spacing: 10) { trailing }
-                }
-                .padding(.top, 8)
-                if store.link == .offline {
-                    Card(padding: 14) {
-                        Label("Can't reach the frame right now. Changes will work again when it is back on this Wi-Fi.", systemImage: "wifi.slash")
-                            .textStyle(.caption)
-                            .foregroundStyle(theme.muted)
-                    }
-                }
-                content
+    func body(content: Content) -> some View {
+        content.toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
             }
-            .padding(.horizontal, Metrics.gutter)
-            .padding(.bottom, 32)
+            ToolbarItem(placement: .confirmationAction) {
+                Button(confirmLabel) {
+                    onConfirm()
+                    dismiss()
+                }
+                .fontWeight(.semibold)
+                .disabled(!canConfirm)
+            }
         }
-        .background(theme.bg.ignoresSafeArea())
-        .refreshable { await store.refresh() }
-        .scrollDismissesKeyboard(.interactively)
     }
 }
 
-struct SheetScaffold<Content: View>: View {
-    @Environment(\.theme) private var theme
-    @Environment(\.dismiss) private var dismiss
-    let title: String
-    var confirmLabel = "Save"
-    var dismissLabel: String?
-    var canConfirm = true
-    var onConfirm: (() -> Void)?
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Metrics.gap) { content }
-                    .padding(Metrics.gutter)
-            }
-            .background(theme.bg.ignoresSafeArea())
-            .scrollDismissesKeyboard(.interactively)
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(dismissLabel ?? (onConfirm == nil ? "Done" : "Cancel")) { dismiss() }
-                }
-                if let onConfirm {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(confirmLabel) {
-                            onConfirm()
-                            dismiss()
-                        }
-                        .fontWeight(.semibold)
-                        .disabled(!canConfirm)
-                    }
-                }
-            }
-        }
-        .tint(theme.accent)
+extension View {
+    func editorToolbar(_ confirmLabel: String = "Save", canConfirm: Bool, onConfirm: @escaping () -> Void) -> some View {
+        modifier(EditorToolbar(confirmLabel: confirmLabel, canConfirm: canConfirm, onConfirm: onConfirm))
     }
 }
 
 struct NoticeToast: View {
-    @Environment(\.theme) private var theme
     @Binding var notice: String?
+    var actionLabel: String?
+    var action: (() -> Void)?
 
     var body: some View {
         if let text = notice {
-            Text(text)
-                .textStyle(.caption)
-                .foregroundStyle(theme.panel)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 13)
-                .background(theme.ink, in: RoundedRectangle(cornerRadius: Metrics.controlRadius, style: .continuous))
-                .padding(.horizontal, Metrics.gutter)
-                .padding(.bottom, 12)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .onTapGesture { notice = nil }
-                .task(id: text) {
-                    try? await Task.sleep(for: .seconds(4))
-                    if !Task.isCancelled { notice = nil }
+            HStack(spacing: Space.m) {
+                Text(text).font(.note).multilineTextAlignment(.leading)
+                if let actionLabel {
+                    Button(actionLabel) {
+                        action?()
+                        notice = nil
+                    }
+                    .font(.note.weight(.semibold))
                 }
-                .accessibilityAddTraits(.isStaticText)
+            }
+            .padding(.horizontal, Space.l)
+            .padding(.vertical, Space.m)
+            .modifier(ToastSurface())
+            .padding(.horizontal, Space.margin)
+            .transition(.opacity)
+            .onTapGesture { if actionLabel == nil { notice = nil } }
+            .task(id: text) {
+                try? await Task.sleep(for: .seconds(actionLabel == nil ? 4 : 6))
+                if !Task.isCancelled { notice = nil }
+            }
         }
     }
 }
 
-struct SunMark: View {
+private struct ToastSurface: ViewModifier {
     @Environment(\.theme) private var theme
-    var size: CGFloat = 64
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content
+                .background(theme.groupedBackground, in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.separator))
+        } else if #available(iOS 26.0, *) {
+            content.glassEffect(.regular, in: Capsule())
+        } else {
+            content.background(.regularMaterial, in: Capsule())
+        }
+    }
+}
+
+struct FrameHero: View {
+    @Environment(\.theme) private var theme
+    var width: CGFloat = 200
 
     var body: some View {
-        ZStack {
-            Circle().fill(theme.accent.opacity(0.10))
-            Circle().fill(theme.accent.opacity(0.18)).padding(size * 0.12)
-            Circle().fill(theme.accent).padding(size * 0.26)
+        Canvas { context, size in
+            let h = size.height
+            let unit = h / 1024
+            func rect(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ hh: CGFloat) -> CGRect {
+                CGRect(x: x * unit, y: y * unit, width: w * unit, height: hh * unit)
+            }
+            var wire = Path()
+            wire.move(to: CGPoint(x: 290 * unit, y: 404 * unit))
+            wire.addLine(to: CGPoint(x: 512 * unit, y: 104 * unit))
+            wire.addLine(to: CGPoint(x: 734 * unit, y: 404 * unit))
+            context.stroke(wire, with: .color(theme.inkFigure), style: StrokeStyle(lineWidth: 40 * unit, lineCap: .round, lineJoin: .round))
+            context.fill(Path(ellipseIn: rect(468, 60, 88, 88)), with: .color(theme.inkFigure))
+            context.fill(Path(roundedRect: rect(196, 362, 632, 600), cornerRadius: 60 * unit), with: .color(theme.tint))
+            context.fill(Path(roundedRect: rect(252, 418, 520, 488), cornerRadius: 28 * unit), with: .color(theme.groupedBackground))
+            let photo = Path(roundedRect: rect(316, 482, 392, 360), cornerRadius: 20 * unit)
+            context.fill(photo, with: .color(theme.fill))
+            context.drawLayer { layer in
+                layer.clip(to: photo)
+                for (cx, cy, r, color) in [(430.0, 600.0, 66.0, theme.tint), (560.0, 572.0, 76.0, theme.inkFigure), (640.0, 690.0, 46.0, theme.mutedFigure)] {
+                    layer.fill(Path(ellipseIn: rect(cx - r, cy - r, r * 2, r * 2)), with: .color(color))
+                    layer.fill(Path(roundedRect: rect(cx - r * 1.23, cy + r * 0.9, r * 2.46, 400), cornerRadius: r * 1.23 * unit), with: .color(color))
+                }
+            }
+
+            let phone = rect(1180, 330, 300, 760)
+            context.fill(Path(roundedRect: phone, cornerRadius: 56 * unit), with: .color(theme.inkFigure))
+            let screen = phone.insetBy(dx: 22 * unit, dy: 26 * unit)
+            context.fill(Path(roundedRect: screen, cornerRadius: 40 * unit), with: .color(theme.groupedBackground))
+            let tile = CGRect(x: screen.minX + screen.width * 0.16, y: screen.minY + screen.height * 0.12,
+                              width: screen.width * 0.68, height: screen.height * 0.24)
+            context.fill(Path(roundedRect: tile, cornerRadius: 16 * unit), with: .color(theme.tint))
+            for row in 0..<3 {
+                let line = CGRect(x: tile.minX, y: tile.maxY + screen.height * (0.11 + Double(row) * 0.14),
+                                  width: tile.width * (row == 1 ? 0.6 : 0.9), height: screen.height * 0.055)
+                context.fill(Path(roundedRect: line, cornerRadius: line.height / 2), with: .color(theme.fill))
+            }
+            let origin = CGPoint(x: phone.minX - 40 * unit, y: phone.minY + phone.height * 0.24)
+            for (index, radius) in [80.0, 150.0, 220.0].enumerated() {
+                var arc = Path()
+                arc.addArc(center: origin, radius: radius * unit, startAngle: .degrees(150), endAngle: .degrees(210), clockwise: false)
+                context.stroke(arc, with: .color(theme.tint.opacity(1 - Double(index) * 0.28)),
+                               style: StrokeStyle(lineWidth: 34 * unit, lineCap: .round))
+            }
         }
-        .frame(width: size, height: size)
+        .frame(width: width, height: width * 1024 / 1500)
         .accessibilityHidden(true)
     }
 }

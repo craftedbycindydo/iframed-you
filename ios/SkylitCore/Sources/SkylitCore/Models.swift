@@ -20,7 +20,7 @@ public struct PairedDevice: Codable, Equatable, Identifiable, Sendable {
     public var pairedDate: Date? { ISO8601.date(pairedAt) }
 }
 
-public struct Person: Codable, Equatable, Identifiable, Sendable {
+public struct Person: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var name: String
     public var color: String

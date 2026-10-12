@@ -7,7 +7,7 @@ enum LocationFailure: Error {
 
     var message: String {
         switch self {
-        case .denied: return "Location access is off for Skylit. Search for your city instead, or allow it in Settings."
+        case .denied: return "Location access is off for iFramed You. Search for your city instead, or allow it in Settings."
         case .unavailable: return "Couldn't work out where this phone is. Search for your city instead."
         }
     }

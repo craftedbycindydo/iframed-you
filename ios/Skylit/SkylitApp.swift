@@ -25,9 +25,9 @@ enum Launch {
 }
 
 enum MainTab: String {
-    case chores
     case shopping
     case photos
+    case chores
     case setup
 }
 
@@ -51,20 +51,32 @@ struct RootView: View {
     var body: some View {
         let theme = Theme(appearance: appearance, systemDark: colorScheme == .dark)
         Group {
-            if let store = session.store, store.state != nil {
-                MainTabs(store: store)
-                    .transition(.opacity)
+            #if DEBUG
+            if Demo.screen == "gallery" {
+                GalleryScreen()
             } else {
-                ConnectScreen()
-                    .transition(.opacity)
+                mainContent
             }
+            #else
+            mainContent
+            #endif
         }
-        .animation(Motion.fade, value: session.store?.state != nil)
+        .stateAnimation(session.store?.state != nil)
         .environment(\.theme, theme)
-        .tint(theme.accent)
+        .tint(theme.tint)
         .preferredColorScheme(forcedScheme)
         .task(id: scenePhase) {
             if scenePhase == .active { await session.run() }
+        }
+    }
+
+    @ViewBuilder private var mainContent: some View {
+        if let store = session.store, store.state != nil {
+            MainTabs(store: store)
+                .transition(.opacity)
+        } else {
+            ConnectScreen()
+                .transition(.opacity)
         }
     }
 }
@@ -77,24 +89,25 @@ struct MainTabs: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            ChoresScreen(store: store)
-                .tabItem { Label("Chores", systemImage: "checklist") }
-                .tag(MainTab.chores)
             ShoppingScreen(store: store)
-                .tabItem { Label("Shopping", systemImage: "basket") }
+                .tabItem { Label("Shopping", systemImage: "cart") }
                 .tag(MainTab.shopping)
             PhotosScreen(store: store) { tab = .setup }
                 .tabItem { Label("Photos", systemImage: "photo.on.rectangle.angled") }
                 .tag(MainTab.photos)
+            ChoresScreen(store: store)
+                .tabItem { Label("Chores", systemImage: "checklist") }
+                .tag(MainTab.chores)
             SetupScreen(store: store)
                 .tabItem { Label("Frame", systemImage: "sun.max") }
                 .tag(MainTab.setup)
         }
         .overlay(alignment: .bottom) {
             NoticeToast(notice: $store.notice)
-                .padding(.bottom, 56)
-                .animation(Motion.settle, value: store.notice)
+                .padding(.bottom, Space.xxl + Space.xl)
+                .stateAnimation(store.notice)
         }
+        .sensoryFeedback(.error, trigger: store.notice) { _, new in new != nil }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await store.refresh()
@@ -106,9 +119,9 @@ struct MainTabs: View {
 extension Launch {
     static var initialTab: MainTab {
         #if DEBUG
-        return Demo.screen.flatMap(MainTab.init(rawValue:)) ?? .chores
+        return Demo.screen.flatMap(MainTab.init(rawValue:)) ?? .shopping
         #else
-        return .chores
+        return .shopping
         #endif
     }
 }
@@ -138,7 +151,19 @@ enum Demo {
             tokens.save(DemoFrameServer.demoToken, for: frame.frameId)
             paired.current = PairedFrame(frameId: frame.frameId, name: frame.name)
         }
-        let server = DemoFrameServer.sample()
+        let server: DemoFrameServer
+        if UserDefaults.standard.bool(forKey: "demoEmpty") {
+            server = DemoFrameServer()
+            server.authorize(token: DemoFrameServer.demoToken, deviceName: "Karan's iPhone")
+        } else {
+            server = DemoFrameServer.sample()
+        }
+        if UserDefaults.standard.bool(forKey: "demoOffline") {
+            Task {
+                try? await Task.sleep(for: .milliseconds(1500))
+                server.setUnreachable(true)
+            }
+        }
         switch UserDefaults.standard.string(forKey: "demoICloud") {
         case "syncing": server.setICloudAlbum(name: "Family album", count: 0, lastSync: nil, syncing: true, error: nil)
         case "synced": server.setICloudAlbum(name: "Family album", count: 24, lastSync: ISO8601DateFormatter().string(from: Date(timeIntervalSinceNow: -720)), syncing: false, error: nil)

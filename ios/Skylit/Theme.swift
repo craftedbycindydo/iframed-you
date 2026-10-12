@@ -2,28 +2,31 @@ import SwiftUI
 import SkylitCore
 
 struct Theme: Equatable {
-    let bg: Color
-    let panel: Color
-    let rail: Color
-    let ink: Color
-    let muted: Color
-    let line: Color
-    let accent: Color
-    let accentInk: Color
-    let soft: Color
+    let background: Color
+    let groupedBackground: Color
+    let fill: Color
+    let tint: Color
+    let onTint: Color
+    let inkFigure: Color
+    let mutedFigure: Color
     let isDark: Bool
+
+    static let label = Color.primary
+    static let secondaryLabel = Color.secondary
+    static let tertiaryLabel = Color(.tertiaryLabel)
+    static let separator = Color(.separator)
+    static let destructive = Color.red
+    static let connected = Color.green
 
     init(palette: String = "linen", dark: Bool) {
         let tokens = Palettes.palette(palette).tokens(dark: dark)
-        bg = Color(hex: tokens.bg)
-        panel = Color(hex: tokens.panel)
-        rail = Color(hex: tokens.rail)
-        ink = Color(hex: tokens.ink)
-        muted = Color(hex: tokens.muted)
-        line = Color(hex: tokens.line)
-        accent = Color(hex: tokens.accent)
-        accentInk = Color(hex: tokens.accentInk)
-        soft = Color(hex: tokens.soft)
+        background = Color(hex: tokens.bg)
+        groupedBackground = Color(hex: tokens.panel)
+        fill = Color(hex: tokens.soft)
+        tint = Color(hex: tokens.accent)
+        onTint = Color(hex: tokens.accentInk)
+        inkFigure = Color(hex: tokens.ink)
+        mutedFigure = Color(hex: tokens.muted)
         isDark = dark
     }
 
@@ -50,55 +53,90 @@ extension EnvironmentValues {
     }
 }
 
-enum Metrics {
-    static let gutter: CGFloat = 20
-    static let gap: CGFloat = 16
-    static let cardRadius: CGFloat = 18
-    static let controlRadius: CGFloat = 13
-    static let controlHeight: CGFloat = 50
+enum Space {
+    static let xs: CGFloat = 4
+    static let s: CGFloat = 8
+    static let m: CGFloat = 12
+    static let l: CGFloat = 16
+    static let xl: CGFloat = 24
+    static let xxl: CGFloat = 32
+    static let margin: CGFloat = 16
+}
+
+enum Radius {
+    static var container: CGFloat {
+        if #available(iOS 26.0, *) { return 26 }
+        return 10
+    }
+
+    static let control: CGFloat = 10
+}
+
+enum Size {
+    static let control: CGFloat = 28
+    static let glyph: CGFloat = 28
+    static let avatar: CGFloat = 28
     static let touch: CGFloat = 44
 }
 
-enum Motion {
-    static let settle = Animation.spring(response: 0.4, dampingFraction: 1)
-    static let pop = Animation.spring(response: 0.35, dampingFraction: 0.7)
-    static let fade = Animation.easeOut(duration: 0.2)
+extension Font {
+    static let screenTitle = Font.system(.largeTitle, design: .serif, weight: .bold)
+    static let hero = Font.system(.title2, design: .serif, weight: .semibold)
+    static let sectionTitle = Font.subheadline
+    static let rowTitle = Font.body
+    static let rowSubtitle = Font.subheadline
+    static let rowValue = Font.body
+    static let status = Font.subheadline
+    static let note = Font.footnote
 }
 
-enum TextStyle {
-    case display
-    case title
-    case heading
-    case body
-    case label
-    case caption
-    case eyebrow
+enum Motion {
+    static let state = Animation.spring(response: 0.35, dampingFraction: 1)
+    static let gesture = Animation.spring(response: 0.35, dampingFraction: 0.8)
+    static let reduced = Animation.easeOut(duration: 0.15)
+}
 
-    var font: Font {
-        switch self {
-        case .display: return .custom("Georgia", size: 38, relativeTo: .largeTitle)
-        case .title: return .custom("Georgia", size: 26, relativeTo: .title)
-        case .heading: return .custom("Georgia", size: 21, relativeTo: .title3)
-        case .body: return .system(.body)
-        case .label: return .system(.subheadline, weight: .semibold)
-        case .caption: return .system(.footnote)
-        case .eyebrow: return .system(.caption2, weight: .semibold)
-        }
+struct StateAnimation<Value: Equatable>: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let value: Value
+
+    func body(content: Content) -> some View {
+        content.animation(reduceMotion ? Motion.reduced : Motion.state, value: value)
     }
+}
 
-    var tracking: CGFloat {
-        switch self {
-        case .display: return -0.9
-        case .title: return -0.5
-        case .heading: return -0.3
-        case .eyebrow: return 1.3
-        default: return 0
+extension View {
+    func stateAnimation<Value: Equatable>(_ value: Value) -> some View {
+        modifier(StateAnimation(value: value))
+    }
+}
+
+struct RowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.5 : 1)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+struct HeaderActionStyle: ViewModifier {
+    let prominent: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            if prominent { content.buttonStyle(.glassProminent) } else { content.buttonStyle(.glass) }
+        } else {
+            if prominent { content.buttonStyle(.borderedProminent) } else { content.buttonStyle(.bordered) }
         }
     }
 }
 
 extension View {
-    func textStyle(_ style: TextStyle) -> some View {
-        font(style.font).tracking(style.tracking)
+    func headerAction(prominent: Bool = false) -> some View {
+        modifier(HeaderActionStyle(prominent: prominent))
+            .labelStyle(.iconOnly)
+            .controlSize(.large)
+            .buttonBorderShape(.circle)
     }
 }
