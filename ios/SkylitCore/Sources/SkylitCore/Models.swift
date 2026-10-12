@@ -366,15 +366,27 @@ public enum Limits {
         scalar.properties.generalCategory == .control || directionMarks.contains(scalar.value)
     }
 
+    public static let emojiLength = 16
+
+    public static func clipped(_ text: String, to limit: Int) -> String {
+        String(String.UnicodeScalarView(text.unicodeScalars.prefix(limit)))
+    }
+
     public static func display(_ text: String, limit: Int = nameLength) -> String {
         let kept = String(String.UnicodeScalarView(text.unicodeScalars.filter { !isUnsafe($0) }))
-        return String(kept.trimmingCharacters(in: .whitespacesAndNewlines).prefix(limit))
+        return clipped(kept.trimmingCharacters(in: .whitespacesAndNewlines), to: limit)
     }
 
     public static func cleanDeviceName(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (1...deviceNameLength).contains(trimmed.count), !trimmed.unicodeScalars.contains(where: isUnsafe) else { return nil }
+        guard (1...deviceNameLength).contains(trimmed.unicodeScalars.count), !trimmed.unicodeScalars.contains(where: isUnsafe) else { return nil }
         return trimmed
+    }
+
+    public static func cleanEmoji(_ text: String) -> String {
+        guard let last = text.last else { return "" }
+        let one = String(last)
+        return one.unicodeScalars.count <= emojiLength ? one : ""
     }
 
     public static func responseBytes(for request: URLRequest) -> Int {
@@ -384,7 +396,7 @@ public enum Limits {
 
     public static func cleanName(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (1...nameLength).contains(trimmed.count) ? trimmed : nil
+        return (1...nameLength).contains(trimmed.unicodeScalars.count) ? trimmed : nil
     }
 
     public static func isHexColor(_ text: String) -> Bool {

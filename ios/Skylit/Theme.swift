@@ -56,6 +56,7 @@ extension EnvironmentValues {
 }
 
 enum Space {
+    static let xxs: CGFloat = 2
     static let xs: CGFloat = 4
     static let s: CGFloat = 8
     static let m: CGFloat = 12
@@ -91,6 +92,9 @@ extension Font {
     static let rowValue = Font.body
     static let status = Font.subheadline
     static let note = Font.footnote
+    static let control = Font.title2
+    static let glyph = Font.title3
+    static let stepSymbol = Font.subheadline.weight(.bold)
 }
 
 enum Motion {

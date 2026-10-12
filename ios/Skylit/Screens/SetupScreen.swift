@@ -55,7 +55,7 @@ struct SetupScreen: View {
     private var location: some View {
         Section {
             RowLabel("City", symbol: "mappin.and.ellipse", symbolTint: theme.tint) {
-                VStack(alignment: .trailing, spacing: 2) {
+                VStack(alignment: .trailing, spacing: Space.xxs) {
                     RowValue(text: settings.location?.name ?? "Not set")
                     if let zone = settings.location?.timezone {
                         Text(zone.replacingOccurrences(of: "_", with: " ")).font(.note).foregroundStyle(Theme.tertiaryLabel)
@@ -164,7 +164,7 @@ struct SetupScreen: View {
                     .focused($calendarNameFocused)
                     .submitLabel(.next)
                     .onChange(of: calendarName) { _, new in
-                        if new.count > Limits.calendarNameLength { calendarName = String(new.prefix(Limits.calendarNameLength)) }
+                        if Limits.clipped(new, to: Limits.calendarNameLength) != new { calendarName = Limits.clipped(new, to: Limits.calendarNameLength) }
                     }
                     .inlineEditorRow()
                 SwatchPicker(selection: $calendarColor)
@@ -212,11 +212,16 @@ struct SetupScreen: View {
     private func addCalendar() {
         guard let clean = Limits.cleanName(calendarName), canAddCalendar else { return }
         let url = cleanLink
-        calendarName = ""
-        calendarLink = ""
         calendarNameFocused = false
         addsCalendar = false
-        Task { await store.addCalendar(name: clean, color: calendarColor, url: url) }
+        Task {
+            if await store.addCalendar(name: clean, color: calendarColor, url: url) {
+                calendarName = ""
+                calendarLink = ""
+            } else {
+                addsCalendar = true
+            }
+        }
     }
 
     private var devices: some View {

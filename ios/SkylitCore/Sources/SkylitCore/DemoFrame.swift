@@ -175,6 +175,13 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
         }
     }
 
+    public func setAppearance(palette: String, mode: String) {
+        lock.withLock {
+            appearance = ["palette": palette, "mode": mode]
+            rev += 1
+        }
+    }
+
     public func changeFromFrame(_ change: (inout [[String: Any]]) -> Void) {
         lock.withLock {
             change(&shopping)
@@ -392,6 +399,7 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
             case .tapsPick:
                 current.outcome = .approved
                 current.deviceId = makeId("d")
+                devices.removeAll { $0.tokenHash == current.tokenHash }
                 devices.append(Device(id: current.deviceId, name: current.deviceName, pairedAt: Self.timestamp(), tokenHash: current.tokenHash))
             case .tapsDecoy, .tapsCancel:
                 current.outcome = .denied

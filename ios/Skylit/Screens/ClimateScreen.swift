@@ -285,7 +285,7 @@ private struct ThermostatTile: View {
     }
 
     private var identity: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
             Text(thermostat.name).font(.rowTitle).fontWeight(.semibold).lineLimit(1)
             HStack(spacing: Space.xs) {
                 Circle().fill(accent).frame(width: dot, height: dot).opacity(isRunning || !thermostat.isOnline ? 1 : 0.4)
@@ -347,7 +347,7 @@ private struct ThermostatTile: View {
             }
         } label: {
             Image(systemName: "ellipsis.circle")
-                .font(.title3)
+                .font(.glyph)
                 .foregroundStyle(theme.tint)
                 .frame(width: Size.touch, height: Size.touch)
                 .contentShape(Rectangle())
@@ -369,7 +369,7 @@ private struct StepButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.subheadline.weight(.bold))
+                .font(.stepSymbol)
                 .frame(width: disc, height: disc)
                 .modifier(GlassSurface())
                 .frame(width: max(Size.touch, disc), height: max(Size.touch, disc))

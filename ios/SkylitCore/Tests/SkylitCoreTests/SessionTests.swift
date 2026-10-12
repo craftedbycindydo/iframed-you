@@ -414,6 +414,20 @@ final class FrameSessionTests: XCTestCase {
         }
     }
 
+    func testUnpairWhileTheFrameIsUnreachableForgetsAndSaysWhatToDoOnTheFrame() async {
+        rememberPairing()
+        let session = makeSession()
+        await session.receive(.services(["Skylit"]))
+        XCTAssertNotNil(session.store)
+        server.setUnreachable(true)
+        await session.unpair()
+        XCTAssertNil(session.store)
+        XCTAssertNil(session.paired)
+        XCTAssertNil(tokens.credential(for: server.frameId))
+        XCTAssertEqual(session.notice, FrameSession.unpairOfflineText("Kitchen frame"))
+        XCTAssertTrue(session.notice?.contains("Phone app") ?? false)
+    }
+
     func testRunConsumesBrowserEvents() async {
         rememberPairing()
         browser = StaticFrameBrowser(events: [.services(["Skylit"])], addresses: ["Skylit": DemoFrameServer.address])

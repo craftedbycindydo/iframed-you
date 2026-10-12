@@ -60,6 +60,11 @@ public enum Palettes {
     ]
 
     public static let swatches = ["#9A513B", "#C98A3C", "#526747", "#00A36C", "#44758A", "#2D5BFF", "#8B5779", "#C0567A"]
+    public static let swatchNames = ["Terracotta", "Amber", "Olive", "Emerald", "Teal", "Cobalt", "Plum", "Rose"]
+
+    public static func swatchName(_ hex: String) -> String {
+        swatches.firstIndex { $0.caseInsensitiveCompare(hex) == .orderedSame }.map { swatchNames[$0] } ?? hex
+    }
 
     public static func palette(_ id: String) -> Palette {
         all.first { $0.id == id } ?? all[0]

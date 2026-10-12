@@ -111,6 +111,22 @@ final class FrameStoreTests: XCTestCase {
         XCTAssertEqual(store.state?.shopping.first { $0.id == "s1" }?.done, true)
     }
 
+    func testTwoQuickChangesBothStickAndEndOnTheFrameRevision() async {
+        let gate = GatedTransport(server)
+        let store = await loaded(gate)
+        gate.hold()
+        let first = Task { await store.setItem(id: "s1", done: true) }
+        let second = Task { await store.setItem(id: "s2", done: true) }
+        await waitUntil { gate.heldCount == 2 }
+        XCTAssertEqual(store.state?.shopping.filter(\.done).map(\.id), ["s1", "s2", "s4", "s5"])
+        gate.release()
+        let outcomes = await (first.value, second.value)
+        XCTAssertEqual(outcomes.0, true)
+        XCTAssertEqual(outcomes.1, true)
+        XCTAssertEqual(store.state?.rev, server.revision)
+        XCTAssertEqual(store.state?.shopping.filter(\.done).map(\.id), ["s1", "s2", "s4", "s5"])
+    }
+
     func testAddReplacesTemporaryIdAndReconcilesRevWithoutRefetch() async {
         let store = await loaded()
         let requestsBefore = server.requests.count

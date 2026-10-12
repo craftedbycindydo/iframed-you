@@ -16,6 +16,10 @@ public final class FrameSession {
         "Another device on this Wi-Fi is claiming to be \(name). Nothing was sent."
     }
 
+    public nonisolated static func unpairOfflineText(_ name: String) -> String {
+        "This phone forgot \(name), but \(name) couldn't be reached. Remove this phone under Settings › Phone app on the frame."
+    }
+
     public private(set) var frames: [DiscoveredFrame] = []
     public private(set) var discovery: Discovery = .searching
     public private(set) var paired: PairedFrame?
@@ -220,11 +224,14 @@ public final class FrameSession {
     }
 
     public func unpair() async {
+        let name = paired?.name
+        var told = true
         if let store {
             store.onUnauthorized = nil
-            await store.unpairThisPhone()
+            told = await store.unpairThisPhone()
         }
         forget()
+        if !told, let name { notice = Self.unpairOfflineText(name) }
     }
 
     public func forget() {

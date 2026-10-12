@@ -16,7 +16,9 @@ public final class PairingFlow {
     public nonisolated static let codeLength = 6
     public nonisolated static let attempts = 3
     public nonisolated static let failureText = "This phone did not pair. Another device may be trying. Tap Cancel on the frame; do not tap a number."
-    public nonisolated static let windowText = "The frame is not ready to pair. On the frame, open Settings, then Phone app, and tap Pair a phone. Then tap Pair here."
+    public nonisolated static let timeoutText = "Pairing timed out. Nothing was paired. Open Pair a phone on the frame and try again."
+    public nonisolated static let windowText = "The frame isn't ready to pair. On the frame, open Settings → Phone app → Pair a phone, then try again."
+    public nonisolated static let cancelledText = "The frame ended this pairing. Nothing was paired. Open Pair a phone on the frame and try again."
     public nonisolated static let nameText = "Give this phone a name of 1 to 40 characters."
 
     public nonisolated static func tapText(_ pick: String) -> String {
@@ -85,6 +87,8 @@ public final class PairingFlow {
                 started = try await api.pairStart(commit: PairingCrypto.sha256(nP), tokenHash: PairingCrypto.sha256(token), deviceName: deviceName)
             } catch let failure as FrameError where failure.isConnectivity {
                 return retry(failure.userMessage)
+            } catch FrameError.api(status: 409, code: "conflict") {
+                return retry(Self.windowText)
             }
             guard Hex.isValid(started.session, bytes: 16) else { throw FrameError.invalidResponse }
             session = started.session
@@ -97,6 +101,8 @@ public final class PairingFlow {
             let derived = PairingCrypto.derive(nP: nP, nF: nF, fpRaw: fpRaw)
             attempt = Attempt(token: Hex.encode(token), fp: fp, code: derived.code, pick: derived.pick)
             step = .enteringCode
+        } catch FrameError.api(status: 410, code: _) {
+            await fail(Self.timeoutText)
         } catch {
             await fail()
         }
@@ -143,13 +149,21 @@ public final class PairingFlow {
                 }
             } catch let failure as FrameError where failure.isConnectivity {
                 guard case .confirming = step else { return nil }
+            } catch FrameError.api(status: 410, code: _) {
+                guard case .confirming = step else { return nil }
+                await fail(Self.timeoutText)
+                return nil
+            } catch FrameError.api(status: 403, code: _), FrameError.api(status: 404, code: _) {
+                guard case .confirming = step else { return nil }
+                await fail(Self.cancelledText)
+                return nil
             } catch {
                 guard case .confirming = step else { return nil }
                 await fail()
                 return nil
             }
             guard clock.now < deadline else {
-                await fail()
+                await fail(Self.timeoutText)
                 return nil
             }
             try? await Task.sleep(for: pollInterval)
@@ -165,14 +179,21 @@ public final class PairingFlow {
         await cancelOnFrame()
     }
 
+    public func reset() {
+        guard step == .failed else { return }
+        step = .naming
+        message = nil
+        triesLeft = Self.attempts
+    }
+
     private func retry(_ text: String) {
         step = .naming
         message = text
     }
 
-    private func fail() async {
+    private func fail(_ text: String = PairingFlow.failureText) async {
         step = .failed
-        message = Self.failureText
+        message = text
         attempt = nil
         await cancelOnFrame()
     }

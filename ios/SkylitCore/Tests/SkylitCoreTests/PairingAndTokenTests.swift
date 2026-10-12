@@ -169,6 +169,43 @@ final class PairingFlowTests: XCTestCase {
         XCTAssertEqual(flow.step, .enteringCode)
     }
 
+    func testNoWindowAtStartIsCalmAndStaysOnTheNameStep() async {
+        let api = ScriptedTransport([.status(409, ##"{"error":{"code":"conflict","message":"x"}}"##)])
+        let flow = scripted(probe: [open, open], api: api)
+        await flow.begin(name: "Phone")
+        XCTAssertEqual(flow.step, .naming)
+        XCTAssertEqual(flow.message, PairingFlow.windowText)
+        XCTAssertFalse(flow.message?.contains("Another device") ?? true)
+        XCTAssertEqual(api.calls.map { $0.request.url!.path }, ["/v2/pair/start"])
+        api.queue(.status(200, ##"{"session":"\##(String(repeating: "5", count: 32))","nF":"\##(String(repeating: "6", count: 64))"}"##))
+        api.queue(.status(204, ""))
+        await flow.begin(name: "Phone")
+        XCTAssertEqual(flow.step, .enteringCode)
+    }
+
+    func testWindowRunningOutAtRevealIsATimeout() async {
+        let api = ScriptedTransport([
+            .status(200, ##"{"session":"\##(String(repeating: "5", count: 32))","nF":"\##(String(repeating: "6", count: 64))"}"##),
+            .status(410, ##"{"error":{"code":"gone","message":"x"}}"##),
+            .status(204, ""),
+        ])
+        let flow = scripted(probe: [open], api: api)
+        await flow.begin(name: "Phone")
+        XCTAssertEqual(flow.step, .failed)
+        XCTAssertEqual(flow.message, PairingFlow.timeoutText)
+        XCTAssertEqual(api.calls.map { $0.request.url!.path }, ["/v2/pair/start", "/v2/pair/reveal", "/v2/pair/cancel"])
+    }
+
+    func testEveryEndingHasItsOwnWordingAndNoneLeaksTheCode() {
+        let texts = [PairingFlow.failureText, PairingFlow.timeoutText, PairingFlow.windowText, PairingFlow.cancelledText]
+        XCTAssertEqual(Set(texts).count, texts.count)
+        XCTAssertTrue(PairingFlow.failureText.contains("Another device"))
+        for calm in [PairingFlow.timeoutText, PairingFlow.windowText, PairingFlow.cancelledText] {
+            XCTAssertFalse(calm.contains("Another device"), calm)
+            XCTAssertTrue(calm.lowercased().contains("try again"), calm)
+        }
+    }
+
     func testBusyWindowAtStartIsAFailureWithNothingToCancel() async {
         let api = ScriptedTransport([.status(409, ##"{"error":{"code":"pairing_busy","message":"x"}}"##)])
         let flow = scripted(probe: [open], api: api)
@@ -281,32 +318,95 @@ final class PairingFlowTests: XCTestCase {
         return flow
     }
 
-    func testDecoyOrCancelOnTheFrameFails() async throws {
+    func testDecoyOrCancelOnTheFrameEndsCalmly() async throws {
         for bystander in [DemoFrameServer.Bystander.tapsDecoy, .tapsCancel] {
             server.openPairingWindow()
             let flow = try await confirming(bystander)
             let result = await flow.awaitResult()
             XCTAssertNil(result)
-            assertFailed(flow)
+            XCTAssertEqual(flow.step, .failed)
+            XCTAssertEqual(flow.message, PairingFlow.cancelledText)
+            XCTAssertNil(tokens.credential(for: server.frameId))
             XCTAssertEqual(paths().suffix(2), ["/v2/pair/result", "/v2/pair/cancel"])
         }
     }
 
-    func testExpiryFails() async throws {
+    func testSessionForgottenByTheFrameEndsCalmly() async throws {
+        let api = ScriptedTransport([
+            .status(200, ##"{"session":"\##(String(repeating: "5", count: 32))","nF":"\##(String(repeating: "6", count: 64))"}"##),
+            .status(204, ""),
+        ])
+        let flow = scripted(probe: [open], api: api)
+        await flow.begin(name: "Phone")
+        XCTAssertEqual(flow.step, .enteringCode)
+        let revealed = try XCTUnwrap(api.calls[1].json?["nP"] as? String)
+        let derived = PairingCrypto.derive(nP: try XCTUnwrap(Hex.decode(revealed, bytes: 32)),
+                                           nF: Data(repeating: 0x66, count: 32),
+                                           fpRaw: Data(repeating: 0xab, count: 32))
+        await flow.submit(code: derived.code)
+        XCTAssertEqual(flow.step, .confirming(pick: derived.pick))
+        api.queue(.status(404, ##"{"error":{"code":"not_found","message":"x"}}"##))
+        api.queue(.status(409, ##"{"error":{"code":"conflict","message":"x"}}"##))
+        let result = await flow.awaitResult()
+        XCTAssertNil(result)
+        XCTAssertEqual(flow.step, .failed)
+        XCTAssertEqual(flow.message, PairingFlow.cancelledText)
+        XCTAssertEqual(api.calls.map { $0.request.url!.path }, ["/v2/pair/start", "/v2/pair/reveal", "/v2/pair/result", "/v2/pair/cancel"])
+    }
+
+    private func assertTimedOut(_ flow: PairingFlow, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(flow.step, .failed, file: file, line: line)
+        XCTAssertEqual(flow.message, PairingFlow.timeoutText, file: file, line: line)
+        XCTAssertFalse(flow.message?.contains("Another device") ?? true, file: file, line: line)
+        XCTAssertNil(tokens.credential(for: server.frameId), file: file, line: line)
+    }
+
+    func testExpiryIsACalmTimeout() async throws {
         let flow = try await confirming(.letsItExpire)
         let result = await flow.awaitResult()
         XCTAssertNil(result)
-        assertFailed(flow)
+        assertTimedOut(flow)
         XCTAssertEqual(paths().suffix(2), ["/v2/pair/result", "/v2/pair/cancel"])
     }
 
-    func testWaitingStopsWhenPatienceRunsOut() async throws {
+    func testWaitingStopsWhenPatienceRunsOutWithACalmTimeout() async throws {
         let flow = try await confirming(.waits, patience: .milliseconds(20))
         let result = await flow.awaitResult()
         XCTAssertNil(result)
-        assertFailed(flow)
+        assertTimedOut(flow)
         XCTAssertEqual(paths().last, "/v2/pair/cancel")
         XCTAssertGreaterThan(paths().filter { $0 == "/v2/pair/result" }.count, 1)
+    }
+
+    func testTryAgainAfterAFailureStartsAFreshAttemptInTheSameSheet() async throws {
+        let flow = try await confirming(.letsItExpire)
+        _ = await flow.awaitResult()
+        XCTAssertEqual(flow.step, .failed)
+        flow.reset()
+        XCTAssertEqual(flow.step, .naming)
+        XCTAssertNil(flow.message)
+        XCTAssertEqual(flow.triesLeft, PairingFlow.attempts)
+        await flow.begin(name: "Phone")
+        XCTAssertEqual(flow.message, PairingFlow.windowText)
+        server.openPairingWindow()
+        server.setBystander(.tapsPick)
+        await flow.begin(name: "Phone")
+        XCTAssertEqual(flow.step, .enteringCode)
+        await flow.submit(code: try XCTUnwrap(server.shownCode))
+        let result = await flow.awaitResult()
+        XCTAssertNotNil(result)
+        XCTAssertEqual(flow.step, .paired)
+        XCTAssertNotNil(tokens.credential(for: server.frameId))
+    }
+
+    func testResetOnlyWorksAfterAFailure() async throws {
+        let flow = makeFlow()
+        await flow.begin(name: "Phone")
+        flow.reset()
+        XCTAssertEqual(flow.step, .enteringCode)
+        await flow.submit(code: try XCTUnwrap(server.shownCode))
+        flow.reset()
+        XCTAssertEqual(flow.step, .confirming(pick: try XCTUnwrap(server.shownPick)))
     }
 
     func testCertificateChangeMidPairingSendsNothingToTheNewServer() async throws {

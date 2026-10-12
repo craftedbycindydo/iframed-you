@@ -69,7 +69,7 @@ struct ConnectScreen: View {
 
     private var searchingGlyph: some View {
         Image(systemName: "dot.radiowaves.left.and.right")
-            .font(.title3)
+            .font(.glyph)
             .foregroundStyle(theme.tint)
             .symbolEffect(.variableColor.iterative.reversing, isActive: !reduceMotion)
             .frame(width: Size.glyph, height: Size.glyph)
@@ -268,7 +268,7 @@ struct PairingSheet: View {
                 .submitLabel(.go)
                 .onSubmit(begin)
                 .onChange(of: name) { _, new in
-                    if new.count > Limits.deviceNameLength { name = String(new.prefix(Limits.deviceNameLength)) }
+                    if Limits.clipped(new, to: Limits.deviceNameLength) != new { name = Limits.clipped(new, to: Limits.deviceNameLength) }
                 }
                 .disabled(flow.step == .starting)
             Button(action: begin) {
@@ -324,11 +324,16 @@ struct PairingSheet: View {
     }
 
     private var failed: some View {
-        Section {
-            RowLabel(flow.message ?? PairingFlow.failureText, symbol: "exclamationmark.triangle", symbolTint: theme.tint)
-            Button("Close") { dismiss() }
+        let symbol = switch flow.message {
+        case PairingFlow.timeoutText: "clock"
+        case PairingFlow.cancelledText: "xmark.circle"
+        default: "exclamationmark.triangle"
+        }
+        return Section {
+            RowLabel(flow.message ?? PairingFlow.failureText, symbol: symbol, symbolTint: theme.tint)
+            Button("Try again", systemImage: "arrow.clockwise") { flow.reset() }
         } footer: {
-            Text("To try again, tap Pair a phone on the frame, then choose the frame here.")
+            Text("On the frame, tap Pair a phone again first.")
         }
     }
 

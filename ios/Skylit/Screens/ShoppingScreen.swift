@@ -171,16 +171,9 @@ struct ShoppingScreen: View {
                 .onSubmit(closeEditor)
                 .onChange(of: draft?.name) { _, new in
                     guard let new else { return }
-                    if new.count > Limits.nameLength { draft?.name = String(new.prefix(Limits.nameLength)) }
+                    if Limits.clipped(new, to: Limits.nameLength) != new { draft?.name = Limits.clipped(new, to: Limits.nameLength) }
                 }
-            Button(action: closeEditor) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(theme.tint)
-                    .frame(width: Size.touch, height: Size.touch)
-            }
-            .buttonStyle(RowButtonStyle())
-            .accessibilityLabel("Finish editing")
+            TickButton(label: "Finish editing", action: closeEditor)
         }
         .inlineEditorRow()
         Stepper(value: bind(\.qty, 1), in: Limits.quantity) {
@@ -194,7 +187,7 @@ struct ShoppingScreen: View {
             .onSubmit(closeEditor)
             .onChange(of: draft?.note) { _, new in
                 guard let new else { return }
-                if new.count > Limits.nameLength { draft?.note = String(new.prefix(Limits.nameLength)) }
+                if Limits.clipped(new, to: Limits.noteLength) != new { draft?.note = Limits.clipped(new, to: Limits.noteLength) }
             }
             .inlineEditorRow()
     }

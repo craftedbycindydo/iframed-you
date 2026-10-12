@@ -42,3 +42,30 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_STRICT_CONCURRENCY: minimal
         ENABLE_USER_SCRIPT_SANDBOXING: YES
+  SkylitUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: SkylitUITests
+    dependencies:
+      - target: Skylit
+    settings:
+      base:
+        TEST_TARGET_NAME: Skylit
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: Z9Q998MK8P
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+schemes:
+  Skylit:
+    build:
+      targets:
+        Skylit: all
+        SkylitUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - SkylitUITests

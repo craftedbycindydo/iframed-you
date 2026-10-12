@@ -148,19 +148,19 @@ struct RowLabel<Leading: View, Trailing: View>: View {
                     if emoji.isEmpty {
                         Image(systemName: "sparkle").foregroundStyle(Theme.tertiaryLabel)
                     } else {
-                        Text(emoji).font(.title2)
+                        Text(emoji).font(.control)
                     }
                 }
                 .frame(width: glyph, height: glyph)
                 .accessibilityHidden(true)
             } else if let symbol {
                 Image(systemName: symbol)
-                    .font(.title3)
+                    .font(.glyph)
                     .foregroundStyle(symbolTint ?? Theme.label)
                     .frame(width: glyph, height: glyph)
                     .accessibilityHidden(true)
             }
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(title)
                     .font(.rowTitle)
                     .foregroundStyle(isDimmed ? Theme.secondaryLabel : Theme.label)
@@ -201,6 +201,7 @@ struct RowValue: View {
 
 struct RowDisclosure: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.layoutDirection) private var layoutDirection
     let isExpanded: Bool
     let toggle: () -> Void
 
@@ -209,7 +210,7 @@ struct RowDisclosure: View {
             Image(systemName: "chevron.down")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Theme.tertiaryLabel)
-                .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                .rotationEffect(.degrees(isExpanded ? 0 : (layoutDirection == .rightToLeft ? 90 : -90)))
                 .animation(reduceMotion ? nil : Motion.state, value: isExpanded)
                 .frame(width: Size.touch, height: Size.touch)
                 .contentShape(Rectangle())
@@ -247,15 +248,34 @@ struct RowChevron: View {
     }
 }
 
+struct TickButton: View {
+    @Environment(\.theme) private var theme
+    @ScaledMetric(relativeTo: .title2) private var size = Size.control
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.control)
+                .foregroundStyle(theme.tint)
+                .frame(width: max(Size.touch, size), height: max(Size.touch, size))
+        }
+        .buttonStyle(RowButtonStyle())
+        .accessibilityLabel(label)
+    }
+}
+
 struct DoneMark: View {
     @Environment(\.theme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .title2) private var size = Size.control
     let isOn: Bool
     var tint: Color?
 
     var body: some View {
         let mark = Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-            .font(.title2)
+            .font(.control)
             .foregroundStyle(isOn ? (tint ?? theme.tint) : Theme.tertiaryLabel)
         Group {
             if reduceMotion {
@@ -266,7 +286,7 @@ struct DoneMark: View {
                     .symbolEffect(.bounce, value: isOn)
             }
         }
-        .frame(width: Size.control, height: Size.control)
+        .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
 }
@@ -301,6 +321,7 @@ struct ProgressSummary: View {
 struct InlineAddField: View {
     @Environment(\.theme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .title2) private var size = Size.control
     let prompt: String
     @Binding var text: String
     var focus: FocusState<Bool>.Binding
@@ -315,9 +336,9 @@ struct InlineAddField: View {
                 focus.wrappedValue = true
             } label: {
                 Image(systemName: "plus.circle.fill")
-                    .font(.title2)
+                    .font(.control)
                     .foregroundStyle(theme.tint)
-                    .frame(width: Size.control, height: Size.control)
+                    .frame(width: size, height: size)
             }
             .buttonStyle(RowButtonStyle())
             .accessibilityHidden(true)
@@ -328,18 +349,11 @@ struct InlineAddField: View {
                     if hasText { onSubmit() } else { focus.wrappedValue = false }
                 }
                 .onChange(of: text) { _, new in
-                    if new.count > limit { text = String(new.prefix(limit)) }
+                    if Limits.clipped(new, to: limit) != new { text = Limits.clipped(new, to: limit) }
                 }
             if hasText {
-                Button(action: onSubmit) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(theme.tint)
-                        .frame(width: Size.touch, height: Size.touch)
-                }
-                .buttonStyle(RowButtonStyle())
-                .accessibilityLabel("Add item")
-                .transition(reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
+                TickButton(label: prompt, action: onSubmit)
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
             }
         }
         .stateAnimation(hasText)
@@ -391,7 +405,7 @@ struct SwatchPicker: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(RowButtonStyle())
-                .accessibilityLabel("Colour \(hex)")
+                .accessibilityLabel(Palettes.swatchName(hex))
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }

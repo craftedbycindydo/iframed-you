@@ -167,6 +167,9 @@ enum Demo {
         } else {
             server = DemoFrameServer.sample()
         }
+        if let palette = UserDefaults.standard.string(forKey: "demoPalette") {
+            server.setAppearance(palette: palette, mode: UserDefaults.standard.string(forKey: "demoMode") ?? "auto")
+        }
         let frame = DiscoveredFrame(frameId: server.frameId, name: "Kitchen frame")
         if !unpaired {
             tokens.save(server.credential)
@@ -197,7 +200,7 @@ enum Demo {
         if screen == "pairing" {
             let stage = UserDefaults.standard.string(forKey: "demoPairing") ?? "name"
             server.openPairingWindow()
-            server.setBystander(stage == "failed" ? .tapsDecoy : .waits)
+            server.setBystander(stage == "failed" ? .tapsDecoy : stage == "expired" ? .letsItExpire : .waits)
             Task {
                 try? await Task.sleep(for: .milliseconds(900))
                 await session.select(frame)

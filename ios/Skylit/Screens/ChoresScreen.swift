@@ -196,7 +196,7 @@ struct ChoresScreen: View {
                 .frame(width: Size.glyph + Space.s)
                 .focused($editField, equals: .emoji)
                 .onChange(of: draft?.emoji) { _, new in
-                    if let new, new.count > 1 { draft?.emoji = String(new.suffix(1)) }
+                    if let new, Limits.cleanEmoji(new) != new { draft?.emoji = Limits.cleanEmoji(new) }
                 }
                 .accessibilityLabel("Emoji")
             Divider()
@@ -205,16 +205,9 @@ struct ChoresScreen: View {
                 .submitLabel(.done)
                 .onSubmit(closeEditor)
                 .onChange(of: draft?.title) { _, new in
-                    if let new, new.count > Limits.nameLength { draft?.title = String(new.prefix(Limits.nameLength)) }
+                    if let new, Limits.clipped(new, to: Limits.nameLength) != new { draft?.title = Limits.clipped(new, to: Limits.nameLength) }
                 }
-            Button(action: closeEditor) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(theme.tint)
-                    .frame(width: Size.touch, height: Size.touch)
-            }
-            .buttonStyle(RowButtonStyle())
-            .accessibilityLabel("Finish editing")
+            TickButton(label: "Finish editing", action: closeEditor)
         }
         .inlineEditorRow()
         Picker("Who does it", selection: bind(\.personId, nil)) {
@@ -381,7 +374,7 @@ struct PersonEditor: View {
                     .focused($nameFocused)
                     .submitLabel(.done)
                     .onChange(of: name) { _, new in
-                        if new.count > Limits.nameLength { name = String(new.prefix(Limits.nameLength)) }
+                        if Limits.clipped(new, to: Limits.nameLength) != new { name = Limits.clipped(new, to: Limits.nameLength) }
                     }
             }
             Section {
