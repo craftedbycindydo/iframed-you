@@ -17,6 +17,8 @@ struct Theme: Equatable {
     static let separator = Color(.separator)
     static let destructive = Color.red
     static let connected = Color.green
+    static let heating = Color.orange
+    static let cooling = Color.blue
 
     init(palette: String = "linen", dark: Bool) {
         let tokens = Palettes.palette(palette).tokens(dark: dark)
@@ -82,6 +84,7 @@ enum Size {
 extension Font {
     static let screenTitle = Font.system(.largeTitle, design: .serif, weight: .bold)
     static let hero = Font.system(.title2, design: .serif, weight: .semibold)
+    static let figure = Font.system(.title2, weight: .semibold)
     static let sectionTitle = Font.subheadline
     static let rowTitle = Font.body
     static let rowSubtitle = Font.subheadline

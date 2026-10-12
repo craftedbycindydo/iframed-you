@@ -159,7 +159,7 @@ struct PhotosScreen: View {
                 }
             }
         }
-        .sheet(item: $viewing) { photo in
+        .fullScreenCover(item: $viewing) { photo in
             PhotoViewer(store: store, photo: photo, added: added(photo)).environment(\.theme, theme)
         }
         .confirmationDialog("Remove this photo from the frame? It stays in your phone's library.",
@@ -188,7 +188,7 @@ struct PhotosScreen: View {
     }
 
     private func added(_ photo: PhotoRef) -> String {
-        ISO8601.date(photo.addedAt)?.formatted(date: .abbreviated, time: .shortened) ?? ""
+        ISO8601.date(photo.addedAt)?.formatted(date: .abbreviated, time: .omitted) ?? ""
     }
 }
 

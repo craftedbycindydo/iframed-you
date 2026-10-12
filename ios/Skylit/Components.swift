@@ -23,16 +23,13 @@ struct ScreenHeader<Actions: View>: View {
     var statusSymbol: String?
     @ViewBuilder let actions: Actions
 
-    @Environment(\.dynamicTypeSize) private var typeSize
-
     var body: some View {
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.s))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: Space.m))
-        layout {
+        HStack(alignment: .top, spacing: Space.m) {
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text(title)
                     .font(.screenTitle)
+                    .lineLimit(1)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .accessibilityAddTraits(.isHeader)
                 if let status {
                     Label {
@@ -46,6 +43,8 @@ struct ScreenHeader<Actions: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: Space.s) { actions }
+                .fixedSize()
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .padding(.top, Space.xs)
         }
         .padding(.horizontal, Space.margin)
@@ -197,6 +196,45 @@ struct RowValue: View {
 
     var body: some View {
         Text(text).font(.rowValue).foregroundStyle(Theme.secondaryLabel).monospacedDigit()
+    }
+}
+
+struct RowDisclosure: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let isExpanded: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        Button(action: toggle) {
+            Image(systemName: "chevron.down")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Theme.tertiaryLabel)
+                .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                .animation(reduceMotion ? nil : Motion.state, value: isExpanded)
+                .frame(width: Size.touch, height: Size.touch)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(RowButtonStyle())
+        .accessibilityLabel("Details")
+        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+        .accessibilityHint(isExpanded ? "Hides the editing controls" : "Shows the editing controls")
+    }
+}
+
+struct InlineEditorRow: ViewModifier {
+    @Environment(\.theme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .listRowBackground(theme.fill.opacity(0.4).background(theme.groupedBackground))
+            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+    }
+}
+
+extension View {
+    func inlineEditorRow() -> some View {
+        modifier(InlineEditorRow())
     }
 }
 
@@ -501,7 +539,7 @@ struct NoticeToast: View {
             }
             .padding(.horizontal, Space.l)
             .padding(.vertical, Space.m)
-            .modifier(ToastSurface())
+            .modifier(GlassSurface())
             .padding(.horizontal, Space.margin)
             .transition(.opacity)
             .onTapGesture { if actionLabel == nil { notice = nil } }
@@ -513,7 +551,7 @@ struct NoticeToast: View {
     }
 }
 
-private struct ToastSurface: ViewModifier {
+struct GlassSurface: ViewModifier {
     @Environment(\.theme) private var theme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 

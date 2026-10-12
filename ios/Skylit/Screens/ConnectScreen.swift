@@ -256,6 +256,7 @@ struct PairingSheet: View {
         }
         .onAppear { name = flow.suggestedName }
         .presentationDetents([.large])
+        .interactiveDismissDisabled(flow.step != .failed)
     }
 
     private var naming: some View {

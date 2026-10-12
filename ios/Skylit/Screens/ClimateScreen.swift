@@ -32,10 +32,7 @@ struct ClimateScreen: View {
                     } else {
                         unreachable
                     }
-                case .locked(let until):
-                    locked(until)
-                    thermostats
-                case .ready:
+                case .locked, .ready:
                     thermostats
                 }
             }
@@ -45,6 +42,9 @@ struct ClimateScreen: View {
             .screenHeader("Climate", status: status, statusSymbol: statusSymbol) {
                 if store.phase != .signedOut {
                     Menu {
+                        Button("Refresh", systemImage: "arrow.clockwise") {
+                            Task { await store.refresh() }
+                        }
                         Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
                             Task { await store.signOut() }
                         }
@@ -67,8 +67,9 @@ struct ClimateScreen: View {
 
     private var status: String? {
         switch store.phase {
-        case .signedOut, .locked: return nil
+        case .signedOut: return "Sign in to Honeywell to see your thermostats here"
         case .loading: return store.trouble == nil ? nil : "Can't reach Honeywell right now"
+        case .locked(let until): return "Sign-in paused by Honeywell until \(until.formatted(date: .omitted, time: .shortened))"
         case .ready: break
         }
         let updated = store.lastUpdated.map { " · updated \($0.formatted(date: .omitted, time: .shortened))" } ?? ""
@@ -81,18 +82,17 @@ struct ClimateScreen: View {
     }
 
     private var statusSymbol: String? {
-        guard store.phase == .ready else { return store.trouble == nil ? nil : "wifi.slash" }
+        switch store.phase {
+        case .signedOut: return "thermometer.medium"
+        case .loading: return store.trouble == nil ? nil : "wifi.slash"
+        case .locked: return "lock"
+        case .ready: break
+        }
         if store.trouble != nil { return "wifi.slash" }
         return store.isStale ? "arrow.triangle.2.circlepath" : "cloud.sun"
     }
 
     @ViewBuilder private var signIn: some View {
-        Section {
-            RowLabel("Total Connect Comfort", subtitle: "Sign in with your Honeywell account to see and adjust your thermostats here, at home or away.",
-                     symbol: "thermometer.medium", symbolTint: theme.tint)
-        } footer: {
-            Text("Your password stays in this iPhone's Keychain and is sent only to Honeywell.")
-        }
         Section {
             TextField("Email", text: $email)
                 .textContentType(.username)
@@ -107,20 +107,22 @@ struct ClimateScreen: View {
                 .focused($focus, equals: .password)
                 .submitLabel(.go)
                 .onSubmit(submit)
+            Button(action: submit) {
+                HStack {
+                    Text(store.isSigningIn ? "Signing In" : "Sign In").fontWeight(.semibold)
+                    Spacer()
+                    if store.isSigningIn { ProgressView() }
+                }
+            }
+            .disabled(!canSubmit)
+        } header: {
+            SectionHeader("Total Connect Comfort account")
         } footer: {
             if let problem = store.signInError {
                 Label(problem, systemImage: "exclamationmark.circle").foregroundStyle(Theme.destructive)
+            } else {
+                Text("Your password stays in this iPhone's Keychain and is sent only to Honeywell.")
             }
-        }
-        Section {
-            Button(action: submit) {
-                HStack(spacing: Space.s) {
-                    Text(store.isSigningIn ? "Signing In" : "Sign In").fontWeight(.semibold)
-                    if store.isSigningIn { ProgressView() }
-                }
-                .frame(maxWidth: .infinity, minHeight: Size.control)
-            }
-            .disabled(!canSubmit)
         }
     }
 
@@ -151,15 +153,13 @@ struct ClimateScreen: View {
         .listRowBackground(Color.clear)
     }
 
-    private func locked(_ until: Date) -> some View {
-        Section {
-            RowLabel("Honeywell has paused sign-in",
-                     subtitle: "Too many sign-in attempts. This also blocks the Total Connect Comfort app. Trying again after \(until.formatted(date: .omitted, time: .shortened)).",
-                     symbol: "lock", symbolTint: Theme.secondaryLabel)
-        }
-    }
-
     @ViewBuilder private var thermostats: some View {
+        if case .locked(let until) = store.phase, store.thermostats.isEmpty {
+            Section {
+                RowLabel("Too many sign-in attempts", subtitle: "Honeywell pauses every app, including Total Connect Comfort. Your thermostats come back after \(until.formatted(date: .omitted, time: .shortened)).",
+                         symbol: "lock", symbolTint: Theme.secondaryLabel)
+            }
+        }
         if store.phase == .ready, store.thermostats.isEmpty {
             Section {
                 ContentUnavailableView {
@@ -171,15 +171,14 @@ struct ClimateScreen: View {
             .listRowBackground(Color.clear)
         }
         ForEach(store.thermostats) { thermostat in
-            ThermostatSection(store: store, thermostat: thermostat)
+            Section {
+                ThermostatTile(store: store, thermostat: thermostat)
+            }
         }
     }
 }
 
 enum Climate {
-    static let heating = Color.orange
-    static let cooling = Color.blue
-
     static func degrees(_ value: Double, _ units: TccUnits) -> String {
         let rounded = (value * 2).rounded() / 2
         return (rounded == rounded.rounded() ? String(Int(rounded)) : String(format: "%.1f", rounded)) + "°"
@@ -209,159 +208,177 @@ enum Climate {
         case .followSchedule: return "Follows schedule"
         }
     }
+
+    static func holdName(_ hold: TccHold?) -> String {
+        switch hold {
+        case .schedule, nil: return "Following schedule"
+        case .permanent: return "Permanent hold"
+        case .temporary(let minutes): return minutes.map { "Hold until \(time(minutes: $0))" } ?? "Temporary hold"
+        }
+    }
 }
 
-private struct ThermostatSection: View {
+private struct ThermostatTile: View {
     @Environment(\.theme) private var theme
-    @ScaledMetric(relativeTo: .largeTitle) private var indoorSize: CGFloat = 64
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .footnote) private var dot = Space.s
     let store: ClimateStore
     let thermostat: TccThermostat
 
     private var enabled: Bool { store.canControl && thermostat.isOnline }
-    private var accent: Color { thermostat.activeSetpoint == .cool ? Climate.cooling : Climate.heating }
+    private var accent: Color { thermostat.isOnline ? (thermostat.activeSetpoint == .cool ? Theme.cooling : Theme.heating) : Theme.tertiaryLabel }
+    private var isRunning: Bool { thermostat.running == .heating || thermostat.running == .cooling }
+    private var onHold: Bool { thermostat.hold != nil && thermostat.hold != .schedule }
+    private var indoor: String { thermostat.indoorTemperature.map { Climate.degrees($0, thermostat.units) } ?? "–" }
 
-    private var activity: (text: String, color: Color)? {
-        guard thermostat.isOnline else { return ("Offline", Theme.secondaryLabel) }
+    private var target: (which: TccSetpoint, value: Double, limits: ClosedRange<Double>)? {
+        guard thermostat.isOnline, let which = thermostat.activeSetpoint, let value = thermostat.setpoint(which),
+              let limits = thermostat.range(which) else { return nil }
+        return (which, value, limits)
+    }
+
+    private var activity: String {
+        guard thermostat.isOnline else { return "Offline" }
+        let mode = Climate.modeName(thermostat.mode)
         switch thermostat.running {
-        case .heating: return ("Heating", Climate.heating)
-        case .cooling: return ("Cooling", Climate.cooling)
-        case .idle: return ("Idle", Theme.secondaryLabel)
-        case nil: return nil
+        case .heating: return "Heating now"
+        case .cooling: return "Cooling now"
+        default: return mode
         }
     }
 
     var body: some View {
-        Section {
-            reading
-            if !thermostat.isOnline {
-                RowLabel("Thermostat is offline", subtitle: "Honeywell can't reach it. Check its Wi-Fi and power.", symbol: "wifi.exclamationmark",
-                         symbolTint: Theme.secondaryLabel)
-            } else {
-                holdRow.alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-                if thermostat.canSwitchHeatCool { modeRow }
-                if let fan = thermostat.fanMode {
-                    RowLabel("Fan", symbol: "fan", symbolTint: Theme.secondaryLabel) {
-                        RowValue(text: thermostat.isFanRunning ? "\(Climate.fanName(fan)) · running" : Climate.fanName(fan))
-                    }
-                }
-            }
-        } header: {
-            SectionHeader(thermostat.name) {
-                if let activity {
-                    HStack(spacing: Space.xs) {
-                        if thermostat.running == .heating || thermostat.running == .cooling {
-                            Circle().fill(activity.color).frame(width: Space.s, height: Space.s).accessibilityHidden(true)
-                        }
-                        Text(activity.text).foregroundStyle(Theme.secondaryLabel)
-                    }
-                }
-            }
-        }
-    }
-
-    private var reading: some View {
-        HStack(alignment: .center, spacing: Space.m) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(thermostat.indoorTemperature.map { Climate.degrees($0, thermostat.units) } ?? "–")
-                    .font(.system(size: indoorSize, weight: .semibold, design: .serif))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.6)
-                    .lineLimit(1)
-                    .contentTransition(.numericText())
-                Text(thermostat.indoorHumidity.map { "Indoor · \(Int($0.rounded()))% humidity" } ?? "Indoor")
-                    .font(.rowSubtitle)
-                    .foregroundStyle(Theme.secondaryLabel)
-            }
-            .opacity(enabled ? 1 : 0.5)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Indoor temperature")
-            .accessibilityValue(thermostat.indoorTemperature.map { Climate.degrees($0, thermostat.units) } ?? "Unknown")
-            Spacer(minLength: 0)
-            if thermostat.isOnline, let which = thermostat.activeSetpoint, let target = thermostat.setpoint(which), let limits = thermostat.range(which) {
-                stepper(which, target, limits)
-            } else if thermostat.isOnline {
-                Text(Climate.modeName(thermostat.mode)).font(.hero).foregroundStyle(Theme.secondaryLabel)
-            }
-        }
-        .padding(.vertical, Space.xs)
-    }
-
-    private func stepper(_ which: TccSetpoint, _ target: Double, _ limits: ClosedRange<Double>) -> some View {
-        HStack(spacing: Space.s) {
-            stepButton("minus", "Lower", -1, disabled: target <= limits.lowerBound)
-            VStack(spacing: 0) {
-                Text(Climate.degrees(target, thermostat.units))
-                    .font(.screenTitle)
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.m))
+            : AnyLayout(HStackLayout(spacing: Space.m))
+        layout {
+            identity.frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: Space.s) {
+                Text(indoor)
+                    .font(.figure)
                     .monospacedDigit()
                     .contentTransition(.numericText())
-                    .stateAnimation(target)
-                HStack(spacing: Space.xs) {
-                    Circle().fill(accent).frame(width: Space.s, height: Space.s)
-                    Text(which == .heat ? "Heat to" : "Cool to").font(.note).foregroundStyle(Theme.secondaryLabel)
-                }
+                    .foregroundStyle(enabled ? Theme.label : Theme.secondaryLabel)
+                if typeSize.isAccessibilitySize { Spacer(minLength: 0) }
+                if let target { stepper(target) }
+                menu
             }
-            .frame(minWidth: Size.touch + Space.xl)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(which == .heat ? "Heat setpoint" : "Cool setpoint")
-            .accessibilityValue(Climate.degrees(target, thermostat.units))
-            stepButton("plus", "Raise", 1, disabled: target >= limits.upperBound)
+            .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: false)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
-        .sensoryFeedback(.selection, trigger: target)
-        .opacity(enabled ? 1 : 0.5)
+        .listRowInsets(EdgeInsets(top: Space.s, leading: Space.l, bottom: Space.s, trailing: Space.xs))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(thermostat.name), \(activity)")
+        .accessibilityValue((target.map { "\(indoor), set to \(Climate.degrees($0.value, thermostat.units)), " } ?? "\(indoor), ") + Climate.holdName(thermostat.hold))
+        .accessibilityHint(target == nil ? "" : "Swipe up or down to change the setpoint")
+        .accessibilityAdjustableAction { direction in
+            store.adjust(thermostat.id, by: direction == .increment ? 1 : -1)
+        }
+        .accessibilityActions {
+            if onHold {
+                Button("Resume schedule") { Task { await store.resumeSchedule(thermostat.id) } }
+            }
+            ForEach(switchableModes, id: \.self) { mode in
+                Button("Switch to \(Climate.modeName(mode))") { Task { await store.setMode(thermostat.id, to: mode) } }
+            }
+        }
     }
 
-    private func stepButton(_ symbol: String, _ label: String, _ step: Int, disabled: Bool) -> some View {
-        Button {
-            store.adjust(thermostat.id, by: step)
+    private var identity: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(thermostat.name).font(.rowTitle).fontWeight(.semibold).lineLimit(1)
+            HStack(spacing: Space.xs) {
+                Circle().fill(accent).frame(width: dot, height: dot).opacity(isRunning || !thermostat.isOnline ? 1 : 0.4)
+                Text(activity).font(.note).foregroundStyle(Theme.secondaryLabel).lineLimit(1)
+            }
+        }
+    }
+
+    private func stepper(_ target: (which: TccSetpoint, value: Double, limits: ClosedRange<Double>)) -> some View {
+        HStack(spacing: Space.xs) {
+            StepButton(symbol: "minus", label: "Lower \(thermostat.name) setpoint", disabled: target.value <= target.limits.lowerBound || !enabled) {
+                store.adjust(thermostat.id, by: -1)
+            }
+            Text(Climate.degrees(target.value, thermostat.units))
+                .font(.rowTitle)
+                .fontWeight(.semibold)
+                .monospacedDigit()
+                .lineLimit(1)
+                .fixedSize()
+                .contentTransition(.numericText())
+                .stateAnimation(target.value)
+                .frame(minWidth: Space.xxl)
+                .foregroundStyle(enabled ? Theme.label : Theme.secondaryLabel)
+            StepButton(symbol: "plus", label: "Raise \(thermostat.name) setpoint", disabled: target.value >= target.limits.upperBound || !enabled) {
+                store.adjust(thermostat.id, by: 1)
+            }
+        }
+        .sensoryFeedback(.selection, trigger: target.value)
+    }
+
+    private var switchableModes: [TccMode] {
+        [TccMode.heat, .cool].filter { thermostat.allowedModes.contains($0) && $0 != thermostat.mode }
+    }
+
+    private var menu: some View {
+        Menu {
+            Text(Climate.holdName(thermostat.hold))
+            if onHold {
+                Button("Resume schedule", systemImage: "calendar") {
+                    Task { await store.resumeSchedule(thermostat.id) }
+                }
+                .disabled(!enabled)
+            }
+            if !switchableModes.isEmpty || thermostat.activeSetpoint != nil {
+                Picker("Mode", selection: Binding(get: { thermostat.mode }, set: { chosen in
+                    guard let chosen, chosen != thermostat.mode else { return }
+                    Task { await store.setMode(thermostat.id, to: chosen) }
+                })) {
+                    if thermostat.allowedModes.contains(.heat) { Label("Heat", systemImage: "flame").tag(TccMode?.some(.heat)) }
+                    if thermostat.allowedModes.contains(.cool) { Label("Cool", systemImage: "snowflake").tag(TccMode?.some(.cool)) }
+                }
+                .pickerStyle(.menu)
+                .disabled(!enabled)
+            }
+            if let fan = thermostat.fanMode {
+                Section {
+                    Label("Fan · \(Climate.fanName(fan))" + (thermostat.isFanRunning ? " · running" : ""), systemImage: "fan")
+                }
+            }
         } label: {
-            Image(systemName: symbol)
-                .font(.title3.weight(.semibold))
+            Image(systemName: "ellipsis.circle")
+                .font(.title3)
+                .foregroundStyle(theme.tint)
                 .frame(width: Size.touch, height: Size.touch)
-                .background(theme.fill, in: Circle())
-                .contentShape(Circle())
+                .contentShape(Rectangle())
+        }
+        .menuOrder(.fixed)
+        .sensoryFeedback(.selection, trigger: thermostat.mode)
+        .accessibilityLabel("\(thermostat.name) settings")
+    }
+}
+
+private struct StepButton: View {
+    @Environment(\.theme) private var theme
+    @ScaledMetric(relativeTo: .subheadline) private var disc = Size.control + Space.xs
+    let symbol: String
+    let label: String
+    let disabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.subheadline.weight(.bold))
+                .frame(width: disc, height: disc)
+                .modifier(GlassSurface())
+                .frame(width: max(Size.touch, disc), height: max(Size.touch, disc))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .tint(theme.tint)
-        .disabled(disabled || !enabled)
-        .accessibilityLabel("\(label) \(thermostat.name) setpoint")
-    }
-
-    @ViewBuilder private var holdRow: some View {
-        switch thermostat.hold {
-        case .schedule:
-            RowLabel("Following schedule", symbol: "calendar", symbolTint: Theme.secondaryLabel)
-        case .permanent:
-            RowLabel("Permanent hold", symbol: "pause.circle", symbolTint: Theme.secondaryLabel) { resume }
-        case .temporary(let minutes):
-            RowLabel(minutes.map { "Hold until \(Climate.time(minutes: $0))" } ?? "Temporary hold", symbol: "pause.circle",
-                     symbolTint: Theme.secondaryLabel) { resume }
-        case nil:
-            EmptyView()
-        }
-    }
-
-    private var resume: some View {
-        Button("Resume schedule") {
-            Task { await store.resumeSchedule(thermostat.id) }
-        }
-        .buttonStyle(.borderless)
-        .font(.rowSubtitle.weight(.semibold))
-        .frame(minHeight: Size.touch)
-        .disabled(!enabled)
-    }
-
-    private var modeRow: some View {
-        Picker("Mode", selection: Binding(get: { thermostat.mode }, set: { chosen in
-            guard let chosen, chosen != thermostat.mode else { return }
-            Task { await store.setMode(thermostat.id, to: chosen) }
-        })) {
-            Text("Heat").tag(TccMode?.some(.heat))
-            Text("Cool").tag(TccMode?.some(.cool))
-        }
-        .pickerStyle(.segmented)
-        .disabled(!enabled)
-        .sensoryFeedback(.selection, trigger: thermostat.mode)
-        .accessibilityHint(thermostat.mode == .heat || thermostat.mode == .cool ? "" : "Currently \(Climate.modeName(thermostat.mode))")
+        .disabled(disabled)
+        .accessibilityLabel(label)
     }
 }
 
@@ -385,6 +402,9 @@ enum ClimateDemo {
         switch mode {
         case "locked": server.setLogin(.tooManyAttempts)
         case "thermostatOffline": server.update(1002) { $0["communicationLost"] = true }
+        case "many":
+            server.addThermostat(id: 1003, name: "Studio", ui: FakeTccServer.ui(mode: 1, indoor: 66, heat: 68, cool: 78, status: 0, running: 1))
+            server.addThermostat(id: 1004, name: "Guest room", ui: FakeTccServer.ui(mode: 2, indoor: 71, heat: 65, cool: 76, status: 0))
         default: break
         }
         let store = ClimateStore(client: TccClient(transport: server), credentials: saved)

@@ -5,16 +5,36 @@ struct ChoresScreen: View {
     @Environment(\.theme) private var theme
     let store: FrameStore
     @State private var showsEverything = false
-    @State private var editor: ChoreEditor.Target?
+    @State private var newTitle = ""
+    @State private var draft: ChoreEditDraft?
     @State private var showsPeople = false
     @State private var deleting: Chore?
+    @FocusState private var addFocused: Bool
+    @FocusState private var editField: ChoreEditDraft.Field?
 
     private var state: FrameState { store.state ?? FrameState(rev: 0) }
+    private var people: [Person] { store.state?.people ?? [] }
 
     var body: some View {
         NavigationStack {
             ThemedList {
-                if !state.chores.isEmpty {
+                Section {
+                    InlineAddField(prompt: "Add a chore", text: $newTitle, focus: $addFocused, limit: Limits.nameLength, onSubmit: add)
+                } footer: {
+                    if state.chores.isEmpty {
+                        Text("Chores appear on the frame for everyone to tick off. Open a chore to pick who does it and on which days.")
+                    }
+                }
+                if state.chores.isEmpty {
+                    Section {
+                        ContentUnavailableView {
+                            Label("No chores yet", systemImage: "checklist")
+                        } description: {
+                            Text("Add the jobs your household shares.")
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                } else {
                     Section {
                         Picker("View", selection: $showsEverything) {
                             Text("Today").tag(false)
@@ -32,44 +52,67 @@ struct ChoresScreen: View {
                 }
             }
             .listSectionSpacing(Space.l)
-            .overlay {
-                if state.chores.isEmpty {
-                    ContentUnavailableView {
-                        Label("No chores yet", systemImage: "checklist")
-                    } description: {
-                        Text("Add the jobs your household shares. They appear on the frame for everyone to tick off.")
-                    } actions: {
-                        Button("Add a chore") { editor = .new }.buttonStyle(.borderedProminent)
-                    }
-                }
-            }
+            .stateAnimation(state.chores)
+            .stateAnimation(draft?.id)
             .refreshable { await store.refresh() }
             .sensoryFeedback(.selection, trigger: showsEverything)
+            .onChange(of: showsEverything) { _, _ in closeEditor() }
             .screenHeader("Chores", status: store.connectionStatus, statusSymbol: store.connectionSymbol) {
                 Button("People", systemImage: "person.2") { showsPeople = true }
                     .headerAction()
-                Button("Add chore", systemImage: "plus") { editor = .new }
+                Button("Add chore", systemImage: "plus") { addFocused = true }
                     .headerAction(prominent: true)
             }
-        }
-        .sheet(item: $editor) { target in
-            ChoreEditor(store: store, target: target).environment(\.theme, theme)
-        }
-        .sheet(isPresented: $showsPeople) {
-            PeopleSheet(store: store).environment(\.theme, theme)
+            .navigationDestination(isPresented: $showsPeople) {
+                PeopleScreen(store: store)
+            }
         }
         .confirmationDialog("Delete “\(deleting?.title ?? "")”?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
-                if let id = deleting?.id { Task { await store.deleteChore(id: id) } }
+                if let id = deleting?.id {
+                    if draft?.id == id { draft = nil }
+                    Task { await store.deleteChore(id: id) }
+                }
             }
         }
         .onAppear {
             #if DEBUG
             if Demo.scrollAnchor == "all" { showsEverything = true }
-            if Demo.scrollAnchor == "editor", let chore = state.chores.first { editor = .existing(chore) }
+            if Demo.scrollAnchor == "editor", let chore = state.chores.first { openEditor(chore) }
             if Demo.scrollAnchor == "people" { showsPeople = true }
+            if Demo.scrollAnchor == "add" { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { addFocused = true } }
             #endif
         }
+    }
+
+    private func add() {
+        guard let title = Limits.cleanName(newTitle) else { return }
+        newTitle = ""
+        addFocused = true
+        Task { await store.addChore(ChoreDraft(title: title)) }
+    }
+
+    private func openEditor(_ chore: Chore) {
+        save()
+        draft = ChoreEditDraft(chore, people: people)
+        editField = .title
+    }
+
+    private func closeEditor() {
+        save()
+        editField = nil
+        draft = nil
+    }
+
+    private func save() {
+        guard let draft, let clean = Limits.cleanName(draft.title), let chore = state.chores.first(where: { $0.id == draft.id }) else { return }
+        let changed = ChoreDraft(title: clean, emoji: draft.emoji, personId: draft.personId, days: draft.days.sorted())
+        guard changed != ChoreDraft(title: chore.title, emoji: chore.emoji, personId: chore.personId, days: chore.days.sorted()) else { return }
+        Task { await store.updateChore(id: draft.id, changed) }
+    }
+
+    private func bind<T>(_ path: WritableKeyPath<ChoreEditDraft, T>, _ fallback: T) -> Binding<T> {
+        Binding(get: { draft?[keyPath: path] ?? fallback }, set: { value in draft?[keyPath: path] = value })
     }
 
     @ViewBuilder private func todaySections(_ today: TodayChores) -> some View {
@@ -81,16 +124,19 @@ struct ChoresScreen: View {
         ForEach(today.groups) { group in
             Section {
                 ForEach(group.chores) { status in
-                    TodayRow(status: status, tint: group.person.map { Color(hex: $0.color) }) {
+                    TodayRow(status: status, tint: group.person.map { Color(hex: $0.color) }, isEditing: draft?.id == status.chore.id) {
                         Task { await store.setChore(id: status.chore.id, done: !status.isDone) }
+                    } edit: {
+                        if draft?.id == status.chore.id { closeEditor() } else { openEditor(status.chore) }
                     }
                     .swipeActions(edge: .trailing) {
-                        Button("Edit", systemImage: "pencil") { editor = .existing(status.chore) }
+                        Button("Edit", systemImage: "pencil") { openEditor(status.chore) }
                     }
                     .contextMenu {
-                        Button("Edit", systemImage: "pencil") { editor = .existing(status.chore) }
+                        Button("Edit", systemImage: "pencil") { openEditor(status.chore) }
                         Button("Delete", systemImage: "trash", role: .destructive) { deleting = status.chore }
                     }
+                    if draft?.id == status.chore.id { editor(status.chore) }
                 }
             } header: {
                 SectionHeader(group.person?.name ?? "Anyone", person: group.person, showsAvatar: true,
@@ -113,21 +159,28 @@ struct ChoresScreen: View {
         ForEach(groups.filter { !$0.1.isEmpty }, id: \.0?.id) { person, chores in
             Section {
                 ForEach(chores) { chore in
+                    let isEditing = draft?.id == chore.id
                     Button {
-                        editor = .existing(chore)
+                        if isEditing { closeEditor() } else { openEditor(chore) }
                     } label: {
                         RowLabel(chore.title, subtitle: ChoreLogic.daysSummary(chore.days), emoji: chore.emoji) {
-                            RowChevron()
+                            RowDisclosure(isExpanded: isEditing) {
+                                if isEditing { closeEditor() } else { openEditor(chore) }
+                            }
+                            .accessibilityHidden(true)
                         }
                     }
                     .buttonStyle(RowButtonStyle())
+                    .accessibilityValue(isEditing ? "Expanded" : "Collapsed")
+                    .accessibilityHint(isEditing ? "Hides the editing controls" : "Shows the editing controls")
                     .swipeActions(edge: .trailing) {
                         Button("Delete", systemImage: "trash", role: .destructive) { deleting = chore }
                     }
                     .contextMenu {
-                        Button("Edit", systemImage: "pencil") { editor = .existing(chore) }
+                        Button("Edit", systemImage: "pencil") { openEditor(chore) }
                         Button("Delete", systemImage: "trash", role: .destructive) { deleting = chore }
                     }
+                    if isEditing { editor(chore) }
                 }
             } header: {
                 SectionHeader(person?.name ?? "Anyone", person: person, showsAvatar: true,
@@ -135,19 +188,105 @@ struct ChoresScreen: View {
             }
         }
     }
+
+    @ViewBuilder private func editor(_ chore: Chore) -> some View {
+        HStack(spacing: Space.m) {
+            TextField("🙂", text: bind(\.emoji, ""))
+                .multilineTextAlignment(.center)
+                .frame(width: Size.glyph + Space.s)
+                .focused($editField, equals: .emoji)
+                .onChange(of: draft?.emoji) { _, new in
+                    if let new, new.count > 1 { draft?.emoji = String(new.suffix(1)) }
+                }
+                .accessibilityLabel("Emoji")
+            Divider()
+            TextField("What needs doing", text: bind(\.title, ""))
+                .focused($editField, equals: .title)
+                .submitLabel(.done)
+                .onSubmit(closeEditor)
+                .onChange(of: draft?.title) { _, new in
+                    if let new, new.count > Limits.nameLength { draft?.title = String(new.prefix(Limits.nameLength)) }
+                }
+            Button(action: closeEditor) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(theme.tint)
+                    .frame(width: Size.touch, height: Size.touch)
+            }
+            .buttonStyle(RowButtonStyle())
+            .accessibilityLabel("Finish editing")
+        }
+        .inlineEditorRow()
+        Picker("Who does it", selection: bind(\.personId, nil)) {
+            Text("Anyone").tag(String?.none)
+            ForEach(people) { person in
+                Text(person.name).tag(String?.some(person.id))
+            }
+        }
+        .pickerStyle(.menu)
+        .onChange(of: draft?.personId) { _, _ in save() }
+        .inlineEditorRow()
+        VStack(alignment: .leading, spacing: Space.s) {
+            HStack(spacing: Space.xs) {
+                ForEach(0..<7, id: \.self) { day in
+                    let isOn = draft?.days.contains(day) ?? false
+                    Button(String(ChoreLogic.dayNames[day].prefix(1))) {
+                        if isOn { draft?.days.remove(day) } else { draft?.days.insert(day) }
+                        save()
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.circle)
+                    .tint(isOn ? theme.tint : Theme.secondaryLabel)
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel(ChoreLogic.dayNames[day])
+                    .accessibilityAddTraits(isOn ? .isSelected : [])
+                }
+            }
+            Text(ChoreLogic.daysSummary(Array(draft?.days ?? []))).font(.note).foregroundStyle(Theme.secondaryLabel)
+        }
+        .padding(.vertical, Space.xs)
+        .stateAnimation(draft?.days)
+        .inlineEditorRow()
+        Button("Delete Chore", systemImage: "trash", role: .destructive) { deleting = chore }
+            .inlineEditorRow()
+    }
+}
+
+struct ChoreEditDraft: Equatable {
+    enum Field {
+        case emoji
+        case title
+    }
+
+    let id: String
+    var title: String
+    var emoji: String
+    var personId: String?
+    var days: Set<Int>
+
+    init(_ chore: Chore, people: [Person]) {
+        id = chore.id
+        title = chore.title
+        emoji = chore.emoji
+        personId = people.contains { $0.id == chore.personId } ? chore.personId : nil
+        days = Set(chore.days)
+    }
 }
 
 private struct TodayRow: View {
     let status: ChoreStatus
     let tint: Color?
+    let isEditing: Bool
     let toggle: () -> Void
+    let edit: () -> Void
 
     var body: some View {
         Button(action: toggle) {
             RowLabel(title: status.chore.title, emoji: status.chore.emoji, isDimmed: status.isDone) {
                 DoneMark(isOn: status.isDone, tint: tint)
             } trailing: {
-                EmptyView()
+                RowDisclosure(isExpanded: isEditing, toggle: edit)
             }
         }
         .buttonStyle(RowButtonStyle())
@@ -155,133 +294,11 @@ private struct TodayRow: View {
         .accessibilityLabel(status.chore.title)
         .accessibilityValue(status.isDone ? "Done" : "Not done")
         .accessibilityHint(status.isDone ? "Marks as not done" : "Marks as done")
+        .accessibilityAction(named: isEditing ? "Finish editing" : "Edit", edit)
     }
 }
 
-struct ChoreEditor: View {
-    enum Target: Identifiable {
-        case new
-        case existing(Chore)
-
-        var id: String {
-            if case .existing(let chore) = self { return chore.id }
-            return "new"
-        }
-    }
-
-    @Environment(\.theme) private var theme
-    @Environment(\.dismiss) private var dismiss
-    let store: FrameStore
-    let target: Target
-    @State private var title = ""
-    @State private var emoji = ""
-    @State private var personId: String?
-    @State private var days: Set<Int> = []
-    @State private var confirmsDelete = false
-    @FocusState private var titleFocused: Bool
-
-    private var existing: Chore? {
-        if case .existing(let chore) = target { return chore }
-        return nil
-    }
-
-    private var people: [Person] { store.state?.people ?? [] }
-
-    var body: some View {
-        NavigationStack {
-            ThemedList {
-                Section {
-                    HStack(spacing: Space.m) {
-                        TextField("🙂", text: $emoji)
-                            .multilineTextAlignment(.center)
-                            .frame(width: Size.glyph + Space.s)
-                            .onChange(of: emoji) { _, new in
-                                if new.count > 1 { emoji = String(new.suffix(1)) }
-                            }
-                            .accessibilityLabel("Emoji")
-                        Divider()
-                        TextField("What needs doing", text: $title)
-                            .focused($titleFocused)
-                            .submitLabel(.done)
-                            .onChange(of: title) { _, new in
-                                if new.count > Limits.nameLength { title = String(new.prefix(Limits.nameLength)) }
-                            }
-                    }
-                }
-                Section {
-                    Picker("Who does it", selection: $personId) {
-                        Text("Anyone").tag(String?.none)
-                        ForEach(people) { person in
-                            Text(person.name).tag(String?.some(person.id))
-                        }
-                    }
-                }
-                Section {
-                    HStack(spacing: Space.xs) {
-                        ForEach(0..<7, id: \.self) { day in
-                            let isOn = days.contains(day)
-                            Button(String(ChoreLogic.dayNames[day].prefix(1))) {
-                                if isOn { days.remove(day) } else { days.insert(day) }
-                            }
-                            .buttonStyle(.bordered)
-                            .buttonBorderShape(.circle)
-                            .tint(isOn ? theme.tint : Theme.secondaryLabel)
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .accessibilityLabel(ChoreLogic.dayNames[day])
-                            .accessibilityAddTraits(isOn ? .isSelected : [])
-                        }
-                    }
-                    .padding(.vertical, Space.xs)
-                    .stateAnimation(days)
-                } header: {
-                    SectionHeader("Which days")
-                } footer: {
-                    Text(ChoreLogic.daysSummary(Array(days)))
-                }
-                if existing != nil {
-                    Section {
-                        Button("Delete Chore", role: .destructive) { confirmsDelete = true }
-                    }
-                }
-            }
-            .navigationTitle(existing == nil ? "New Chore" : "Edit Chore")
-            .navigationBarTitleDisplayMode(.inline)
-            .editorToolbar(canConfirm: Limits.cleanName(title) != nil, onConfirm: save)
-            .confirmationDialog("Delete “\(existing?.title ?? "")”?", isPresented: $confirmsDelete, titleVisibility: .visible) {
-                Button("Delete", role: .destructive) {
-                    if let existing { Task { await store.deleteChore(id: existing.id) } }
-                    dismiss()
-                }
-            }
-        }
-        .onAppear {
-            guard let existing else {
-                titleFocused = true
-                return
-            }
-            title = existing.title
-            emoji = existing.emoji
-            personId = people.contains { $0.id == existing.personId } ? existing.personId : nil
-            days = Set(existing.days)
-        }
-    }
-
-    private func save() {
-        guard let clean = Limits.cleanName(title) else { return }
-        let draft = ChoreDraft(title: clean, emoji: emoji, personId: personId, days: days.sorted())
-        Task {
-            if let existing {
-                await store.updateChore(id: existing.id, draft)
-            } else {
-                await store.addChore(draft)
-            }
-        }
-    }
-}
-
-struct PeopleSheet: View {
-    @Environment(\.dismiss) private var dismiss
+struct PeopleScreen: View {
     let store: FrameStore
     @State private var addsPerson = false
     @State private var removing: Person?
@@ -289,7 +306,6 @@ struct PeopleSheet: View {
     private var people: [Person] { store.state?.people ?? [] }
 
     var body: some View {
-        NavigationStack {
             ThemedList {
                 Section {
                     ForEach(people) { person in
@@ -324,9 +340,6 @@ struct PeopleSheet: View {
                 PersonEditor(store: store, target: .new)
             }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Add person", systemImage: "plus") { addsPerson = true }
                         .disabled(people.count >= Limits.people)
@@ -338,7 +351,6 @@ struct PeopleSheet: View {
                     if let id = removing?.id { Task { await store.deletePerson(id: id) } }
                 }
             }
-        }
     }
 }
 

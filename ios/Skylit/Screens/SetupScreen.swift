@@ -8,7 +8,11 @@ struct SetupScreen: View {
     @State private var finder = LocationFinder()
     @State private var isLocating = false
     @State private var showsCitySearch = false
-    @State private var showsCalendarForm = false
+    @State private var addsCalendar = false
+    @State private var calendarName = ""
+    @State private var calendarColor = Palettes.swatches[5]
+    @State private var calendarLink = ""
+    @FocusState private var calendarNameFocused: Bool
     @State private var removingCalendar: CalendarFeed?
     @State private var confirmsUnpair = false
 
@@ -30,8 +34,8 @@ struct SetupScreen: View {
                 .onAppear {
                     #if DEBUG
                     if let anchor = Demo.scrollAnchor {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { proxy.scrollTo(anchor, anchor: .top) }
-                        if anchor == "calendarForm" { showsCalendarForm = true }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { proxy.scrollTo(anchor == "calendarForm" ? "calendars" : anchor, anchor: .top) }
+                        if anchor == "calendarForm" { addsCalendar = true }
                         if anchor == "city" { showsCitySearch = true }
                     }
                     #endif
@@ -46,9 +50,6 @@ struct SetupScreen: View {
             }
         }
         .task { await store.loadDevices() }
-        .sheet(isPresented: $showsCalendarForm) {
-            CalendarForm(store: store).environment(\.theme, theme)
-        }
     }
 
     private var location: some View {
@@ -125,6 +126,11 @@ struct SetupScreen: View {
         }
     }
 
+    private var cleanLink: String { calendarLink.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canAddCalendar: Bool {
+        Limits.cleanName(calendarName) != nil && cleanLink.lowercased().hasPrefix("https://") && !cleanLink.contains(" ")
+    }
+
     private var calendarSection: some View {
         Section {
             ForEach(calendars) { calendar in
@@ -136,21 +142,81 @@ struct SetupScreen: View {
                         Button("Remove from Frame", systemImage: "trash", role: .destructive) { removingCalendar = calendar }
                     }
             }
-            Button("Add a calendar", systemImage: "plus") { showsCalendarForm = true }
-                .disabled(calendars.count >= Limits.calendars)
+            if calendars.count < Limits.calendars {
+                Button {
+                    addsCalendar.toggle()
+                    calendarNameFocused = addsCalendar
+                } label: {
+                    HStack {
+                        Label("Add a calendar", systemImage: "plus")
+                        Spacer()
+                        RowDisclosure(isExpanded: addsCalendar) {
+                            addsCalendar.toggle()
+                            calendarNameFocused = addsCalendar
+                        }
+                        .accessibilityHidden(true)
+                    }
+                }
+                .accessibilityValue(addsCalendar ? "Expanded" : "Collapsed")
+            }
+            if addsCalendar {
+                TextField("Name on the frame", text: $calendarName, prompt: Text("Family"))
+                    .focused($calendarNameFocused)
+                    .submitLabel(.next)
+                    .onChange(of: calendarName) { _, new in
+                        if new.count > Limits.calendarNameLength { calendarName = String(new.prefix(Limits.calendarNameLength)) }
+                    }
+                    .inlineEditorRow()
+                SwatchPicker(selection: $calendarColor)
+                    .inlineEditorRow()
+                HStack(alignment: .top, spacing: Space.m) {
+                    TextField("Paste the secret address", text: $calendarLink, axis: .vertical)
+                        .lineLimit(1...4)
+                        .keyboardType(.URL)
+                        .textContentType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .privacySensitive()
+                        .accessibilityLabel("Secret address in iCal format")
+                    PasteButton(payloadType: String.self) { strings in
+                        calendarLink = strings.first ?? ""
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonBorderShape(.capsule)
+                }
+                .inlineEditorRow()
+                Button("Add calendar", systemImage: "checkmark", action: addCalendar)
+                    .disabled(!canAddCalendar)
+                    .inlineEditorRow()
+            }
         } header: {
             SectionHeader("Calendars")
         } footer: {
-            Text(calendars.count >= Limits.calendars
-                 ? "The frame holds up to \(Limits.calendars) calendars."
-                 : "Google Calendar feeds shown on the frame.")
+            if addsCalendar {
+                Text("Google Calendar on a computer: Settings, the calendar, then “Secret address in iCal format”. The address is a password; it stays on the frame.")
+            } else {
+                Text(calendars.count >= Limits.calendars
+                     ? "The frame holds up to \(Limits.calendars) calendars."
+                     : "Google Calendar feeds shown on the frame.")
+            }
         }
+        .stateAnimation(addsCalendar)
         .confirmationDialog("Remove \(removingCalendar?.name ?? "") from the frame?",
                             isPresented: Binding(get: { removingCalendar != nil }, set: { if !$0 { removingCalendar = nil } }), titleVisibility: .visible) {
             Button("Remove", role: .destructive) {
                 if let id = removingCalendar?.id { Task { await store.deleteCalendar(id: id) } }
             }
         }
+    }
+
+    private func addCalendar() {
+        guard let clean = Limits.cleanName(calendarName), canAddCalendar else { return }
+        let url = cleanLink
+        calendarName = ""
+        calendarLink = ""
+        calendarNameFocused = false
+        addsCalendar = false
+        Task { await store.addCalendar(name: clean, color: calendarColor, url: url) }
     }
 
     private var devices: some View {
@@ -341,63 +407,5 @@ struct ICloudAlbumSection: View {
             if await store.connectICloudAlbum(link: entered) { link = "" }
             isConnecting = false
         }
-    }
-}
-
-struct CalendarForm: View {
-    let store: FrameStore
-    @State private var name = ""
-    @State private var color = Palettes.swatches[5]
-    @State private var link = ""
-    @FocusState private var nameFocused: Bool
-
-    private var cleanLink: String { link.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var canSave: Bool {
-        Limits.cleanName(name) != nil && cleanLink.lowercased().hasPrefix("https://") && !cleanLink.contains(" ")
-    }
-
-    var body: some View {
-        NavigationStack {
-            ThemedList {
-                Section {
-                    TextField("Name on the frame", text: $name, prompt: Text("Family"))
-                        .focused($nameFocused)
-                        .onChange(of: name) { _, new in
-                            if new.count > Limits.calendarNameLength { name = String(new.prefix(Limits.calendarNameLength)) }
-                        }
-                    SwatchPicker(selection: $color)
-                }
-                Section {
-                    HStack(alignment: .top, spacing: Space.m) {
-                        TextField("Paste the secret address", text: $link, axis: .vertical)
-                            .lineLimit(1...4)
-                            .keyboardType(.URL)
-                            .textContentType(.URL)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .privacySensitive()
-                        PasteButton(payloadType: String.self) { strings in
-                            link = strings.first ?? ""
-                        }
-                        .labelStyle(.iconOnly)
-                        .buttonBorderShape(.capsule)
-                    }
-                } header: {
-                    SectionHeader("Secret address in iCal format")
-                } footer: {
-                    Text("Google Calendar on a computer: Settings, the calendar, then “Secret address in iCal format”.")
-                }
-            }
-            .navigationTitle("Add Calendar")
-            .navigationBarTitleDisplayMode(.inline)
-            .editorToolbar("Add", canConfirm: canSave, onConfirm: save)
-        }
-        .onAppear { nameFocused = true }
-    }
-
-    private func save() {
-        guard let clean = Limits.cleanName(name) else { return }
-        let url = cleanLink
-        Task { await store.addCalendar(name: clean, color: color, url: url) }
     }
 }
