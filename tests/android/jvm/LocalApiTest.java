@@ -796,6 +796,13 @@ public final class LocalApiTest {
     api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
     same(before, call("GET", "/v1/state", null).text(), "after a restart the frame holds exactly what it acknowledged");
     same("p3", row(call("POST", "/v1/people", "{\"name\":\"Noor\",\"color\":\"#123456\"}"), "person").get("id"), "ids refused during the failure are not skipped");
+    storage.full = true;
+    String own = (String) Json.map(call("GET", "/v1/devices", null).list().get(0)).get("id");
+    same(500, call("DELETE", "/v1/devices/" + own, null).status, "a phone's own removal that cannot be saved is an error");
+    same(401, call("GET", "/v1/state", null).status, "and the phone is refused until the frame restarts");
+    storage.full = false;
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    same(200, call("GET", "/v1/state", null).status, "when it is paired again, as storage says");
   }
 
   static void clockless() throws Exception {
@@ -1201,6 +1208,19 @@ public final class LocalApiTest {
     return Fakes.inMemory(api, ("GET /v2/info HTTP/1.1\r\n" + line + "\r\n").getBytes(StandardCharsets.ISO_8859_1)).status;
   }
 
+  static void changedWhileUnobserved() throws Exception {
+    fresh();
+    long seen = rev();
+    calendars.add("Family", "#2D5BFF", FEED);
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    Fakes.Reply polled = call("GET", "/v1/state?since=" + seen, null);
+    same(200, polled.status, "a calendar added on the frame just before a restart is not hidden behind 304");
+    same(1, Json.list(polled.object().get("calendars")).size(), "and the phone receives it");
+    same(304, call("GET", "/v1/state?since=" + rev(), null).status, "after which nothing is new");
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    same(304, call("GET", "/v1/state?since=" + polled.object().get("rev"), null).status, "and a restart with nothing new changes nothing");
+  }
+
   static void hardening() throws Exception {
     fresh();
     for (String host : new String[] {"192.168.1.20", "192.168.1.20:8765", "10.0.0.7:1", "[fe80::1]:8765", "[fd00::2]", "[fe80::1%25wlan0]:8765",
@@ -1373,6 +1393,7 @@ public final class LocalApiTest {
     photosOverHttp();
     identity();
     persistence();
+    changedWhileUnobserved();
     hardening();
     manyDevices();
     System.out.println("LocalApi: " + checks + " checks passed");

@@ -4,11 +4,11 @@
 
 Covers the TLS phone API with v2 pairing, the household store, the iCloud album
 mirror, the Honeywell thermostat tiles, Settings closing itself, and the fixes from
-three QA passes. Nothing in this entry was run on a physical frame, against a real
+four QA passes. Nothing in this entry was run on a physical frame, against a real
 Honeywell or iCloud account, or with a real iPhone.
 
-- 135 JavaScript tests and 34 Python tests pass. The Python run includes the
-  desktop-JVM checks of the frame's own Java: 5,642 local API, 206 TLS server,
+- 135 JavaScript tests and 35 Python tests pass, three runs in a row. The Python run includes the
+  desktop-JVM checks of the frame's own Java: 5,651 local API, 205 TLS server,
   589 iCloud album, 415 thermostat client and 97 thermostat bridge assertions.
 - 35 rendered browser checks pass with no runtime errors or load retries. A
   separate 396-state sweep (0–8 thermostat tiles × 0–10 events × both text sizes
@@ -20,6 +20,12 @@ Honeywell or iCloud account, or with a real iPhone.
   email address in commit metadata.
 - The same server run on a Mac (`scripts/dev_server.py`) passed 74 socket-level
   checks: pairing, limits at and just over each size, slow and flooding clients.
+- `tests/test_rehearsal.py` walks one morning against that server: two phones pair,
+  people, chores, shopping, photos, city, palette, a calendar and the canned album are
+  added, the dashboard ticks chores and items through the bridge, the first phone
+  unpairs, and after a restart the second phone finds everything intact.
+- The fourth pass found one fault: a picture or calendar that arrived while no phone
+  was asking was hidden behind `304` if the frame restarted before the next request.
 
 Still to be checked by a person, on the frame:
 

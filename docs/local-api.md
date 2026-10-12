@@ -32,8 +32,8 @@ This file is the contract between the Android viewer, the dashboard and the iOS 
   Clients branch on `code`, never on `message`.
 - A change the frame cannot write to its storage (a full disk) is `500` `internal` and is not
   applied: the frame keeps showing, and serving, what it last saved. This covers people, chores,
-  shopping, both settings, connecting an album and a phone removing itself. The request can be
-  repeated later.
+  shopping, both settings and connecting an album. The request can be repeated later. A phone
+  removing itself also gets `500`, but its token is refused from then until the frame restarts.
 - Every authenticated request carries `Authorization: Bearer <token>`, where `<token>` is the 64
   lowercase hex characters of the phone's 32 raw token bytes. Anything else, including uppercase
   hex, is `401`. A route that does not exist is `401` without a valid token and `404` with one.
@@ -169,7 +169,9 @@ It does not protect against someone who can read the frame's screen and touch it
 }
 ```
 
-- `rev` increases by one on every change, from any source, and survives a restart. A request
+- `rev` increases by one on every change, from any source, and survives a restart. A picture or
+  calendar that arrived while no phone was asking counts at the next request, also when the frame
+  restarted in between. A request
   that changes nothing (a `PATCH` with the same values, `clear-done` with nothing ticked) returns
   the current `rev` unchanged. `GET /v1/state?since=42` returns `304` when `rev` is still 42 and
   the full state otherwise; `since` must be digits (`400` if not).

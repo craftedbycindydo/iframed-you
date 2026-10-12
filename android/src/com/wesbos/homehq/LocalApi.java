@@ -92,7 +92,11 @@ final class LocalApi {
     } catch (Json.Malformed | ApiException | RuntimeException absentOrUnreadable) {
       storage.put("settings", Json.write(settings));
     }
-    observed = external();
+    observed = storage.get("observed");
+    if (observed == null) {
+      observed = external();
+      storage.put("observed", observed);
+    }
   }
 
   String frameId() {
@@ -210,6 +214,7 @@ final class LocalApi {
     String current = external();
     if (!current.equals(observed)) {
       observed = current;
+      storage.put("observed", current);
       return household.touch();
     }
     return household.rev();
@@ -219,7 +224,7 @@ final class LocalApi {
     StringBuilder signature = new StringBuilder(Json.write(calendars.list()));
     for (Photo photo : photos.list()) signature.append(photo.id);
     signature.append(Json.write(icloud.status()));
-    return signature.toString();
+    return Digests.sha256(signature.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
   }
 
   private String today() {

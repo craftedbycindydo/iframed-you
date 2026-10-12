@@ -107,7 +107,12 @@ covers 960×540, 1024×640, 1280×720/800, 1440×900, 1600×900, 1920×1080/1200
 
 `scripts/dev_server.py` runs the frame's real server on this computer with throwaway
 data (`--pair-window`, `--auto-approve`, `--fake-icloud`, `--control-port`) for
-socket-level and iPhone-app testing without a frame.
+socket-level and iPhone-app testing without a frame. Its control port also takes
+`/household/<URL-encoded op>` (a dashboard change through the bridge) and `/restart`
+(a new server over the same stored data). `tests/test_rehearsal.py` uses both to walk
+one morning end to end: pair, fill the household, photos, settings, a calendar and
+the canned album, dashboard changes, a second phone, the first phone unpairing and
+a restart.
 
 Record any first-load retry separately. The previously observed desktop module
 omission is not proof of a native asset failure. Chrome browser geometry coverage

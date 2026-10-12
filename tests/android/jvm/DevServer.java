@@ -11,7 +11,14 @@ import java.util.List;
 import java.util.Map;
 
 public final class DevServer {
-  private static LocalApi api;
+  private static volatile LocalApi api;
+  private static volatile ICloudSync album;
+  private static LocalServer server;
+  private static final Fakes.Storage storage = new Fakes.Storage();
+  private static final Fakes.PhotoShelf photos = new Fakes.PhotoShelf();
+  private static final Fakes.CalendarShelf calendars = new Fakes.CalendarShelf();
+  private static boolean fakeAlbum;
+  private static InetAddress address;
   private static volatile String phase = "idle";
   private static volatile String tap = "none";
   private static volatile long tapDelay;
@@ -51,8 +58,15 @@ public final class DevServer {
     tapping.start();
   }
 
-  private static String control(String target) {
-    if (target.equals("/open")) openWindow();
+  private static String control(String target) throws IOException {
+    if (target.startsWith("/household/")) return api.householdMutate(java.net.URLDecoder.decode(target.substring(11), "UTF-8"));
+    if (target.equals("/restart")) {
+      int port = server.port();
+      server.stop();
+      boot();
+      server.start(address, port);
+      album.request(true);
+    } else if (target.equals("/open")) openWindow();
     else if (target.equals("/cancel")) api.pairingCancel();
     else if (target.startsWith("/tap/")) api.pairingTap(target.substring(5));
     else if (!target.equals("/state")) return null;
@@ -74,7 +88,7 @@ public final class DevServer {
             String line = new BufferedReader(new InputStreamReader(caller.getInputStream(), StandardCharsets.ISO_8859_1)).readLine();
             String[] parts = line == null ? new String[0] : line.split(" ");
             String answer = parts.length == 3 ? control(parts[1]) : null;
-            byte[] body = ((answer == null ? "{\"error\":\"Use /state, /open, /cancel or /tap/NN\"}" : answer) + "\n").getBytes(StandardCharsets.UTF_8);
+            byte[] body = ((answer == null ? "{\"error\":\"Use /state, /open, /cancel, /tap/NN, /household/JSON or /restart\"}" : answer) + "\n").getBytes(StandardCharsets.UTF_8);
             caller.getOutputStream().write(("HTTP/1.1 " + (answer == null ? "404 Not Found" : "200 OK") + "\r\nContent-Type: application/json\r\nContent-Length: "
                 + body.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1));
             caller.getOutputStream().write(body);
@@ -89,16 +103,7 @@ public final class DevServer {
     serving.start();
   }
 
-  public static void main(String[] args) throws Exception {
-    int port = args.length > 0 ? Integer.parseInt(args[0]) : LocalServer.PREFERRED_PORT;
-    InetAddress address = args.length > 1 && args[1].equals("lan") ? null : InetAddress.getLoopbackAddress();
-    boolean fakeAlbum = args.length > 2 && args[2].equals("fake-icloud");
-    boolean window = args.length > 3 && args[3].equals("window");
-    tap = args.length > 4 ? args[4] : "none";
-    tapDelay = args.length > 5 ? Long.parseLong(args[5]) : 0;
-    int controlPort = args.length > 6 ? Integer.parseInt(args[6]) : -1;
-    Fakes.Storage storage = new Fakes.Storage();
-    Fakes.PhotoShelf photos = new Fakes.PhotoShelf();
+  private static void boot() {
     FrameTime.Clock clock = new FrameTime.Clock() {
       @Override public long now() {
         return System.currentTimeMillis();
@@ -109,8 +114,7 @@ public final class DevServer {
         return System.nanoTime() / 1000000L;
       }
     };
-    final ICloudSync[] album = new ICloudSync[1];
-    album[0] = new ICloudSync(storage, clock, uptime, fakeAlbum ? Fakes.sampleAlbum() : new ICloudHttp(), photos.library, new ICloudSync.Runner() {
+    album = new ICloudSync(storage, clock, uptime, fakeAlbum ? Fakes.sampleAlbum() : new ICloudHttp(), photos.library, new ICloudSync.Runner() {
       @Override public void start(Runnable work) {
         Thread thread = new Thread(work, "album-sync");
         thread.setDaemon(true);
@@ -118,10 +122,10 @@ public final class DevServer {
       }
     }, new ICloudSync.Listener() {
       @Override public void changed() {
-        System.out.println("icloud " + Json.write(album[0].status()));
+        System.out.println("icloud " + Json.write(album.status()));
       }
     });
-    api = new LocalApi(storage, clock, uptime, new Fakes.CalendarShelf(), photos, album[0], new LocalApi.Events() {
+    api = new LocalApi(storage, clock, uptime, calendars, photos, album, new LocalApi.Events() {
       @Override public void householdChanged(String snapshot) {
         System.out.println("household " + snapshot);
       }
@@ -138,7 +142,18 @@ public final class DevServer {
         System.out.println("settings requested " + settings);
       }
     });
-    LocalServer server = new LocalServer(api);
+    server = new LocalServer(api);
+  }
+
+  public static void main(String[] args) throws Exception {
+    int port = args.length > 0 ? Integer.parseInt(args[0]) : LocalServer.PREFERRED_PORT;
+    address = args.length > 1 && args[1].equals("lan") ? null : InetAddress.getLoopbackAddress();
+    fakeAlbum = args.length > 2 && args[2].equals("fake-icloud");
+    boolean window = args.length > 3 && args[3].equals("window");
+    tap = args.length > 4 ? args[4] : "none";
+    tapDelay = args.length > 5 ? Long.parseLong(args[5]) : 0;
+    int controlPort = args.length > 6 ? Integer.parseInt(args[6]) : -1;
+    boot();
     int bound = server.start(address, port);
     System.out.println("Skylit dev frame " + api.frameId() + " fp " + api.identity().fp + " listening on "
         + (address == null ? "all interfaces" : "127.0.0.1") + " port " + bound);
@@ -163,7 +178,7 @@ public final class DevServer {
     for (int second = 1; true; second++) {
       Thread.sleep(1000L);
       api.pairingStatus(0, false, "");
-      if (second % 60 == 0) album[0].request(false);
+      if (second % 60 == 0) album.request(false);
     }
   }
 }
