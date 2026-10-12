@@ -152,6 +152,7 @@ enum Demo {
     static var isOn: Bool { UserDefaults.standard.bool(forKey: "demoFrame") }
     static var screen: String? { isOn ? UserDefaults.standard.string(forKey: "demoScreen") : nil }
     static var scrollAnchor: String? { isOn ? UserDefaults.standard.string(forKey: "demoScroll") : nil }
+    static var dropsFirstCode: Bool { isOn && UserDefaults.standard.bool(forKey: "demoDropCode") }
 
     @MainActor
     static func session() -> FrameSession? {

@@ -409,7 +409,7 @@ final class FrameSessionTests: XCTestCase {
         await session.receive(.services([]))
         XCTAssertNil(session.store)
         XCTAssertEqual(session.warning, FrameSession.impostorText("Kitchen frame"))
-        XCTAssertTrue(restarted.requests.isEmpty)
+        assertNothingSecretReached(restarted)
         XCTAssertEqual(tokens.credential(for: server.frameId), server.credential)
     }
 
@@ -573,6 +573,38 @@ final class FrameSessionTests: XCTestCase {
         server.setUnreachable(false)
         await session.receive(.services(["Skylit"]))
         XCTAssertEqual(session.store?.state?.rev, 42)
+    }
+
+    func testLeavingWhileAReconnectIsStillLookingDoesNotBringTheFrameBack() async {
+        rememberPairing()
+        let gate = GatedTransport(network.pinned(server.fingerprint))
+        let session = FrameSession(browser: browser, connector: GatedNetwork(network, gate), tokens: tokens, pairedStore: PairedFrameStore(defaults: defaults),
+                                   deviceNames: DeviceNameStore(defaults: defaults, fallback: "Test phone"), pollInterval: .milliseconds(1))
+        gate.hold { $0.url?.path == "/v2/info" }
+        let looking = Task { await session.receive(.services(["Skylit"])) }
+        for _ in 0..<2000 where gate.heldCount == 0 { try? await Task.sleep(for: .milliseconds(1)) }
+        XCTAssertEqual(gate.heldCount, 1)
+        session.leave()
+        gate.release()
+        await looking.value
+        XCTAssertNil(session.store)
+        XCTAssertNil(session.paired)
+        XCTAssertNil(PairedFrameStore(defaults: defaults).current)
+        XCTAssertNotNil(tokens.credential(for: server.frameId))
+    }
+
+    func testAnotherDeviceOnTheOldAddressThatDoesNotClaimThisFrameIsNotAnImpostor() async {
+        rememberPairing()
+        PairedFrameStore(defaults: defaults).current = savedFrame
+        let other = DemoFrameServer(identity: "garage", name: "Garage frame")
+        network.place(other, at: "demo-frame.local")
+        let session = makeSession()
+        await session.receive(.services([]))
+        XCTAssertNil(session.store)
+        XCTAssertNil(session.warning)
+        XCTAssertNotNil(session.paired)
+        assertNothingSecretReached(other)
+        XCTAssertEqual(tokens.credential(for: server.frameId), server.credential)
     }
 
     func testRunConsumesBrowserEvents() async {

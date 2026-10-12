@@ -132,7 +132,7 @@ public final class FrameSession {
                 _ = try await FrameAPI(baseURL: stored, transport: transport).info()
                 match = stored
             } catch FrameError.pinMismatch {
-                mismatch = true
+                if let other = await probe(stored), other.info.frameId == frame.frameId || other.info.name == frame.name { mismatch = true }
             } catch {}
         }
         if mismatch {
@@ -152,7 +152,7 @@ public final class FrameSession {
         }
         guard let paired, store == nil, let credential = tokens.credential(for: paired.frameId) else { return }
         let attempt = Task {
-            guard let url = await self.locate(paired, pin: credential.fp), self.store == nil else { return }
+            guard let url = await self.locate(paired, pin: credential.fp), self.store == nil, self.paired?.frameId == paired.frameId else { return }
             await self.open(paired, url: url, credential: credential)
         }
         reconnecting = attempt

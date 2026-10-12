@@ -115,18 +115,44 @@ final class BehaviourUITests: XCTestCase {
     }
 
     func testCodeTypedAfterATimedOutAttemptIsStillChecked() {
-        let app = launch("pairing", ["-demoPairing", "expired"])
-        XCTAssertTrue(app.staticTexts["Pairing timed out. Nothing was paired. Open Pair a phone on the frame and try again."].waitForExistence(timeout: 15))
-        app.buttons["Try again"].tap()
-        XCTAssertTrue(app.buttons["Pair"].waitForExistence(timeout: 5))
-        app.buttons["Pair"].tap()
+        for delay in [0.0, 0.6, 2.5] {
+            let app = launch("pairing", ["-demoPairing", "expired"])
+            XCTAssertTrue(app.staticTexts["Pairing timed out. Nothing was paired. Open Pair a phone on the frame and try again."].waitForExistence(timeout: 15))
+            app.buttons["Try again"].tap()
+            XCTAssertTrue(app.buttons["Pair"].waitForExistence(timeout: 5))
+            app.buttons["Pair"].tap()
+            let entry = app.textFields["Pairing code"]
+            XCTAssertTrue(entry.waitForExistence(timeout: 10))
+            if delay == 0 {
+                entry.tap()
+            } else {
+                Thread.sleep(forTimeInterval: delay)
+            }
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+            entry.typeText("000000")
+            let checked = app.staticTexts["That code didn't match. 2 tries left."].waitForExistence(timeout: 5)
+            if !checked { snap("code-after-timeout-ignored-\(delay)") }
+            XCTAssertTrue(checked, "six digits typed \(delay)s after a timed-out attempt must be checked; field value \(String(describing: entry.value))")
+            entry.typeText("000000")
+            XCTAssertTrue(app.staticTexts["That code didn't match. 1 try left."].waitForExistence(timeout: 5), "the same wrong code typed again is checked again")
+            app.terminate()
+        }
+    }
+
+    func testSixDigitsThatAreNeverCheckedGetACalmMessageAndTryAgain() {
+        let app = launch("pairing", ["-demoPairing", "code", "-demoDropCode", "YES"])
         let entry = app.textFields["Pairing code"]
-        XCTAssertTrue(entry.waitForExistence(timeout: 10))
+        XCTAssertTrue(entry.waitForExistence(timeout: 15))
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         entry.typeText("000000")
-        let checked = app.staticTexts["That code didn't match. 2 tries left."].waitForExistence(timeout: 5)
-        if !checked { snap("code-after-timeout-ignored") }
-        XCTAssertTrue(checked, "six digits typed after a timed-out attempt must be checked; field value \(String(describing: entry.value))")
+        XCTAssertFalse(app.buttons["Try again"].exists)
+        let calm = app.staticTexts["That code couldn't be checked. Tap Try again, or Cancel and start over."]
+        XCTAssertTrue(calm.waitForExistence(timeout: 8), "a code that is not checked within a few seconds must say so")
+        snap("code-unchecked")
+        app.buttons["Try again"].tap()
+        XCTAssertTrue(app.staticTexts["That code didn't match. 2 tries left."].waitForExistence(timeout: 5), "Try again resubmits the held digits")
+        XCTAssertFalse(calm.exists)
+        XCTAssertFalse(app.buttons["Try again"].exists)
     }
 
     func testCancellingMidCodeAndBackgroundingKeepTheSheetConsistent() {

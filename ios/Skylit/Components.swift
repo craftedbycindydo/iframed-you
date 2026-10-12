@@ -468,6 +468,7 @@ struct CodeEntry: View {
     var onComplete: (String) -> Void
 
     @FocusState private var focused: Bool
+    @State private var submitted = ""
     private let count = PairingFlow.codeLength
     #if DEBUG
     @MainActor static var trace = ""
@@ -480,13 +481,14 @@ struct CodeEntry: View {
                 .keyboardType(.numberPad)
                 .focused($focused)
                 .opacity(0.02)
-                .onChange(of: code) { old, new in
+                .onChange(of: code, initial: true) { old, new in
                     let clean = PairingFlow.asciiDigits(new)
                     if clean != new { code = clean }
-                    let fires = clean.count == count && old.count < count
+                    let fires = clean.count == count && clean != submitted
                     #if DEBUG
                     Self.trace += "\(old.count)>\(new.count)\(fires ? "!" : "") "
                     #endif
+                    submitted = clean.count == count ? clean : ""
                     if fires { onComplete(clean) }
                 }
                 .accessibilityLabel("Pairing code")

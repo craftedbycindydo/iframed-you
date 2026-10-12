@@ -20,6 +20,7 @@ public final class PairingFlow {
     public nonisolated static let windowText = "The frame isn't ready to pair. On the frame, open Settings → Phone app → Pair a phone, then try again."
     public nonisolated static let cancelledText = "The frame ended this pairing. Nothing was paired. Open Pair a phone on the frame and try again."
     public nonisolated static let nameText = "Give this phone a name of 1 to 40 characters."
+    public nonisolated static let uncheckedText = "That code couldn't be checked. Tap Try again, or Cancel and start over."
 
     public nonisolated static func tapText(_ pick: String) -> String {
         "Tap \(pick) on the frame"
@@ -59,6 +60,7 @@ public final class PairingFlow {
     private let patience: Duration
     private var session: String?
     private var attempt: Attempt?
+    private var generation = 0
 
     public init(frameName: String, api: FrameAPI, probe: FrameAPI, fingerprint: @escaping @Sendable () -> String?,
                 tokens: TokenStoring, names: DeviceNameStore, pollInterval: Duration = .seconds(1), patience: Duration = .seconds(180)) {
@@ -81,9 +83,13 @@ public final class PairingFlow {
         names.name = deviceName
         step = .starting
         message = nil
+        let mine = generation
         do {
-            guard try await probe.info().pairing else { return retry(Self.windowText) }
+            let open = try await probe.info().pairing
+            guard generation == mine else { return }
+            guard open else { return retry(Self.windowText) }
         } catch {
+            guard generation == mine else { return }
             return retry(FrameError.from(error).userMessage)
         }
         do {
@@ -93,24 +99,28 @@ public final class PairingFlow {
             do {
                 started = try await api.pairStart(commit: PairingCrypto.sha256(nP), tokenHash: PairingCrypto.sha256(token), deviceName: deviceName)
             } catch let failure as FrameError where failure.isConnectivity {
+                guard generation == mine else { return }
                 return retry(failure.userMessage)
             } catch FrameError.api(status: 409, code: "conflict") {
+                guard generation == mine else { return }
                 return retry(Self.windowText)
             }
             guard Hex.isValid(started.session, bytes: 16) else { throw FrameError.invalidResponse }
+            guard generation == mine, step == .starting else { return await cancel(started.session) }
             session = started.session
-            guard step == .starting else { return await cancelOnFrame() }
             guard let nF = Hex.decode(started.nF, bytes: 32), let fp = fingerprint(), let fpRaw = Hex.decode(fp, bytes: Pin.bytes) else {
                 throw FrameError.invalidResponse
             }
             try await api.pairReveal(session: started.session, nP: Hex.encode(nP))
-            guard step == .starting else { return await cancelOnFrame() }
+            guard generation == mine, step == .starting else { return await cancel(started.session) }
             let derived = PairingCrypto.derive(nP: nP, nF: nF, fpRaw: fpRaw)
             attempt = Attempt(token: Hex.encode(token), fp: fp, code: derived.code, pick: derived.pick)
             step = .enteringCode
         } catch FrameError.api(status: 410, code: _) {
+            guard generation == mine else { return }
             await fail(Self.timeoutText)
         } catch {
+            guard generation == mine else { return }
             await fail()
         }
     }
@@ -136,12 +146,13 @@ public final class PairingFlow {
 
     public func awaitResult() async -> (frame: PairedFrame, credential: FrameCredential)? {
         guard case .confirming = step, let attempt, let session else { return nil }
+        let mine = generation
         let clock = ContinuousClock()
         let deadline = clock.now + patience
         while true {
             do {
                 let result = try await api.pairResult(session: session)
-                guard case .confirming = step else { return nil }
+                guard generation == mine, case .confirming = step else { return nil }
                 if let result {
                     guard result.frameId == Pin.frameId(for: attempt.fp) else {
                         await fail()
@@ -155,17 +166,17 @@ public final class PairingFlow {
                     return (PairedFrame(frameId: credential.frameId, name: Limits.display(result.name)), credential)
                 }
             } catch let failure as FrameError where failure.isConnectivity {
-                guard case .confirming = step else { return nil }
+                guard generation == mine, case .confirming = step else { return nil }
             } catch FrameError.api(status: 410, code: _) {
-                guard case .confirming = step else { return nil }
+                guard generation == mine, case .confirming = step else { return nil }
                 await fail(Self.timeoutText)
                 return nil
             } catch FrameError.api(status: 403, code: _), FrameError.api(status: 404, code: _) {
-                guard case .confirming = step else { return nil }
+                guard generation == mine, case .confirming = step else { return nil }
                 await fail(Self.cancelledText)
                 return nil
             } catch {
-                guard case .confirming = step else { return nil }
+                guard generation == mine, case .confirming = step else { return nil }
                 await fail()
                 return nil
             }
@@ -174,12 +185,13 @@ public final class PairingFlow {
                 return nil
             }
             try? await Task.sleep(for: pollInterval)
-            guard case .confirming = step else { return nil }
+            guard generation == mine, case .confirming = step else { return nil }
         }
     }
 
     public func abandon() async {
         guard step != .paired, step != .failed else { return }
+        generation += 1
         step = .failed
         message = nil
         attempt = nil
@@ -188,6 +200,7 @@ public final class PairingFlow {
 
     public func reset() {
         guard step == .failed else { return }
+        generation += 1
         step = .naming
         message = nil
         triesLeft = Self.attempts
@@ -207,7 +220,11 @@ public final class PairingFlow {
 
     private func cancelOnFrame() async {
         guard let id = session else { return }
-        session = nil
+        await cancel(id)
+    }
+
+    private func cancel(_ id: String) async {
+        if session == id { session = nil }
         try? await api.pairCancel(session: id)
     }
 }

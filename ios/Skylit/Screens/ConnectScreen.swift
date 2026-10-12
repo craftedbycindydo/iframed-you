@@ -200,6 +200,7 @@ struct PairingSheet: View {
     let flow: PairingFlow
     @State private var code = ""
     @State private var name = ""
+    @State private var unchecked = false
     @FocusState private var nameFocused: Bool
 
     private var title: String {
@@ -266,6 +267,13 @@ struct PairingSheet: View {
         .onChange(of: flow.message) { _, message in
             if message != nil { code = "" }
         }
+        .task(id: code) {
+            unchecked = false
+            guard PairingFlow.isValid(code: code) else { return }
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            unchecked = flow.step == .enteringCode && flow.message == nil
+        }
         .onAppear { name = flow.suggestedName }
         .presentationDetents([.large])
         .interactiveDismissDisabled(flow.step != .failed)
@@ -306,27 +314,38 @@ struct PairingSheet: View {
 
     private var codeEntry: some View {
         Section {
-            CodeEntry(code: $code) { entered in
-                Task {
-                    #if DEBUG
-                    CodeEntry.trace += "S\(flow.step == .enteringCode ? "e" : "x")\(session.pairing === flow ? "=" : "#") "
-                    #endif
-                    await session.submit(code: entered)
-                    #if DEBUG
-                    CodeEntry.trace += "R\(flow.message ?? "-")|\(flow.step) "
-                    #endif
-                }
+            CodeEntry(code: $code, onComplete: submit)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Space.s)
+            if unchecked {
+                Button("Try again", systemImage: "arrow.clockwise") { submit(code) }
+                    .listRowBackground(theme.groupedBackground)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, Space.s)
         } footer: {
             if let message = flow.message {
                 Text(message).foregroundStyle(theme.tint)
+            } else if unchecked {
+                Text(PairingFlow.uncheckedText).foregroundStyle(theme.tint)
             } else {
                 Text("You have three tries.")
             }
         }
         .listRowBackground(Color.clear)
+    }
+
+    private func submit(_ entered: String) {
+        #if DEBUG
+        if Demo.dropsFirstCode, !unchecked { return }
+        #endif
+        Task {
+            #if DEBUG
+            CodeEntry.trace += "S\(flow.step == .enteringCode ? "e" : "x")\(session.pairing === flow ? "=" : "#") "
+            #endif
+            await session.submit(code: entered)
+            #if DEBUG
+            CodeEntry.trace += "R\(flow.message ?? "-")|\(flow.step) "
+            #endif
+        }
     }
 
     private func confirming(_ pick: String) -> some View {

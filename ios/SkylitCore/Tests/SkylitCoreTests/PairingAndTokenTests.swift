@@ -455,6 +455,123 @@ final class PairingFlowTests: XCTestCase {
         XCTAssertNotNil(result)
         XCTAssertEqual(flow.step, .paired)
     }
+
+    private func gatedFlow() -> (PairingFlow, GatedTransport) {
+        let transport = network.pairing()
+        let gate = GatedTransport(transport)
+        let flow = PairingFlow(frameName: "Kitchen", api: FrameAPI(baseURL: DemoFrameServer.address, transport: gate),
+                               probe: FrameAPI(baseURL: DemoFrameServer.address, transport: network.probe()),
+                               fingerprint: { transport.fingerprint }, tokens: tokens,
+                               names: DeviceNameStore(defaults: defaults, fallback: "Test phone"), pollInterval: .milliseconds(1), patience: .seconds(5))
+        return (flow, gate)
+    }
+
+    private func settle(_ gate: GatedTransport, held: Int) async {
+        for _ in 0..<2000 where gate.heldCount < held { try? await Task.sleep(for: .milliseconds(1)) }
+        XCTAssertEqual(gate.heldCount, held)
+    }
+
+    private func secondAttempt(_ flow: PairingFlow) async throws {
+        flow.reset()
+        XCTAssertEqual(flow.step, .naming)
+        server.openPairingWindow()
+        server.setBystander(.waits)
+        await flow.begin(name: "Phone")
+        XCTAssertEqual(flow.step, .enteringCode, flow.message ?? "")
+        await flow.submit(code: try XCTUnwrap(server.shownCode))
+        XCTAssertEqual(flow.step, .confirming(pick: try XCTUnwrap(server.shownPick)))
+    }
+
+    func testLeftoverCancelFromATimedOutAttemptDoesNotTouchTheNextOne() async throws {
+        let (flow, gate) = gatedFlow()
+        server.setBystander(.letsItExpire)
+        await flow.begin(name: "Phone")
+        await flow.submit(code: try XCTUnwrap(server.shownCode))
+        gate.hold { $0.url?.path == "/v2/pair/cancel" }
+        let leftover = Task { await flow.awaitResult() }
+        await settle(gate, held: 1)
+        XCTAssertEqual(flow.step, .failed)
+        XCTAssertEqual(flow.message, PairingFlow.timeoutText)
+
+        try await secondAttempt(flow)
+        gate.release()
+        let stale = await leftover.value
+        XCTAssertNil(stale)
+        XCTAssertEqual(flow.step, .confirming(pick: try XCTUnwrap(server.shownPick)))
+        XCTAssertNil(flow.message)
+        server.setBystander(.tapsPick)
+        let result = await flow.awaitResult()
+        XCTAssertNotNil(result)
+        XCTAssertEqual(flow.step, .paired)
+    }
+
+    func testStalePollFromAnAbandonedAttemptDoesNotEndTheNextOne() async throws {
+        let (flow, gate) = gatedFlow()
+        server.setBystander(.waits)
+        await flow.begin(name: "Phone")
+        await flow.submit(code: try XCTUnwrap(server.shownCode))
+        gate.hold { $0.url?.path == "/v2/pair/result" }
+        let leftover = Task { await flow.awaitResult() }
+        await settle(gate, held: 1)
+        gate.hold { _ in false }
+        await flow.abandon()
+        XCTAssertEqual(flow.step, .failed)
+
+        try await secondAttempt(flow)
+        gate.release()
+        let stale = await leftover.value
+        XCTAssertNil(stale)
+        XCTAssertEqual(flow.step, .confirming(pick: try XCTUnwrap(server.shownPick)))
+        XCTAssertNil(flow.message)
+        server.setBystander(.tapsPick)
+        let result = await flow.awaitResult()
+        XCTAssertNotNil(result)
+        XCTAssertEqual(flow.step, .paired)
+    }
+
+    func testAStartStillInFlightWhenAbandonedDoesNotHijackTheNextAttempt() async throws {
+        let (flow, gate) = gatedFlow()
+        gate.hold { $0.url?.path == "/v2/pair/reveal" }
+        let leftover = Task { await flow.begin(name: "Phone") }
+        await settle(gate, held: 1)
+        gate.hold { _ in false }
+        await flow.abandon()
+        XCTAssertEqual(flow.step, .failed)
+
+        try await secondAttempt(flow)
+        let session = try XCTUnwrap(server.shownCode)
+        gate.release()
+        await leftover.value
+        XCTAssertEqual(flow.step, .confirming(pick: try XCTUnwrap(server.shownPick)))
+        XCTAssertEqual(server.shownCode, session)
+        XCTAssertNil(flow.message)
+        server.setBystander(.tapsPick)
+        let result = await flow.awaitResult()
+        XCTAssertNotNil(result)
+        XCTAssertEqual(flow.step, .paired)
+    }
+
+    func testCodeSubmittedWhileTheLeftoverCancelIsStillInFlightIsChecked() async throws {
+        let (flow, gate) = gatedFlow()
+        server.setBystander(.letsItExpire)
+        await flow.begin(name: "Phone")
+        await flow.submit(code: try XCTUnwrap(server.shownCode))
+        gate.hold { $0.url?.path == "/v2/pair/cancel" }
+        let leftover = Task { await flow.awaitResult() }
+        await settle(gate, held: 1)
+        flow.reset()
+        server.openPairingWindow()
+        server.setBystander(.waits)
+        await flow.begin(name: "Phone")
+        XCTAssertEqual(flow.step, .enteringCode)
+        await flow.submit(code: try wrongCode())
+        XCTAssertEqual(flow.message, "That code didn't match. 2 tries left.")
+        await flow.submit(code: try XCTUnwrap(server.shownCode))
+        XCTAssertEqual(flow.step, .confirming(pick: try XCTUnwrap(server.shownPick)))
+        gate.release()
+        _ = await leftover.value
+        XCTAssertEqual(flow.step, .confirming(pick: try XCTUnwrap(server.shownPick)))
+    }
 }
 
 final class TokenStoreTests: XCTestCase {
