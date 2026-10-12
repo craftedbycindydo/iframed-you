@@ -11,6 +11,7 @@ import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -44,7 +45,6 @@ final class PhoneLink implements LocalApi.Events {
   private final WifiManager.MulticastLock multicast;
   private final Map<String, Object> waitingSettings = new LinkedHashMap<>();
   private NsdManager.RegistrationListener registration;
-  private String shownPairing;
   private boolean running;
   private boolean watchingNetwork;
   private volatile boolean advertised;
@@ -71,7 +71,7 @@ final class PhoneLink implements LocalApi.Events {
       service.setServiceName(LocalApi.NAME);
       service.setServiceType(SERVICE_TYPE);
       service.setPort(port);
-      service.setAttribute("v", "1");
+      service.setAttribute("v", "2");
       service.setAttribute("id", api.frameId());
       final NsdManager.RegistrationListener attempt = new NsdManager.RegistrationListener() {
         @Override public void onServiceRegistered(NsdServiceInfo registered) {
@@ -282,7 +282,12 @@ final class PhoneLink implements LocalApi.Events {
         show("window.SkylitICloud&&window.SkylitICloud.receive(" + api.icloudStatus() + ")");
       }
     });
-    api = new LocalApi(storage, clock, feeds, library, icloud, this);
+    FrameTime.Uptime uptime = new FrameTime.Uptime() {
+      @Override public long millis() {
+        return SystemClock.elapsedRealtime();
+      }
+    };
+    api = new LocalApi(storage, clock, uptime, feeds, library, icloud, this);
     server = new LocalServer(api);
   }
 
@@ -348,35 +353,23 @@ final class PhoneLink implements LocalApi.Events {
   }
 
   String status() {
-    return api.pairingStatus(port, advertised);
+    return api.pairingStatus(port, advertised, LocalServer.lanAddress());
   }
 
   void pageReady() {
     if (!waitingSettings.isEmpty() && evaluate(applySettings(Json.write(waitingSettings)))) waitingSettings.clear();
-    if (shownPairing != null) evaluate(shownPairing);
   }
 
   @Override public void householdChanged(String snapshot) {
     show("window.SkylitHousehold&&window.SkylitHousehold.receive(" + snapshot + ")");
   }
 
-  @Override public void pairingShown(final String code, final long expiresAt) {
+  @Override public void pairingChanged(final String state, final long remaining) {
     main.post(new Runnable() {
       @Override public void run() {
-        shownPairing = "window.SkylitPairing&&window.SkylitPairing.show(" + Json.write(Json.object("code", code, "expiresAt", expiresAt)) + ")";
-        evaluate(shownPairing);
+        evaluate("window.SkylitPairing&&window.SkylitPairing.update(" + state + ")");
         main.removeCallbacks(expirePairing);
-        main.postDelayed(expirePairing, Math.max(0, expiresAt - System.currentTimeMillis()) + 250);
-      }
-    });
-  }
-
-  @Override public void pairingHidden() {
-    main.post(new Runnable() {
-      @Override public void run() {
-        shownPairing = null;
-        main.removeCallbacks(expirePairing);
-        evaluate("window.SkylitPairing&&window.SkylitPairing.hide()");
+        if (remaining >= 0) main.postDelayed(expirePairing, remaining + 250);
       }
     });
   }

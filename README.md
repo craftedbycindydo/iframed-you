@@ -41,7 +41,7 @@ Known limits:
 - The photo library holds 30 pictures by default and 50 at most, shared by phone, email and album pictures.
 - iCloud album sync uses the unofficial endpoints behind Apple's public album web page. Only
   `https://www.icloud.com/sharedalbum/#…` links are accepted.
-- Traffic between phone and frame is plain HTTP on the local network, protected by the pairing token.
+- Traffic between phone and frame is TLS 1.2 on the local network. The phone pins the frame's self-signed certificate while pairing.
 - Emoji newer than Android 6's font show as an empty box on the frame.
 - The frame froze once with its render thread stuck in the Mali GPU driver. The cause is not known.
 
@@ -77,10 +77,11 @@ Open http://127.0.0.1:8767. The preview uses made-up events, weather, chores and
 Useful for developing the iPhone app without a frame:
 
 ```sh
-python3 scripts/dev_server.py --port 8765 --fake-icloud --lan --advertise
+python3 scripts/dev_server.py --port 8765 --fake-icloud --lan --advertise --pair-window --auto-approve 20
 ```
 
-It prints the pairing code when a phone asks to pair.
+It prints its certificate fingerprint, then the pairing code and the number to tap once a phone
+connects. Press Enter to open another pairing window.
 
 ## Build the Android viewer
 

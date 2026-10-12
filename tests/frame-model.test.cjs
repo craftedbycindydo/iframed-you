@@ -6,7 +6,6 @@ test('photo choices exclude hidden pictures everywhere and preserve stable IDs a
  const curated=model.curation(raw,photos.slice().reverse());
  assert.deepEqual(model.pictures(photos,curated).map(p=>p.id),[photo(2).id,photo(3).id]);
  assert.deepEqual(model.pictures(photos,curated,{favouritesOnly:true}).map(p=>p.id),[photo(2).id]);
- assert.deepEqual(model.overviewPictures(photos,curated,{preferFavourites:true}).map(p=>p.id),[photo(2).id,photo(3).id]);
  assert.equal(curated[photo(2).id].caption,'Portrait');
  assert.deepEqual(Object.keys(model.curation(curated,[photo(3)])),[]);
 });

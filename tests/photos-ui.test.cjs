@@ -30,7 +30,7 @@ test('phone pictures are usable without Gmail or an album',()=>{
  const h=launch({photos:3});
  assert.equal(h.workspace.hidden,false);assert.equal(h.feature.hidden,true);assert.equal(h.details.hidden,true);assert.equal(h.tiles().length,3);
  assert.equal(h.$('photo-play').disabled,false);assert.equal(h.$('photo-mail-status').textContent,'3 saved on this frame');assert.equal(h.$('photo-check').hidden,true);assert.doesNotMatch(h.$('photo-tiles').textContent+h.$('photo-mail-status').textContent,/Gmail|inbox/i);
- assert.equal(h.$('overview-photos').hidden,false);assert.equal(h.$('overview-photo-stack').children.length,3);
+ 
  h.$('photo-play').onclick();assert.deepEqual(h.calls.at(-1),['open',false]);
  h.tiles()[1].children[0].onclick();assert.deepEqual(h.calls.at(-1),['browse',1]);
  h.$('start-photos').onclick();assert.deepEqual(h.calls.at(-1),['open',false]);
@@ -41,11 +41,11 @@ test('phone pictures are usable without Gmail or an album',()=>{
 });
 test('a phone upload arriving later reveals the library and Overview prints',()=>{
  const h=launch();
- assert.equal(h.workspace.hidden,true);assert.equal(h.feature.hidden,false);assert.equal(h.$('overview-photos').hidden,true);assert.equal(h.$('photo-play').disabled,true);
+ assert.equal(h.workspace.hidden,true);assert.equal(h.feature.hidden,false);assert.equal(h.$('photo-play').disabled,true);
  h.$('start-photos').onclick();assert.equal(h.calls.some(c=>c[0]==='open'),false);
  h.push({photos:library(2)});
- assert.equal(h.workspace.hidden,false);assert.equal(h.feature.hidden,true);assert.equal(h.tiles().length,2);assert.equal(h.$('overview-photo-stack').children.length,2);assert.equal(h.$('photo-play').disabled,false);
- h.push({photos:[]});assert.equal(h.workspace.hidden,true);assert.equal(h.feature.hidden,false);assert.equal(h.$('overview-photos').hidden,true);
+ assert.equal(h.workspace.hidden,false);assert.equal(h.feature.hidden,true);assert.equal(h.tiles().length,2);assert.equal(h.$('photo-play').disabled,false);
+ h.push({photos:[]});assert.equal(h.workspace.hidden,true);assert.equal(h.feature.hidden,false);
 });
 test('an empty library without Gmail mentions the phone app, not only Gmail',()=>{
  const h=launch({saved:'email'});
@@ -54,7 +54,7 @@ test('an empty library without Gmail mentions the phone app, not only Gmail',()=
 });
 test('the Google album flow is unchanged, and keeps its card beside phone pictures',()=>{
  const link='https://photos.app.goo.gl/example',empty=launch({album:link});
- assert.equal(empty.workspace.hidden,true);assert.equal(empty.feature.hidden,false);assert.equal(empty.details.hidden,false);assert.equal(empty.$('overview-photos').hidden,true);
+ assert.equal(empty.workspace.hidden,true);assert.equal(empty.feature.hidden,false);assert.equal(empty.details.hidden,false);
  empty.$('start-photos').onclick();assert.deepEqual(empty.calls.at(-1),['album',link,false]);empty.$('test-idle').onclick();assert.deepEqual(empty.calls.at(-1),['album',link,true]);
  const both=launch({album:link,photos:2});
  assert.equal(both.workspace.hidden,false);assert.equal(both.feature.hidden,false);
@@ -64,7 +64,7 @@ test('the Google album flow is unchanged, and keeps its card beside phone pictur
 });
 test('the email flow is unchanged',()=>{
  const h=launch({connected:true,photos:2,saved:'email'});
- assert.equal(h.workspace.hidden,false);assert.equal(h.feature.hidden,true);assert.equal(h.tiles().length,2);assert.match(h.$('photo-mail-status').textContent,/2 saved · Checked/);assert.equal(h.$('photo-check').disabled,false);assert.equal(h.$('photo-check').hidden,false);assert.equal(h.$('overview-photo-stack').children.length,2);
+ assert.equal(h.workspace.hidden,false);assert.equal(h.feature.hidden,true);assert.equal(h.tiles().length,2);assert.match(h.$('photo-mail-status').textContent,/2 saved · Checked/);assert.equal(h.$('photo-check').disabled,false);assert.equal(h.$('photo-check').hidden,false);
  h.$('start-photos').onclick();assert.deepEqual(h.calls.at(-1),['open',false]);h.$('test-idle').onclick();assert.deepEqual(h.calls.at(-1),['open',true]);
  assert.equal(h.window.SkylitPhotos.health().configured,true);
  const waiting=launch({connected:true,saved:'email'});let checks=0;waiting.$('photo-check').onclick=()=>checks++;waiting.$('start-photos').onclick();assert.equal(checks,1);assert.match(waiting.$('photo-tiles').textContent,/Check now/);

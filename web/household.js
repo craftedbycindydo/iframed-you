@@ -37,6 +37,9 @@
       },
       reportSettings() {},
       pairingStatus: () => JSON.stringify(data.pairing),
+      pairingOpen: () => JSON.stringify({ok: false, error: 'Pairing works on the Android frame.'}),
+      pairingTap: () => false,
+      pairingCancel: () => false,
       pairingRevoke(deviceId) {
         data.pairing.devices = data.pairing.devices.filter(device => !device || device.id !== deviceId);
         persist();
@@ -145,9 +148,12 @@
       host.append(card);
     }
     if (focused && rowButtons.has(focused[0])) rowButtons.get(focused[0]).focus();
+    const toBuy = state.shopping.filter(item => !item.done).length;
     $('overview-chores').hidden = !state.chores.length;
     $('overview-chores-count').textContent = view.total ? view.done + ' of ' + view.total + ' done today' : 'None due today';
-    $('overview-chores-bar').style.width = (view.total ? Math.round(view.done / view.total * 100) : 0) + '%';
+    $('overview-shopping').hidden = !state.shopping.length;
+    $('overview-shopping-count').textContent = toBuy ? toBuy + ' to buy' : 'All bought';
+    $('overview-today').hidden = !state.chores.length && !state.shopping.length;
   }
 
   function setManaging(value) {
@@ -351,8 +357,10 @@
     try { localStorage.setItem('skylit.household', JSON.stringify({...legacy, shopping: []})); } catch (_) {}
   }
 
-  const overlay = element('div', 'pairing-overlay'), pairingCard = element('div', 'pairing-card'), pairingCode = element('div', 'pairing-code'), pairingCountdown = element('p', 'pairing-countdown'), pairingDismiss = element('button', 'primary', 'Dismiss');
-  const pairingTitle = element('h2', '', 'Enter this code on your phone');
+  const overlay = element('div', 'pairing-overlay'), pairingCard = element('div', 'pairing-card'), pairingTitle = element('h2'), pairingCode = element('div', 'pairing-code'), pairingText = element('p', 'pairing-text'), pairingPicks = element('div', 'pairing-picks'), pairingCountdown = element('p', 'pairing-countdown'), pairingClose = element('button', 'secondary');
+  const pairingTitles = {waiting: 'Waiting for your phone…', code: 'Pairing code', paired: 'Phone paired', cancelled: 'Pairing cancelled'};
+  const pairingInstruction = 'Type this code into your phone. Your phone will then show a number. Tap that number here. If your phone shows no number, tap Cancel.';
+  const pairingEndings = {decoy: 'That was not the number on the phone. Nothing was paired.', expired: 'The two minutes ran out. Nothing was paired.', phone: 'The phone stopped pairing. Nothing was paired.'};
   let pairingTimer = null, pairingExpires = 0, pairingFocus = null;
   overlay.hidden = true;
   overlay.setAttribute('role', 'dialog');
@@ -360,74 +368,111 @@
   overlay.setAttribute('aria-labelledby', 'pairing-title');
   pairingTitle.id = 'pairing-title';
   pairingCountdown.setAttribute('role', 'timer');
-  pairingDismiss.type = 'button';
-  pairingCard.append(element('p', 'eyebrow', 'PAIR A PHONE'), pairingTitle, pairingCode, pairingCountdown, element('p', 'subtle small', 'Only enter this code in the Skylit app on a phone you trust.'), pairingDismiss);
+  pairingClose.type = 'button';
+  pairingCard.append(element('p', 'eyebrow', 'PAIR A PHONE'), pairingTitle, pairingCode, pairingText, pairingPicks, pairingCountdown, pairingClose);
   overlay.append(pairingCard);
   document.body.append(overlay);
 
+  const syncPairing = () => updatePairing(parse(call('pairingStatus'), {}).pairing);
   function tickPairing() {
     const seconds = Math.ceil((pairingExpires - Date.now()) / 1000);
-    if (seconds <= 0) { hidePairing(); return; }
-    pairingCountdown.textContent = 'Expires in ' + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+    if (seconds <= 0) { syncPairing(); return; }
+    pairingCountdown.textContent = 'Time left ' + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
   }
-  function showPairing(request) {
-    request = parse(request, {});
-    const code = typeof request.code === 'number' ? String(request.code).padStart(6, '0') : request.code;
-    if (typeof code !== 'string' || !/^\d{6}$/.test(code)) return;
-    const stamp = typeof request.expiresAt === 'number' ? (request.expiresAt < 1e12 ? request.expiresAt * 1000 : request.expiresAt) : Date.parse(request.expiresAt);
-    pairingExpires = Number.isFinite(stamp) ? stamp : Date.now() + 120000;
-    if (pairingExpires <= Date.now()) { hidePairing(); return; }
-    pairingCode.replaceChildren(element('span', '', code.slice(0, 3)), element('span', '', code.slice(3)));
-    pairingCode.setAttribute('aria-label', code.split('').join(' '));
-    if (overlay.hidden) pairingFocus = document.activeElement;
-    overlay.hidden = false;
+  function updatePairing(state) {
+    state = parse(state, {});
+    const phase = Object.prototype.hasOwnProperty.call(pairingTitles, state.phase) ? state.phase : 'idle', active = phase === 'waiting' || phase === 'code';
+    const code = typeof state.code === 'string' && /^\d{6}$/.test(state.code) ? state.code : '';
+    const numbers = Array.isArray(state.numbers) ? state.numbers.filter(number => typeof number === 'string' && /^\d\d$/.test(number)) : [];
+    if (phase === 'code' && (!code || numbers.length !== 3)) return;
     clearInterval(pairingTimer);
-    pairingTimer = setInterval(tickPairing, 500);
-    tickPairing();
-    pairingDismiss.focus();
-  }
-  function hidePairing() {
-    if (overlay.hidden) return;
-    overlay.hidden = true;
-    clearInterval(pairingTimer);
+    pairingTimer = null;
     pairingCode.replaceChildren();
-    if (pairingFocus && pairingFocus.isConnected && pairingFocus.focus) pairingFocus.focus();
-    pairingFocus = null;
+    pairingPicks.replaceChildren();
+    if (phase === 'idle') {
+      if (!overlay.hidden) {
+        overlay.hidden = true;
+        if (pairingFocus && pairingFocus.isConnected && pairingFocus.focus) pairingFocus.focus();
+        pairingFocus = null;
+      }
+      renderPhone();
+      return;
+    }
+    pairingTitle.textContent = pairingTitles[phase];
+    pairingCode.hidden = pairingPicks.hidden = phase !== 'code';
+    pairingCountdown.hidden = !active;
+    pairingClose.textContent = active ? 'Cancel' : phase === 'paired' ? 'Done' : 'Close';
+    if (phase === 'waiting') pairingText.textContent = 'On the same Wi-Fi, open the Skylit app on your phone and choose this frame.';
+    if (phase === 'paired') pairingText.textContent = (typeof state.name === 'string' && state.name.trim() ? state.name.trim().slice(0, 40) : 'This phone') + ' can now use this frame.';
+    if (phase === 'cancelled') pairingText.textContent = pairingEndings[state.reason] || 'Nothing was paired.';
+    if (phase === 'code') {
+      pairingText.textContent = pairingInstruction;
+      pairingCode.append(element('span', '', code.slice(0, 3)), element('span', '', code.slice(3)));
+      pairingCode.setAttribute('aria-label', code.split('').join(' '));
+      for (const number of numbers) {
+        const pick = element('button', 'primary pairing-pick', number);
+        pick.type = 'button';
+        pick.onclick = () => { call('pairingTap', number); syncPairing(); };
+        pairingPicks.append(pick);
+      }
+    }
+    if (active) {
+      pairingExpires = Date.now() + (Number.isFinite(state.remaining) && state.remaining >= 0 ? state.remaining : 120000);
+      pairingTimer = setInterval(tickPairing, 500);
+      pairingCountdown.textContent = '';
+      tickPairing();
+    }
+    if (overlay.hidden) {
+      pairingFocus = document.activeElement;
+      overlay.hidden = false;
+      pairingClose.focus();
+    }
     renderPhone();
   }
-  pairingDismiss.onclick = hidePairing;
+  pairingClose.onclick = () => { call('pairingCancel'); syncPairing(); };
   document.addEventListener('keydown', event => {
     if (overlay.hidden) return;
     if (event.key !== 'Escape' && event.key !== 'Tab') return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (event.key === 'Escape') hidePairing(); else pairingDismiss.focus();
+    if (event.key === 'Escape') { pairingClose.onclick(); return; }
+    const stops = [...pairingPicks.children, pairingClose], at = stops.indexOf(document.activeElement);
+    stops[(at + (event.shiftKey ? stops.length - 1 : 1)) % stops.length].focus();
   }, true);
 
+  const shortDate = stamp => new Intl.DateTimeFormat('en-CA', {timeZone: app.calendarPreferences().timezone, year: 'numeric', month: 'short', day: 'numeric'}).format(new Date(stamp));
   function renderPhone() {
     const status = parse(call('pairingStatus'), {}), host = $('phone-devices');
     const devices = (Array.isArray(status.devices) ? status.devices : []).filter(device => device && typeof device.id === 'string' && device.id);
+    const reachable = typeof status.address === 'string' && /^\d{1,3}(\.\d{1,3}){3}$/.test(status.address) && Number.isInteger(status.port) && status.port > 0;
     $('phone-status').textContent = !connected ? 'Preview only · pairing works on the Android frame.' : status.advertised === true ? 'Ready to pair on your home network.' : 'Not visible on the network right now. Check Wi-Fi.';
+    $('phone-address').textContent = reachable ? 'Address for manual entry: ' + status.address + ':' + status.port : connected ? 'Address for manual entry: unavailable until the frame is on Wi-Fi.' : '';
     host.replaceChildren();
     for (const device of devices) {
-      const row = element('div', 'preference-row'), copy = element('span'), revoke = element('button', 'quiet', 'Revoke'), paired = Date.parse(device.pairedAt);
+      const row = element('div', 'preference-row'), copy = element('span'), remove = element('button', 'quiet'), paired = Date.parse(device.pairedAt), seen = Date.parse(device.lastSeen);
+      const dates = [Number.isFinite(paired) ? 'Paired ' + shortDate(paired) : '', Number.isFinite(seen) ? 'Last seen ' + shortDate(seen) : ''].filter(Boolean).join(' · ');
       copy.append(element('strong', '', typeof device.name === 'string' && device.name.trim() ? device.name.trim().slice(0, limits.text) : 'Phone'));
-      if (Number.isFinite(paired)) copy.append(element('span', 'small subtle', 'Paired ' + new Intl.DateTimeFormat('en-CA', {timeZone: app.calendarPreferences().timezone, year: 'numeric', month: 'short', day: 'numeric'}).format(new Date(paired))));
-      revoke.type = 'button';
-      revoke.onclick = () => {
-        if (call('pairingRevoke', device.id) !== true) app.notify('Could not revoke this phone. Try again.');
+      if (dates) copy.append(element('span', 'small subtle', dates));
+      remove.type = 'button';
+      confirmTap(remove, 'Remove', () => {
+        if (call('pairingRevoke', device.id) !== true) app.notify('Could not remove this phone. Try again.');
         renderPhone();
-      };
-      row.append(copy, revoke);
+      });
+      row.append(copy, remove);
       host.append(row);
     }
     if (!devices.length) host.append(element('p', 'subtle small', 'No phones are paired.'));
     $('phone-revoke-all').hidden = !devices.length;
   }
-  confirmTap($('phone-revoke-all'), 'Revoke all phones', () => {
-    if (call('pairingRevokeAll') !== true) app.notify('Could not revoke phones. Try again.');
+  confirmTap($('phone-revoke-all'), 'Remove all phones', () => {
+    if (call('pairingRevokeAll') !== true) app.notify('Could not remove phones. Try again.');
     renderPhone();
   });
+  $('phone-pair').onclick = () => {
+    const result = parse(call('pairingOpen'), null);
+    if (result && result.ok === true) updatePairing(result.pairing);
+    else app.notify(result && typeof result.error === 'string' && result.error ? result.error.slice(0, 200) : 'Could not start pairing. Try again.');
+  };
 
   let reported = null;
   function report(force) {
@@ -463,7 +508,7 @@
 
   window.SkylitHousehold = {receive, snapshot: () => state, mutate, connected};
   window.SkylitShopping = {mount: mountShopping};
-  window.SkylitPairing = {show: showPairing, hide: hidePairing, isOpen: () => !overlay.hidden, refresh: renderPhone};
+  window.SkylitPairing = {update: updatePairing, isOpen: () => !overlay.hidden, refresh: renderPhone};
   window.SkylitRemote = {apply: applyRemote};
 
   window.addEventListener('skylit-settings', () => { report(false); if (today() !== renderedDate) renderToday(); });
@@ -473,6 +518,6 @@
   migrateShopping();
   setManaging(false);
   render();
-  renderPhone();
+  syncPairing();
   report(true);
 })();

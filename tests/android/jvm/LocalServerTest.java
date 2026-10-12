@@ -7,17 +7,22 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLSocket;
 
 public final class LocalServerTest {
   static int checks;
   static int port;
   static String token;
+  static LocalApi api;
+  static Fakes.Recorder events;
 
   static void check(boolean value, String message) {
     if (!value) throw new AssertionError(message);
@@ -33,7 +38,7 @@ public final class LocalServerTest {
   }
 
   static Socket opened(InetAddress address, String beginning) throws Exception {
-    Socket socket = new Socket(address, port);
+    Socket socket = Fakes.tls(address, port);
     socket.getOutputStream().write(beginning.getBytes(StandardCharsets.ISO_8859_1));
     socket.getOutputStream().flush();
     return socket;
@@ -59,7 +64,7 @@ public final class LocalServerTest {
   }
 
   static Fakes.Reply throttled(InetAddress from, byte[] request, int pieces, long pauseMillis) throws Exception {
-    try (Socket socket = new Socket(from, port)) {
+    try (Socket socket = Fakes.tls(from, port)) {
       socket.setSoTimeout(60000);
       OutputStream out = socket.getOutputStream();
       int piece = request.length / pieces + 1;
@@ -75,18 +80,241 @@ public final class LocalServerTest {
     }
   }
 
-  static void households(LocalApi api, Fakes.Recorder events, Fakes.Clock clock) throws Exception {
+  static String pair(InetAddress home, String name) throws Exception {
+    Fakes.Wire wire = Fakes.socket(home, port);
+    Fakes.Phone phone = new Fakes.Phone();
+    check(api.pairingOpen().contains("\"ok\":true"), "the frame opens a window for " + name);
+    Fakes.Reply started = phone.start(wire, name);
+    same(200, started.status, name + " starts pairing over TLS");
+    Fakes.Reply revealed = phone.reveal(wire, started.fpRaw);
+    same(204, revealed.status, name + " reveals");
+    check(Arrays.equals(started.fpRaw, revealed.fpRaw), "both pairing calls saw the same certificate");
+    same(events.pairing.get("code"), phone.code, "the code from the handshake's certificate matches the frame's");
+    same(202, phone.result(wire).status, name + " waits for the tap");
+    check(api.pairingTap(phone.pick), "tapping the number " + name + " shows approves");
+    Fakes.Reply result = phone.result(wire);
+    same(200, result.status, name + " is approved");
+    same(Digests.hex(started.fpRaw).substring(0, 32), result.object().get("frameId"), "the result's frameId belongs to the pinned certificate");
+    api.pairingCancel();
+    return phone.bearer();
+  }
+
+  static boolean refused(String protocol, String... suites) {
+    try (SSLSocket socket = Fakes.tls(InetAddress.getLoopbackAddress(), port, protocol, suites)) {
+      socket.startHandshake();
+      return false;
+    } catch (java.io.IOException failed) {
+      return true;
+    }
+  }
+
+  static void transport() throws Exception {
+    final InetAddress loopback = InetAddress.getLoopbackAddress();
+    for (String suite : LocalServer.SUITES) {
+      try (SSLSocket socket = Fakes.tls(loopback, port, "TLSv1.2", suite)) {
+        socket.startHandshake();
+        same(suite, socket.getSession().getCipherSuite(), "handshake with only " + suite);
+        same("TLSv1.2", socket.getSession().getProtocol(), "over TLS 1.2");
+        check(Arrays.equals(api.identity().fpRaw, Digests.digest(socket.getSession().getPeerCertificates()[0].getEncoded())), "the frame presents its stored certificate");
+        same(1, socket.getSession().getPeerCertificates().length, "and only that certificate");
+      }
+    }
+    String[] older = {"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA", "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA"};
+    SSLServerSocket lenient = (SSLServerSocket) api.identity().tls().getServerSocketFactory().createServerSocket(0, 4, loopback);
+    lenient.setEnabledProtocols(new String[] {"TLSv1", "TLSv1.1", "TLSv1.2"});
+    lenient.setEnabledCipherSuites(older);
+    for (final String protocol : new String[] {"TLSv1", "TLSv1.1"}) {
+      final SSLSocket[] client = new SSLSocket[1];
+      Thread connecting = new Thread(new Runnable() {
+        @Override public void run() {
+          try {
+            client[0] = Fakes.tls(loopback, lenient.getLocalPort(), protocol, older);
+            client[0].startHandshake();
+          } catch (java.io.IOException failed) {
+            client[0] = null;
+          }
+        }
+      });
+      connecting.start();
+      try (SSLSocket accepted = (SSLSocket) lenient.accept()) {
+        accepted.setSoTimeout(5000);
+        accepted.startHandshake();
+        connecting.join();
+        check(client[0] != null && protocol.equals(client[0].getSession().getProtocol()), "this test client really can speak " + protocol + " to a lenient server");
+        client[0].close();
+      }
+      check(refused(protocol, older), protocol + " is refused by the frame");
+    }
+    lenient.close();
+    check(refused("TLSv1.3", "TLS_AES_128_GCM_SHA256"), "TLS 1.3 alone is refused");
+    check(refused("TLSv1.2", "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256"), "a CBC suite is refused");
+    check(refused("TLSv1.2", "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_RSA_WITH_AES_128_GCM_SHA256"), "RSA suites are refused");
+    check(refused("TLSv1.2", "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"), "ChaCha20 is refused");
+
+    try (Socket plain = new Socket(loopback, port)) {
+      long began = System.nanoTime();
+      plain.setSoTimeout(8000);
+      plain.getOutputStream().write("GET /v2/info HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
+      plain.getOutputStream().flush();
+      java.io.ByteArrayOutputStream answer = new java.io.ByteArrayOutputStream();
+      byte[] buffer = new byte[4096];
+      try {
+        for (int count; (count = plain.getInputStream().read(buffer)) >= 0;) answer.write(buffer, 0, count);
+      } catch (java.net.SocketException reset) {
+        checks++;
+      }
+      String text = new String(answer.toByteArray(), StandardCharsets.ISO_8859_1);
+      check(!text.contains("HTTP/") && !text.contains("frameId"), "plain HTTP gets no HTTP answer");
+      check((System.nanoTime() - began) / 1000000L < 3000, "and is dropped at once");
+    }
+
+    long began = System.nanoTime();
+    Socket silent = new Socket(loopback, port);
+    final Socket dribbling = new Socket(loopback, port);
+    dribbling.getOutputStream().write(new byte[] {0x16, 0x03, 0x01, 0x02, 0x00, 0x01});
+    dribbling.getOutputStream().flush();
+    final boolean[] stalling = {true};
+    Thread dribble = new Thread(new Runnable() {
+      @Override public void run() {
+        try {
+          while (stalling[0]) {
+            dribbling.getOutputStream().write(0);
+            dribbling.getOutputStream().flush();
+            Thread.sleep(400);
+          }
+        } catch (java.io.IOException | InterruptedException cut) {
+          return;
+        }
+      }
+    });
+    dribble.setDaemon(true);
+    dribble.start();
+    same(200, Fakes.overSocket(port, Fakes.json("GET", "/v2/info", null, null)).status, "others are served while two handshakes stall");
+    long silentCut = closedAfter(silent, began, 9000);
+    long dribbleCut = closedAfter(dribbling, began, 9000);
+    stalling[0] = false;
+    check(silentCut >= 4000 && silentCut < 7000, "a client that never starts the handshake is cut off at the head deadline, took " + silentCut + " ms");
+    check(dribbleCut >= 4000 && dribbleCut < 7000, "a client that dribbles the handshake is cut off at the same deadline, took " + dribbleCut + " ms");
+    silent.close();
+    dribbling.close();
+    same(200, Fakes.overSocket(port, Fakes.json("GET", "/v2/info", null, null)).status, "the server is healthy after stalled handshakes");
+  }
+
+  static void lazyReader() throws Exception {
+    InetAddress loopback = InetAddress.getLoopbackAddress();
+    byte[] image = Fakes.jpeg(91, LocalApi.MAX_PHOTO);
+    String id = (String) Json.map(Fakes.overSocket(port, Fakes.request("POST", "/v1/photos", token, "image/jpeg", image)).object().get("photo")).get("id");
+    long began = System.nanoTime();
+    Socket lazy = Fakes.tls(loopback, port);
+    lazy.setReceiveBufferSize(4096);
+    lazy.getOutputStream().write(Fakes.json("GET", "/v1/photos/" + id, token, null));
+    lazy.getOutputStream().flush();
+    Thread.sleep((LocalServer.EXCHANGE_SECONDS - 3) * 1000L);
+    long dribbleBegan = System.nanoTime();
+    final Socket dribbling = new Socket(loopback, port);
+    Thread dribble = new Thread(new Runnable() {
+      @Override public void run() {
+        try {
+          while (true) {
+            dribbling.getOutputStream().write(0x16);
+            dribbling.getOutputStream().flush();
+            Thread.sleep(400);
+          }
+        } catch (java.io.IOException | InterruptedException cut) {
+          return;
+        }
+      }
+    });
+    dribble.setDaemon(true);
+    dribble.start();
+    long dribbleCut = closedAfter(dribbling, dribbleBegan, 9000);
+    check(dribbleCut >= 4000 && dribbleCut < 7000, "the deadline for a later connection still fires after a download stalled in mid-write, took " + dribbleCut + " ms");
+    int received = 0;
+    boolean ended = false;
+    lazy.setSoTimeout(3000);
+    byte[] buffer = new byte[65536];
+    try {
+      for (int count; (count = lazy.getInputStream().read(buffer)) >= 0;) received += count;
+      ended = true;
+    } catch (SocketTimeoutException stillOpen) {
+      ended = false;
+    } catch (java.io.IOException reset) {
+      ended = true;
+    }
+    check(ended && received < image.length, "a download nobody reads is cut off at the exchange deadline after " + received + " bytes");
+    check((System.nanoTime() - began) / 1000000L < (LocalServer.EXCHANGE_SECONDS + 8) * 1000L, "within the exchange deadline");
+    lazy.close();
+    dribbling.close();
+    same(204, call("DELETE", "/v1/photos/" + id, null).status, "the server still serves after cutting the stalled download");
+  }
+
+  static int relay(Identity mallory, final int target) throws Exception {
+    final InetAddress loopback = InetAddress.getLoopbackAddress();
+    final java.net.ServerSocket listening = mallory.tls().getServerSocketFactory().createServerSocket(0, 16, loopback);
+    Thread relaying = new Thread(new Runnable() {
+      @Override public void run() {
+        while (true) {
+          try (Socket victim = listening.accept()) {
+            InputStream in = victim.getInputStream();
+            java.io.ByteArrayOutputStream request = new java.io.ByteArrayOutputStream();
+            while (!request.toString("ISO-8859-1").contains("\r\n\r\n")) request.write(in.read());
+            java.util.regex.Matcher length = java.util.regex.Pattern.compile("Content-Length: (\\d+)").matcher(request.toString("ISO-8859-1"));
+            for (int left = length.find() ? Integer.parseInt(length.group(1)) : 0; left > 0; left--) request.write(in.read());
+            victim.getOutputStream().write(Fakes.overSocket(loopback, target, request.toByteArray()).raw);
+            victim.getOutputStream().flush();
+          } catch (java.io.IOException closed) {
+            return;
+          }
+        }
+      }
+    });
+    relaying.setDaemon(true);
+    relaying.start();
+    return listening.getLocalPort();
+  }
+
+  static void middle() throws Exception {
+    InetAddress loopback = InetAddress.getLoopbackAddress();
+    Identity mallory = Identity.open(new Fakes.Storage());
+    Fakes.Wire throughMallory = Fakes.socket(loopback, relay(mallory, port));
+    Fakes.Wire direct = Fakes.socket(loopback, port);
+    int before = Json.list(Json.map(Json.parse(api.pairingStatus(port, true, ""))).get("devices")).size();
+
+    Fakes.Phone phone = new Fakes.Phone();
+    check(api.pairingOpen().contains("\"ok\":true"), "the person opens a window");
+    Fakes.Reply started = phone.start(throughMallory, "Karan's iPhone");
+    same(200, started.status, "the relay carries start to the frame");
+    check(Arrays.equals(mallory.fpRaw, started.fpRaw) && !Arrays.equals(api.identity().fpRaw, started.fpRaw), "the phone's leg ends at the relay's certificate, not the frame's");
+    same(204, phone.reveal(throughMallory, started.fpRaw).status, "the relay carries reveal to the frame");
+    check(!Arrays.equals(Pairing.digest(phone.nP, phone.nF, mallory.fpRaw), Pairing.digest(phone.nP, phone.nF, api.identity().fpRaw)), "the two legs give different digests");
+    check(!(phone.code + phone.pick).equals((String) events.pairing.get("code") + api.pairingPick()), "so the frame shows a code the phone does not expect");
+    same(204, phone.cancel(throughMallory).status, "after three misses the phone cancels");
+    same(403, phone.result(throughMallory).status, "and the relayed session is refused");
+    same("cancelled", events.pairing.get("phase"), "the frame shows Pairing cancelled");
+    same(401, Fakes.overSocket(port, Fakes.json("GET", "/v1/state", phone.bearer(), null)).status, "no token was stored for the relayed session");
+
+    Fakes.Phone attacker = new Fakes.Phone();
+    Fakes.Phone honest = new Fakes.Phone();
+    check(api.pairingOpen().contains("\"ok\":true"), "the person opens another window");
+    same(200, attacker.start(direct, "Karan's iPhone").status, "another device gets in first");
+    Fakes.Reply late = honest.start(direct, "Karan's iPhone");
+    same(409, late.status, "the real phone is told the window is taken");
+    same("pairing_busy", late.error(), "with the pairing_busy slug");
+    same(204, attacker.reveal(direct, api.identity().fpRaw).status, "the other device makes the frame show a code");
+    same(202, attacker.result(direct).status, "but it stays unapproved while nobody taps its number");
+    check(api.pairingCancel(), "the person, shown no number by their phone, taps Cancel");
+    same(403, attacker.result(direct).status, "and the other device is refused");
+    same(401, Fakes.overSocket(port, Fakes.json("GET", "/v1/state", attacker.bearer(), null)).status, "its token is worthless");
+    same(before, Json.list(Json.map(Json.parse(api.pairingStatus(port, true, ""))).get("devices")).size(), "no device was added by either attack");
+    api.pairingCancel();
+  }
+
+  static void households() throws Exception {
     final InetAddress first = InetAddress.getLoopbackAddress();
     final InetAddress second = InetAddress.getByName("::1");
-    clock.now += 700000L;
     final String[] tokens = new String[3];
     final InetAddress[] homes = {first, second, first};
-    for (int device = 0; device < 3; device++) {
-      same(204, as(homes[device], null, "POST", "/v1/pair/start", null).status, "device " + device + " starts pairing");
-      Fakes.Reply paired = as(homes[device], null, "POST", "/v1/pair/finish", "{\"code\":\"" + events.code + "\",\"deviceName\":\"Family phone " + device + "\"}");
-      same(200, paired.status, "device " + device + " pairs over the socket");
-      tokens[device] = (String) paired.object().get("token");
-    }
+    for (int device = 0; device < 3; device++) tokens[device] = pair(homes[device], "Family phone " + device);
     check(!tokens[0].equals(tokens[1]) && !tokens[1].equals(tokens[2]) && !tokens[0].equals(tokens[2]), "three devices hold three tokens");
     long base = (Long) as(first, tokens[0], "GET", "/v1/state", null).object().get("rev");
     same(200, as(second, tokens[1], "POST", "/v1/shopping", "{\"name\":\"From the second phone\"}").status, "one device writes");
@@ -173,26 +401,25 @@ public final class LocalServerTest {
     for (Object device : as(first, tokens[0], "GET", "/v1/devices", null).list()) {
       if (Json.map(device).get("name").equals("Family phone 2")) revokedId = (String) Json.map(device).get("id");
     }
-    same(204, as(first, tokens[0], "DELETE", "/v1/devices/" + revokedId, null).status, "one device is revoked");
+    same(403, as(first, tokens[0], "DELETE", "/v1/devices/" + revokedId, null).status, "one device cannot revoke another");
+    same(204, as(first, tokens[2], "DELETE", "/v1/devices/" + revokedId, null).status, "a device revokes itself");
     same(401, as(first, tokens[2], "GET", "/v1/state", null).status, "the revoked device is refused");
     same(200, as(first, tokens[0], "GET", "/v1/state", null).status, "the first device keeps working");
     same(200, as(second, tokens[1], "POST", "/v1/shopping", "{\"name\":\"Still here\"}").status, "the second device keeps writing");
-    clock.now += 700000L;
-    same(204, as(first, null, "POST", "/v1/pair/start", null).status, "the revoked device pairs again");
-    Fakes.Reply again = as(first, null, "POST", "/v1/pair/finish", "{\"code\":\"" + events.code + "\",\"deviceName\":\"Family phone 2\"}");
-    String renewed = (String) again.object().get("token");
+    String renewed = pair(first, "Family phone 2");
     check(!renewed.equals(tokens[2]), "re-pairing issues a new token");
     same(200, as(first, renewed, "GET", "/v1/state", null).status, "the new token works");
     same(401, as(first, tokens[2], "GET", "/v1/state", null).status, "the old token stays dead");
   }
 
   public static void main(String[] args) throws Exception {
-    Fakes.Recorder events = new Fakes.Recorder();
+    java.security.Security.setProperty("jdk.tls.disabledAlgorithms", "");
+    events = new Fakes.Recorder();
     Fakes.Clock clock = new Fakes.Clock(1791676800000L);
     Fakes.Storage storage = new Fakes.Storage();
     Fakes.PhotoShelf shelf = new Fakes.PhotoShelf();
     ICloudSync icloud = new ICloudSync(storage, clock, Fakes.sampleAlbum(), shelf.library, Fakes.inline(), events.album);
-    LocalApi api = new LocalApi(storage, clock, new Fakes.CalendarShelf(), shelf, icloud, events);
+    api = new LocalApi(storage, clock, new Fakes.Uptime(), new Fakes.CalendarShelf(), shelf, icloud, events);
     LocalServer server = new LocalServer(api);
     InetAddress loopback = InetAddress.getLoopbackAddress();
     port = server.start(null, 0);
@@ -202,24 +429,20 @@ public final class LocalServerTest {
     LocalServer neighbour = new LocalServer(api);
     int fallback = neighbour.start(null, port);
     check(fallback > 0 && fallback != port, "a taken port falls back to a free one");
-    same(200, Fakes.overSocket(fallback, Fakes.json("GET", "/v1/info", null, null)).status, "the fallback listener serves");
+    same(200, Fakes.overSocket(fallback, Fakes.json("GET", "/v2/info", null, null)).status, "the fallback listener serves");
     neighbour.stop();
     same(0, neighbour.port(), "a stopped server reports no port");
 
-    Fakes.Reply info = call("GET", "/v1/info", null);
+    Fakes.Reply info = call("GET", "/v2/info", null);
     same(200, info.status, "info");
     same(api.frameId(), info.object().get("frameId"), "info frame id");
     same("close", info.headers.get("connection"), "connection close");
     same(401, call("GET", "/v1/state", null).status, "state needs pairing");
 
-    same(204, call("POST", "/v1/pair/start", null).status, "pair start");
-    check(events.code != null, "the frame shows a code");
-    same(401, call("POST", "/v1/pair/finish", "{\"code\":\"" + (events.code.equals("111111") ? "222222" : "111111") + "\",\"deviceName\":\"Karan's iPhone\"}").status, "wrong code");
-    Fakes.Reply paired = call("POST", "/v1/pair/finish", "{\"code\":\"" + events.code + "\",\"deviceName\":\"Karan's iPhone\"}");
-    same(200, paired.status, "pair finish");
-    token = (String) paired.object().get("token");
-    same(api.frameId(), paired.object().get("frameId"), "pair result frame id");
-    same("Skylit", paired.object().get("name"), "pair result name");
+    check(Arrays.asList(LocalServer.SUITES).contains(info.suite), "info travels over one of the two suites");
+    same(api.identity().fp, Digests.hex(info.fpRaw), "the handshake certificate's fingerprint is the frame's fp");
+    transport();
+    token = pair(loopback, "Karan's iPhone");
     same("Karan's iPhone", Json.map(call("GET", "/v1/devices", null).list().get(0)).get("name"), "device listed");
 
     same(0L, call("GET", "/v1/state", null).object().get("rev"), "empty state");
@@ -277,7 +500,7 @@ public final class LocalServerTest {
 
     final InetAddress other = InetAddress.getByName("::1");
     final List<Socket> attackers = new ArrayList<>();
-    String finish = "POST /v1/pair/finish HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 3000\r\n\r\n{\"code\":";
+    String finish = "POST /v2/pair/start HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 3000\r\n\r\n{\"commit\":";
     String people = "POST /v1/people HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer " + token + "\r\nContent-Length: 60000\r\n\r\n{\"name\":";
     String[] openings = {"POST /v1/people HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Le", finish, people};
     for (int i = 0; i < 12; i++) attackers.add(opened(loopback, openings[i % 3]));
@@ -308,7 +531,7 @@ public final class LocalServerTest {
     long slowest = 0;
     for (int second = 0; second < 7; second++) {
       long asked = System.nanoTime();
-      same(200, Fakes.overSocket(other, port, Fakes.json("GET", "/v1/info", null, null)).status, "an unpaired request is answered during the attack");
+      same(200, Fakes.overSocket(other, port, Fakes.json("GET", "/v2/info", null, null)).status, "an unpaired request is answered during the attack");
       same(200, Fakes.overSocket(other, port, Fakes.json("GET", "/v1/state", token, null)).status, "a paired request is answered during the attack");
       slowest = Math.max(slowest, (System.nanoTime() - asked) / 1000000L);
       Thread.sleep(1000);
@@ -346,13 +569,15 @@ public final class LocalServerTest {
       }
     }
     same(LocalServer.WAITING_PER_SOURCE + LocalServer.SERVED_PER_SOURCE, opened - refused, "one address may hold three served and twelve waiting connections");
-    same(200, Fakes.overSocket(other, port, Fakes.json("GET", "/v1/info", null, null)).status, "another device is unaffected by one address filling its allowance");
+    same(200, Fakes.overSocket(other, port, Fakes.json("GET", "/v2/info", null, null)).status, "another device is unaffected by one address filling its allowance");
     for (Socket socket : idle) socket.close();
     Thread.sleep(300);
-    same(400, Fakes.overSocket(port, "GET /v1/info HTTP/1.1\r\nHost: evil.test\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1)).status, "a rebound host name is refused over the socket");
-    same(200, call("GET", "/v1/info", null).status, "the server is healthy after stalled clients");
+    same(400, Fakes.overSocket(port, "GET /v2/info HTTP/1.1\r\nHost: evil.test\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1)).status, "a rebound host name is refused over the socket");
+    same(200, call("GET", "/v2/info", null).status, "the server is healthy after stalled clients");
 
-    households(api, events, clock);
+    middle();
+    households();
+    lazyReader();
 
     server.stop();
     try {

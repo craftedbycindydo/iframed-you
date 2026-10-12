@@ -18,12 +18,24 @@ final class ApiException extends Exception {
     return new ApiException(401, "unauthorized", message);
   }
 
+  static ApiException forbidden(String message) {
+    return new ApiException(403, "forbidden", message);
+  }
+
   static ApiException notFound(String message) {
     return new ApiException(404, "not_found", message);
   }
 
   static ApiException conflict(String message) {
     return new ApiException(409, "conflict", message);
+  }
+
+  static ApiException pairingBusy(String message) {
+    return new ApiException(409, "pairing_busy", message);
+  }
+
+  static ApiException gone(String message) {
+    return new ApiException(410, "gone", message);
   }
 
   static ApiException tooLarge(String message) {

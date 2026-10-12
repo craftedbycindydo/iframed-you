@@ -32,7 +32,6 @@ final class LocalHttp {
     final String path;
     final Map<String, String> query;
     final Map<String, String> headers;
-    String peer = "";
 
     Request(String method, String path, Map<String, String> query, Map<String, String> headers) {
       this.method = method;
@@ -170,12 +169,15 @@ final class LocalHttp {
   private static String reason(int status) {
     switch (status) {
       case 200: return "OK";
+      case 202: return "Accepted";
       case 204: return "No Content";
       case 304: return "Not Modified";
       case 400: return "Bad Request";
       case 401: return "Unauthorized";
+      case 403: return "Forbidden";
       case 404: return "Not Found";
       case 409: return "Conflict";
+      case 410: return "Gone";
       case 413: return "Payload Too Large";
       case 429: return "Too Many Requests";
       default: return "Internal Server Error";

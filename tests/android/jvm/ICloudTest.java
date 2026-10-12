@@ -589,9 +589,8 @@ public final class ICloudTest {
 
   static void endpoints() throws Exception {
     fresh();
-    api = new LocalApi(storage, clock, new Fakes.CalendarShelf(), photos, sync, events);
-    Fakes.inMemory(api, Fakes.json("POST", "/v1/pair/start", null, null));
-    bearer = (String) Fakes.inMemory(api, Fakes.json("POST", "/v1/pair/finish", null, "{\"code\":\"" + events.code + "\",\"deviceName\":\"Phone\"}")).object().get("token");
+    api = new LocalApi(storage, clock, new Fakes.Uptime(), new Fakes.CalendarShelf(), photos, sync, events);
+    bearer = Fakes.pair(api, events, Fakes.memory(api), "Phone");
     same(null, albumState(), "state has a null album before connecting");
     check(Json.map(call("GET", "/v1/state", null).object().get("settings")).containsKey("icloudAlbum"), "the key is always present");
     for (String route : new String[] {"PUT /v1/settings/icloud-album", "DELETE /v1/settings/icloud-album", "POST /v1/settings/icloud-album/sync"}) {

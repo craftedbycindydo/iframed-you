@@ -11,6 +11,10 @@ final class FrameTime {
     long now();
   }
 
+  interface Uptime {
+    long millis();
+  }
+
   private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
 
   private FrameTime() {}

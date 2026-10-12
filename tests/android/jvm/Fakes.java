@@ -17,9 +17,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 final class Fakes {
-  static volatile String peer = "192.168.1.50";
   static final LocalHttp.Pace UNPACED = new LocalHttp.Pace() {
     @Override public void readWithin(int millis) {}
   };
@@ -48,6 +51,93 @@ final class Fakes {
     @Override public long now() {
       return now;
     }
+  }
+
+  static final class Uptime implements FrameTime.Uptime {
+    volatile long now = 5000L;
+
+    @Override public long millis() {
+      return now;
+    }
+  }
+
+  interface Wire {
+    Reply send(byte[] raw) throws Exception;
+  }
+
+  static final class Phone {
+    final byte[] nP = random(32);
+    final byte[] token = random(32);
+    String session;
+    byte[] nF;
+    String code;
+    String pick;
+
+    String bearer() {
+      return Digests.hex(token);
+    }
+
+    Reply start(Wire wire, String name) throws Exception {
+      Reply reply = wire.send(json("POST", "/v2/pair/start", null, Json.write(Json.object("commit", Digests.sha256(nP),
+          "tokenHash", Digests.sha256(token), "deviceName", name))));
+      if (reply.status == 200) {
+        session = (String) reply.object().get("session");
+        nF = Digests.bytes(reply.object().get("nF"));
+      }
+      return reply;
+    }
+
+    Reply reveal(Wire wire, byte[] fpRaw) throws Exception {
+      byte[] digest = Pairing.digest(nP, nF, fpRaw);
+      code = Pairing.code(digest);
+      pick = Pairing.pick(digest);
+      return wire.send(json("POST", "/v2/pair/reveal", null, Json.write(Json.object("session", session, "nP", Digests.hex(nP)))));
+    }
+
+    Reply result(Wire wire) throws Exception {
+      return wire.send(json("GET", "/v2/pair/result?session=" + session, null, null));
+    }
+
+    Reply cancel(Wire wire) throws Exception {
+      return wire.send(json("POST", "/v2/pair/cancel", null, Json.write(Json.object("session", session))));
+    }
+  }
+
+  static byte[] random(int length) {
+    byte[] bytes = new byte[length];
+    new java.security.SecureRandom().nextBytes(bytes);
+    return bytes;
+  }
+
+  static Wire memory(final LocalApi api) {
+    return new Wire() {
+      @Override public Reply send(byte[] raw) throws Exception {
+        return inMemory(api, raw);
+      }
+    };
+  }
+
+  static Wire socket(final InetAddress address, final int port) {
+    return new Wire() {
+      @Override public Reply send(byte[] raw) throws Exception {
+        return overSocket(address, port, raw);
+      }
+    };
+  }
+
+  static String pair(LocalApi api, Recorder events, Wire wire, String name) throws Exception {
+    Phone phone = new Phone();
+    if (!api.pairingOpen().contains("\"ok\":true")) throw new AssertionError("the pairing window did not open");
+    Reply started = phone.start(wire, name);
+    if (started.status != 200) throw new AssertionError("pair start returned " + started.status + " " + started.text());
+    int revealed = phone.reveal(wire, api.identity().fpRaw).status;
+    if (revealed != 204) throw new AssertionError("pair reveal returned " + revealed);
+    if (!phone.code.equals(events.pairing.get("code"))) throw new AssertionError("the phone and the frame disagree on the code");
+    if (!api.pairingTap(phone.pick)) throw new AssertionError("tapping the phone's number did not approve");
+    Reply result = phone.result(wire);
+    if (result.status != 200) throw new AssertionError("pair result returned " + result.status);
+    api.pairingCancel();
+    return phone.bearer();
   }
 
   static final class CalendarShelf implements LocalApi.Calendars {
@@ -291,8 +381,8 @@ final class Fakes {
         seen.add("album");
       }
     };
-    volatile String code;
-    volatile long expiresAt;
+    volatile Map<String, Object> pairing = Json.object("phase", "idle");
+    volatile long remaining = -1;
     volatile String snapshot;
     volatile String settings;
 
@@ -301,15 +391,14 @@ final class Fakes {
       seen.add("household");
     }
 
-    @Override public void pairingShown(String shown, long expires) {
-      code = shown;
-      expiresAt = expires;
-      seen.add("shown");
-    }
-
-    @Override public void pairingHidden() {
-      code = null;
-      seen.add("hidden");
+    @Override public void pairingChanged(String state, long left) {
+      try {
+        pairing = Json.map(Json.parse(state));
+      } catch (Json.Malformed impossible) {
+        throw new IllegalStateException(impossible);
+      }
+      remaining = left;
+      seen.add((String) pairing.get("phase"));
     }
 
     @Override public void settingsRequested(String requested) {
@@ -330,8 +419,12 @@ final class Fakes {
     final int status;
     final Map<String, String> headers = new HashMap<>();
     final byte[] body;
+    final byte[] raw;
+    byte[] fpRaw;
+    String suite;
 
     Reply(byte[] raw) {
+      this.raw = raw;
       int split = -1;
       for (int i = 0; i + 3 < raw.length && split < 0; i++) {
         if (raw[i] == '\r' && raw[i + 1] == '\n' && raw[i + 2] == '\r' && raw[i + 3] == '\n') split = i;
@@ -388,7 +481,6 @@ final class Fakes {
     LocalHttp.Response response;
     try {
       LocalHttp.Request request = LocalHttp.readHead(in);
-      request.peer = peer;
       response = api.handle(request, LocalHttp.body(request, in, out, UNPACED));
     } catch (ApiException malformed) {
       response = LocalHttp.Response.error(malformed);
@@ -401,9 +493,36 @@ final class Fakes {
     return overSocket(InetAddress.getLoopbackAddress(), port, raw);
   }
 
-  static Reply overSocket(InetAddress address, int port, byte[] raw) throws IOException {
-    try (Socket socket = new Socket(address, port)) {
+  static SSLSocket tls(InetAddress address, int port, String protocol, String... suites) throws IOException {
+    try {
+      SSLContext context = SSLContext.getInstance("TLS");
+      context.init(null, new TrustManager[] {new X509TrustManager() {
+        @Override public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String type) {}
+
+        @Override public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String type) {}
+
+        @Override public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+          return new java.security.cert.X509Certificate[0];
+        }
+      }}, null);
+      SSLSocket socket = (SSLSocket) context.getSocketFactory().createSocket(address, port);
+      socket.setEnabledProtocols(new String[] {protocol});
+      socket.setEnabledCipherSuites(suites.length == 0 ? LocalServer.SUITES : suites);
       socket.setSoTimeout(20000);
+      return socket;
+    } catch (java.security.GeneralSecurityException impossible) {
+      throw new IOException(impossible);
+    }
+  }
+
+  static SSLSocket tls(InetAddress address, int port) throws IOException {
+    SSLSocket socket = tls(address, port, LocalServer.PROTOCOL);
+    socket.startHandshake();
+    return socket;
+  }
+
+  static Reply overSocket(InetAddress address, int port, byte[] raw) throws IOException {
+    try (SSLSocket socket = tls(address, port)) {
       OutputStream out = socket.getOutputStream();
       out.write(raw);
       out.flush();
@@ -411,7 +530,12 @@ final class Fakes {
       InputStream in = socket.getInputStream();
       byte[] buffer = new byte[65536];
       for (int count; (count = in.read(buffer)) >= 0;) received.write(buffer, 0, count);
-      return new Reply(received.toByteArray());
+      Reply reply = new Reply(received.toByteArray());
+      reply.fpRaw = Digests.digest(socket.getSession().getPeerCertificates()[0].getEncoded());
+      reply.suite = socket.getSession().getCipherSuite();
+      return reply;
+    } catch (java.security.cert.CertificateEncodingException impossible) {
+      throw new IOException(impossible);
     }
   }
 

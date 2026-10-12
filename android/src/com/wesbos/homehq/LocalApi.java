@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
-import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -33,9 +32,7 @@ final class LocalApi {
   interface Events {
     void householdChanged(String snapshot);
 
-    void pairingShown(String code, long expiresAt);
-
-    void pairingHidden();
+    void pairingChanged(String state, long remaining);
 
     void settingsRequested(String settings);
   }
@@ -68,11 +65,11 @@ final class LocalApi {
   private final HouseholdStore household;
   private final Pairing pairing;
   private final Semaphore uploads = new Semaphore(1);
-  private final String frameId;
+  private final Identity identity;
   private Map<String, Object> settings;
   private String observed;
 
-  LocalApi(KeyValue storage, FrameTime.Clock clock, Calendars calendars, Photos photos, ICloudSync icloud, final Events events) {
+  LocalApi(KeyValue storage, FrameTime.Clock clock, FrameTime.Uptime uptime, Calendars calendars, Photos photos, ICloudSync icloud, final Events events) {
     this.storage = storage;
     this.clock = clock;
     this.calendars = calendars;
@@ -80,21 +77,12 @@ final class LocalApi {
     this.events = events;
     this.icloud = icloud;
     household = new HouseholdStore(storage);
-    pairing = new Pairing(storage, clock, new Pairing.Listener() {
-      @Override public void codeShown(String code, long expiresAt) {
-        events.pairingShown(code, expiresAt);
-      }
-
-      @Override public void codeHidden() {
-        events.pairingHidden();
+    identity = Identity.open(storage);
+    pairing = new Pairing(identity, clock, uptime, new Pairing.Listener() {
+      @Override public void changed(Map<String, Object> state, long remaining) {
+        events.pairingChanged(Json.write(state), remaining);
       }
     });
-    String savedId = storage.get("frameId");
-    if (savedId == null || !savedId.matches("[0-9a-f\\-]{36}")) {
-      savedId = UUID.randomUUID().toString();
-      storage.put("frameId", savedId);
-    }
-    frameId = savedId;
     settings = Json.object("location", null, "appearance", Json.object("palette", "linen", "mode", "auto"));
     try {
       Map<String, Object> saved = Json.map(Json.parse(storage.get("settings")));
@@ -107,7 +95,11 @@ final class LocalApi {
   }
 
   String frameId() {
-    return frameId;
+    return identity.frameId;
+  }
+
+  Identity identity() {
+    return identity;
   }
 
   LocalHttp.Response handle(LocalHttp.Request request, LocalHttp.Body body) throws IOException {
@@ -153,8 +145,30 @@ final class LocalApi {
     }
   }
 
-  String pairingStatus(int port, boolean advertised) {
-    return Json.write(Json.object("devices", pairing.devices(), "port", port, "advertised", advertised));
+  String pairingStatus(int port, boolean advertised, String address) {
+    pairing.expireIfDue();
+    return Json.write(Json.object("devices", pairing.devices(null), "port", port, "advertised", advertised, "address", address,
+        "pairing", pairing.state()));
+  }
+
+  String pairingOpen() {
+    try {
+      return Json.write(Json.object("ok", true, "pairing", pairing.open()));
+    } catch (ApiException refused) {
+      return Json.write(Json.object("ok", false, "error", refused.getMessage()));
+    }
+  }
+
+  boolean pairingTap(String number) {
+    return pairing.tap(number);
+  }
+
+  boolean pairingCancel() {
+    return pairing.dismiss();
+  }
+
+  String pairingPick() {
+    return pairing.pick();
   }
 
   boolean pairingRevoke(String id) {
@@ -252,25 +266,29 @@ final class LocalApi {
   private LocalHttp.Response route(LocalHttp.Request request, LocalHttp.Body body) throws ApiException, IOException {
     String route = request.method + " " + request.path;
     switch (route) {
-      case "GET /v1/info":
-        return LocalHttp.Response.json(200, Json.object("v", 1, "frameId", frameId, "name", NAME));
-      case "POST /v1/pair/start":
-        pairing.start(request.peer);
+      case "GET /v2/info":
+        return LocalHttp.Response.json(200, Json.object("v", 2, "frameId", identity.frameId, "name", NAME, "pairing", pairing.accepting()));
+      case "POST /v2/pair/start":
+        return LocalHttp.Response.json(200, pairing.start(fields(body, MAX_UNPAIRED_JSON)));
+      case "POST /v2/pair/reveal":
+        pairing.reveal(fields(body, MAX_UNPAIRED_JSON));
         return LocalHttp.Response.empty(204);
-      case "POST /v1/pair/finish":
-        Map<String, Object> paired = pairing.finish(fields(body, MAX_UNPAIRED_JSON));
-        return LocalHttp.Response.json(200, Json.object("token", paired.get("token"), "frameId", frameId, "name", NAME));
+      case "POST /v2/pair/cancel":
+        pairing.cancel(fields(body, MAX_UNPAIRED_JSON));
+        return LocalHttp.Response.empty(204);
+      case "GET /v2/pair/result":
+        Map<String, Object> paired = pairing.result(request.query.get("session"));
+        if (paired == null) return LocalHttp.Response.empty(202);
+        return LocalHttp.Response.json(200, Json.object("deviceId", paired.get("deviceId"), "frameId", identity.frameId, "name", NAME));
       default:
         break;
     }
     String authorization = request.headers.get("authorization");
-    boolean bearer = authorization != null && authorization.startsWith("Bearer ");
-    if (!bearer || pairing.authenticate(authorization.substring(7).trim()) == null) {
-      throw ApiException.unauthorized("Pair this device with the frame first");
-    }
+    String caller = authorization != null && authorization.startsWith("Bearer ") ? pairing.authenticate(authorization.substring(7).trim()) : null;
+    if (caller == null) throw ApiException.unauthorized("Pair this device with the frame first");
     switch (route) {
       case "GET /v1/devices":
-        return LocalHttp.Response.json(200, pairing.devices());
+        return LocalHttp.Response.json(200, pairing.devices(caller));
       case "GET /v1/state":
         return state(request.query.get("since"));
       case "POST /v1/people":
@@ -313,7 +331,8 @@ final class LocalApi {
     String id = parts[3];
     switch (request.method + " " + parts[2]) {
       case "DELETE devices":
-        if (!pairing.revoke(id)) throw ApiException.notFound("No such device");
+        if (!id.equals(caller)) throw ApiException.forbidden("A phone can only remove itself. Remove others on the frame.");
+        pairing.revoke(id);
         return LocalHttp.Response.empty(204);
       case "PATCH people":
         return mutation("person.update", id, body);

@@ -6,11 +6,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.BindException;
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -22,6 +27,9 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLServerSocketFactory;
+import javax.net.ssl.SSLSocket;
 
 final class LocalServer {
   static final int PREFERRED_PORT = 8765;
@@ -33,6 +41,8 @@ final class LocalServer {
   static final int HEAD_SECONDS = 5;
   static final int EXCHANGE_SECONDS = 20;
   static final int UPLOAD_HANDLING_SECONDS = 60;
+  static final String PROTOCOL = "TLSv1.2";
+  static final String[] SUITES = {"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"};
   private static final long DRAIN_NANOS = 1500000000L;
   private static final int DRAIN_BYTES = 256 * 1024;
 
@@ -67,13 +77,19 @@ final class LocalServer {
 
   synchronized int start(InetAddress address, int preferredPort) throws IOException {
     if (listener != null) return listener.getLocalPort();
-    ServerSocket socket = new ServerSocket();
+    SSLServerSocketFactory factory;
+    try {
+      factory = api.identity().tls().getServerSocketFactory();
+    } catch (GeneralSecurityException unusable) {
+      throw new IOException("The frame's TLS identity could not be used", unusable);
+    }
+    ServerSocket socket = secure(factory);
     socket.setReuseAddress(true);
     try {
       socket.bind(new InetSocketAddress(address, preferredPort), 16);
     } catch (BindException taken) {
       socket.close();
-      socket = new ServerSocket();
+      socket = secure(factory);
       socket.bind(new InetSocketAddress(address, 0), 16);
     }
     workers = new ThreadPoolExecutor(WORKERS, WORKERS, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), threads);
@@ -105,6 +121,33 @@ final class LocalServer {
     for (Connection connection : waiting) close(connection.socket);
     for (Connection connection : served) close(connection.socket);
     waiting.clear();
+  }
+
+  private static ServerSocket secure(SSLServerSocketFactory factory) throws IOException {
+    SSLServerSocket socket = (SSLServerSocket) factory.createServerSocket();
+    List<String> suites = new ArrayList<>(Arrays.asList(SUITES));
+    suites.retainAll(Arrays.asList(socket.getSupportedCipherSuites()));
+    if (suites.isEmpty() || !Arrays.asList(socket.getSupportedProtocols()).contains(PROTOCOL)) {
+      socket.close();
+      throw new IOException("Phone API disabled: this device offers neither " + SUITES[0] + " nor " + SUITES[1] + " over " + PROTOCOL);
+    }
+    socket.setEnabledProtocols(new String[] {PROTOCOL});
+    socket.setEnabledCipherSuites(suites.toArray(new String[0]));
+    return socket;
+  }
+
+  static String lanAddress() {
+    try {
+      for (NetworkInterface link : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+        if (!link.isUp() || link.isLoopback()) continue;
+        for (InetAddress address : Collections.list(link.getInetAddresses())) {
+          if (address instanceof Inet4Address && address.isSiteLocalAddress()) return address.getHostAddress();
+        }
+      }
+      return "";
+    } catch (IOException | RuntimeException unknown) {
+      return "";
+    }
   }
 
   static boolean local(InetAddress peer) {
@@ -173,6 +216,11 @@ final class LocalServer {
   private ScheduledFuture<?> closeAfter(final Socket socket, int seconds) {
     return watchdog.schedule(new Runnable() {
       @Override public void run() {
+        try {
+          socket.setSoLinger(true, 0);
+        } catch (IOException alreadyClosed) {
+          return;
+        }
         close(socket);
       }
     }, seconds, TimeUnit.SECONDS);
@@ -192,12 +240,12 @@ final class LocalServer {
       connection.limit.cancel(false);
       connection.limit = closeAfter(socket, HEAD_SECONDS);
       socket.setSoTimeout(HEAD_SECONDS * 1000);
+      ((SSLSocket) socket).startHandshake();
       InputStream in = new BufferedInputStream(socket.getInputStream(), 16384);
       OutputStream out = new BufferedOutputStream(socket.getOutputStream(), 16384);
       LocalHttp.Response response;
       try {
         LocalHttp.Request request = LocalHttp.readHead(in);
-        request.peer = connection.source.getHostAddress();
         connection.limit.cancel(false);
         connection.limit = closeAfter(socket, exchangeSeconds(request));
         response = api.handle(request, LocalHttp.body(request, in, out, new LocalHttp.Pace() {
@@ -209,7 +257,11 @@ final class LocalServer {
         response = LocalHttp.Response.error(malformed);
       }
       LocalHttp.write(out, response);
-      socket.shutdownOutput();
+      try {
+        socket.shutdownOutput();
+      } catch (UnsupportedOperationException noHalfClose) {
+        out.flush();
+      }
       socket.setSoTimeout(500);
       long until = System.nanoTime() + DRAIN_NANOS;
       byte[] unread = new byte[8192];

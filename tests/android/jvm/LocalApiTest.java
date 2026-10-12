@@ -16,11 +16,17 @@ public final class LocalApiTest {
 
   static Fakes.Storage storage;
   static Fakes.Clock clock;
+  static Fakes.Uptime uptime;
   static Fakes.CalendarShelf calendars;
   static Fakes.PhotoShelf photos;
   static Fakes.Recorder events;
   static LocalApi api;
   static String token;
+  static final Fakes.Wire wire = new Fakes.Wire() {
+    @Override public Fakes.Reply send(byte[] raw) throws Exception {
+      return Fakes.inMemory(api, raw);
+    }
+  };
 
   static Fakes.Album album = new Fakes.Album();
   static ICloudSync icloud;
@@ -42,20 +48,17 @@ public final class LocalApiTest {
   static void fresh() throws Exception {
     storage = new Fakes.Storage();
     clock = new Fakes.Clock(START);
+    uptime = new Fakes.Uptime();
     calendars = new Fakes.CalendarShelf();
     photos = new Fakes.PhotoShelf();
     events = new Fakes.Recorder();
     album = new Fakes.Album();
-    api = new LocalApi(storage, clock, calendars, photos, sync(events), events);
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), events);
     token = pair("Test phone");
   }
 
   static String pair(String deviceName) throws Exception {
-    same(204, send("POST", "/v1/pair/start", null, null).status, "pair start");
-    Fakes.Reply finished = send("POST", "/v1/pair/finish", null,
-        "{\"code\":\"" + events.code + "\",\"deviceName\":\"" + deviceName + "\"}");
-    same(200, finished.status, "pair finish");
-    return (String) finished.object().get("token");
+    return Fakes.pair(api, events, wire, deviceName);
   }
 
   static Fakes.Reply send(String method, String target, String bearer, String json) throws Exception {
@@ -119,42 +122,46 @@ public final class LocalApiTest {
   static void http() throws Exception {
     fresh();
     same(400, raw("GARBAGE\r\n\r\n").status, "missing target and version");
-    same(400, raw("get /v1/info HTTP/1.1\r\n\r\n").status, "lowercase method");
-    same(400, raw("GET /v1/info HTTP/2.0\r\n\r\n").status, "unsupported version");
-    same(400, raw("GET  /v1/info HTTP/1.1\r\n\r\n").status, "double space");
+    same(400, raw("get /v2/info HTTP/1.1\r\n\r\n").status, "lowercase method");
+    same(400, raw("GET /v2/info HTTP/2.0\r\n\r\n").status, "unsupported version");
+    same(400, raw("GET  /v2/info HTTP/1.1\r\n\r\n").status, "double space");
     same(400, raw("GET v1/info HTTP/1.1\r\n\r\n").status, "relative target");
     same(400, raw("GET /v1/photos/../../etc/passwd HTTP/1.1\r\n\r\n").status, "dot traversal");
     same(400, raw("GET /v1/photos/%2e%2e/secret HTTP/1.1\r\n\r\n").status, "encoded traversal");
     same(400, raw("GET /v1//state HTTP/1.1\r\n\r\n").status, "empty segment");
     same(400, raw("GET /v1/photos\\x HTTP/1.1\r\n\r\n").status, "backslash");
-    same(400, raw("GET /v1/info HTTP/1.1\r\nNoColon\r\n\r\n").status, "header without colon");
-    same(400, raw("GET /v1/info HTTP/1.1\r\nX-Long: " + repeat("a", 9000) + "\r\n\r\n").status, "oversize head");
-    same(400, raw("GET /v1/info HTTP/1.1\r\n" + repeat("X-A: 1\r\n", 80) + "\r\n").status, "too many headers");
-    same(400, raw("POST /v1/pair/finish HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n").status, "chunked body");
-    same(400, raw("GET /v1/info HTTP/1.1\r\nOrigin: http://evil.test\r\n\r\n").status, "browser origin");
-    same(400, raw("POST /v1/pair/finish HTTP/1.1\r\nContent-Length: 2\r\nContent-Length: 3\r\n\r\n{}").status, "repeated length");
-    same(400, raw("POST /v1/pair/finish HTTP/1.1\r\nContent-Length: -1\r\n\r\n").status, "negative length");
-    same(400, raw("POST /v1/pair/finish HTTP/1.1\r\nContent-Length: two\r\n\r\n").status, "worded length");
-    Fakes.Reply bare = raw("GET /v1/info HTTP/1.0\nhost: 10.0.0.2\n\n");
+    same(400, raw("GET /v2/info HTTP/1.1\r\nNoColon\r\n\r\n").status, "header without colon");
+    same(400, raw("GET /v2/info HTTP/1.1\r\nX-Long: " + repeat("a", 9000) + "\r\n\r\n").status, "oversize head");
+    same(400, raw("GET /v2/info HTTP/1.1\r\n" + repeat("X-A: 1\r\n", 80) + "\r\n").status, "too many headers");
+    same(400, raw("POST /v2/pair/start HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n").status, "chunked body");
+    same(400, raw("GET /v2/info HTTP/1.1\r\nOrigin: http://evil.test\r\n\r\n").status, "browser origin");
+    same(400, raw("POST /v2/pair/start HTTP/1.1\r\nContent-Length: 2\r\nContent-Length: 3\r\n\r\n{}").status, "repeated length");
+    same(400, raw("POST /v2/pair/start HTTP/1.1\r\nContent-Length: -1\r\n\r\n").status, "negative length");
+    same(400, raw("POST /v2/pair/start HTTP/1.1\r\nContent-Length: two\r\n\r\n").status, "worded length");
+    Fakes.Reply bare = raw("GET /v2/info HTTP/1.0\nhost: 10.0.0.2\n\n");
     same(200, bare.status, "bare newlines and HTTP/1.0 are tolerated");
     same("close", bare.headers.get("connection"), "connection closes");
     same("no-store", bare.headers.get("cache-control"), "responses are not cached");
     check(bare.headers.get("content-type").startsWith("application/json"), "json content type");
     try {
-      raw("GET /v1/info HTTP/1.1\r\nHost: x\r\n");
+      raw("GET /v2/info HTTP/1.1\r\nHost: x\r\n");
       throw new AssertionError("truncated head answered");
     } catch (EOFException expected) {
       checks++;
     }
     try {
-      raw("POST /v1/pair/finish HTTP/1.1\r\nContent-Length: 50\r\n\r\n{\"code\"");
+      raw("POST /v2/pair/start HTTP/1.1\r\nContent-Length: 50\r\n\r\n{\"code\"");
       throw new AssertionError("truncated body answered");
     } catch (EOFException expected) {
       checks++;
     }
 
-    Fakes.Reply info = send("GET", "/v1/info", null, null);
-    same(1L, info.object().get("v"), "info version");
+    Fakes.Reply info = send("GET", "/v2/info", null, null);
+    same(2L, info.object().get("v"), "info version");
+    same(Boolean.FALSE, info.object().get("pairing"), "info says no pairing window is open");
+    same("[v, frameId, name, pairing]", info.object().keySet().toString(), "info fields");
+    same(401, send("GET", "/v1/info", null, null).status, "the first version's info is gone");
+    same(401, send("POST", "/v1/pair/start", null, null).status, "and so is its pairing");
     same(api.frameId(), info.object().get("frameId"), "info frame id");
     same("Skylit", info.object().get("name"), "info name");
 
@@ -176,7 +183,7 @@ public final class LocalApiTest {
     same(404, call("GET", "/", null).status, "root");
     same(404, call("GET", "/v1/people", null).status, "wrong method on people");
     same(404, call("DELETE", "/v1/state", null).status, "wrong method on state");
-    same(404, call("POST", "/v1/info", null).status, "wrong method on info");
+    same(404, call("POST", "/v2/info", null).status, "wrong method on info");
     same(404, call("PUT", "/v1/chores/c1/undone", "{}").status, "unknown chore action");
     same(404, call("PUT", "/v1/people/p1/done", "{}").status, "action on the wrong resource");
     same(404, call("GET", "/v1/people/p1/extra/deep", null).status, "too many segments");
@@ -197,96 +204,235 @@ public final class LocalApiTest {
     check(!LocalServer.local(InetAddress.getByName("2001:4860:4860::8888")), "internet IPv6 peers are refused");
   }
 
-  static Fakes.Reply finish(String code) throws Exception {
-    return send("POST", "/v1/pair/finish", null, "{\"code\":\"" + code + "\",\"deviceName\":\"Phone\"}");
+  static String run(int from) {
+    StringBuilder text = new StringBuilder();
+    for (int value = from; value < from + 32; value++) text.append(String.format("%02x", value));
+    return text.toString();
   }
 
-  static String wrongCode() {
-    return events.code.equals("000000") ? "000001" : "000000";
+  static Fakes.Reply start(String commit, String tokenHash, Object deviceName) throws Exception {
+    return send("POST", "/v2/pair/start", null, Json.write(Json.object("commit", commit, "tokenHash", tokenHash, "deviceName", deviceName)));
+  }
+
+  static void open() throws Exception {
+    same(Boolean.TRUE, Json.map(Json.parse(api.pairingOpen())).get("ok"), "the frame opens a pairing window");
+  }
+
+  static Fakes.Phone revealed(String name) throws Exception {
+    Fakes.Phone phone = new Fakes.Phone();
+    open();
+    same(200, phone.start(wire, name).status, "start for " + name);
+    same(204, phone.reveal(wire, api.identity().fpRaw).status, "reveal for " + name);
+    return phone;
+  }
+
+  static String decoy(Fakes.Phone phone) {
+    for (Object number : Json.list(events.pairing.get("numbers"))) if (!number.equals(phone.pick)) return (String) number;
+    throw new AssertionError("no decoy shown");
+  }
+
+  static boolean accepting() throws Exception {
+    return (Boolean) send("GET", "/v2/info", null, null).object().get("pairing");
   }
 
   static void pairing() throws Exception {
+    byte[] nP = Digests.bytes(run(0x00));
+    byte[] nF = Digests.bytes(run(0x20));
+    byte[] fpRaw = Digests.bytes(run(0x40));
+    same("630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd", Digests.sha256(nP), "test vector commit");
+    byte[] vector = Pairing.digest(nP, nF, fpRaw);
+    same("526438df18ab2fc054b103a87964836abe6e20d4118d11b6a6e50ebbca57d7af", Digests.hex(vector), "test vector D");
+    same("299871", Pairing.code(vector), "test vector code");
+    same("64", Pairing.pick(vector), "test vector pick");
+    byte[] high = new byte[32];
+    java.util.Arrays.fill(high, (byte) 0xFF);
+    same("967295", Pairing.code(high), "the code uses unsigned arithmetic");
+    same("95", Pairing.pick(high), "the pick uses unsigned arithmetic");
+    same("000000", Pairing.code(new byte[32]), "the code keeps leading zeros");
+    same("00", Pairing.pick(new byte[32]), "the pick keeps a leading zero");
+    check(Digests.bytes("AB") == null && Digests.bytes("abc") == null && Digests.bytes("zz") == null && Digests.bytes(12) == null, "only lowercase hex pairs decode");
+    same("00ff10", Digests.hex(Digests.bytes("00ff10")), "hex round trips");
+
     fresh();
-    check(token.matches("[0-9a-f]{64}"), "token is 32 random bytes in hex");
-    check(!storage.values.toString().contains(token), "the token itself is never stored");
-    check(storage.values.get("devices").contains(Digests.sha256(token.getBytes(StandardCharsets.US_ASCII))), "its SHA-256 is stored");
-    same(1, events.count("shown"), "code shown once");
-    same(1, events.count("hidden"), "code hidden after use");
+    check(token.matches("[0-9a-f]{64}"), "the phone's token is 32 random bytes in hex");
+    String saved = storage.values.get(Identity.KEY);
+    check(!saved.contains(token), "the token itself is never stored");
+    check(saved.contains(Digests.sha256(Digests.bytes(token))), "the SHA-256 of its 32 bytes is stored");
+    check(storage.values.get("devices") == null, "nothing is kept under the first version's key");
+    same("[waiting, code, paired, idle]", events.seen.toString(), "the frame walks through waiting, code and paired");
     List<Object> devices = call("GET", "/v1/devices", null).list();
     same(1, devices.size(), "one device");
     Map<String, Object> device = Json.map(devices.get(0));
     same("Test phone", device.get("name"), "device name");
     same("2026-10-11T00:00:00Z", device.get("pairedAt"), "pairedAt is ISO-8601");
-    check(!device.containsKey("hash") && device.keySet().size() == 3, "device rows expose only id, name, pairedAt");
+    same("2026-10-11T00:00:00Z", device.get("lastSeen"), "lastSeen starts at pairing");
+    same(Boolean.TRUE, device.get("self"), "the caller's own device is marked");
+    check(!device.containsKey("hash") && device.keySet().size() == 5, "device rows expose only id, name, pairedAt, lastSeen, self");
 
-    same(409, finish("123456").status, "no active code");
-    same(400, send("POST", "/v1/pair/finish", null, "{\"code\":123456,\"deviceName\":\"Phone\"}").status, "numeric code");
-    same(400, send("POST", "/v1/pair/finish", null, "{\"code\":\"12345\",\"deviceName\":\"Phone\"}").status, "short code");
+    Fakes.Phone early = new Fakes.Phone();
+    Fakes.Reply outside = early.start(wire, "Early phone");
+    same(409, outside.status, "start outside a window");
+    same("conflict", outside.error(), "start outside a window slug");
+    check(!accepting(), "info reports no window");
+    same(409, send("POST", "/v2/pair/reveal", null, "{\"session\":\"" + repeat("0", 32) + "\",\"nP\":\"" + run(0) + "\"}").status, "reveal outside a window");
+    same(409, send("POST", "/v2/pair/cancel", null, "{\"session\":\"" + repeat("0", 32) + "\"}").status, "cancel outside a window");
+    same(404, send("GET", "/v2/pair/result?session=" + repeat("0", 32), null, null).status, "result for a session that never existed");
+    check(!api.pairingTap("00") && !api.pairingCancel(), "taps do nothing with no window");
 
-    send("POST", "/v1/pair/start", null, null);
-    String used = events.code;
-    check(used.matches("[0-9]{6}"), "six digit code");
-    same(START + 120000L, events.expiresAt, "code lasts 120 seconds");
-    same(400, send("POST", "/v1/pair/finish", null, "{\"code\":\"" + used + "\"}").status, "device name is required");
-    same(400, send("POST", "/v1/pair/finish", null, "{\"code\":\"" + used + "\",\"deviceName\":\"  \"}").status, "blank device name");
-    same(200, finish(used).status, "a rejected body does not consume the code");
-    same(409, finish(used).status, "a code cannot be reused");
-
-    send("POST", "/v1/pair/start", null, null);
-    String expiring = events.code;
-    clock.now += 119999L;
-    same(401, finish(wrongCode()).status, "wrong code just before expiry");
-    clock.now += 1L;
-    Fakes.Reply expired = finish(expiring);
-    same(409, expired.status, "expired code");
-    same("conflict", expired.error(), "expired code slug");
-    check(events.code == null, "expired code is hidden");
-
-    send("POST", "/v1/pair/start", null, null);
-    String replaced = events.code;
-    send("POST", "/v1/pair/start", null, null);
-    String replacement = events.code;
-    if (!replaced.equals(replacement)) same(401, finish(replaced).status, "a replaced code stops working");
-    same(200, finish(replacement).status, "the replacement works");
-
-    clock.now += 700000L;
-    send("POST", "/v1/pair/start", null, null);
-    String guarded = events.code;
-    for (int attempt = 1; attempt <= 4; attempt++) {
-      Fakes.Reply wrong = finish(wrongCode());
-      same(401, wrong.status, "wrong attempt " + attempt);
-      same("unauthorized", wrong.error(), "wrong attempt slug");
+    open();
+    same("waiting", events.pairing.get("phase"), "the frame waits for a phone");
+    same(Pairing.WINDOW, events.remaining, "the window lasts 120 seconds");
+    same(120000L, events.pairing.get("remaining"), "and says so to the dashboard");
+    check(accepting(), "info reports the open window");
+    String good = run(0x00);
+    Object[][] malformed = {{good.toUpperCase(), good, "Phone"}, {good, good.toUpperCase(), "Phone"}, {good.substring(2), good, "Phone"}, {good + "00", good, "Phone"},
+        {good.substring(0, 63) + "g", good, "Phone"}, {good, good.substring(0, 63), "Phone"}, {good, good, null}, {good, good, "   "}, {good, good, repeat("n", 41)},
+        {good, good, "Pho‮ne"}, {good, good, "Pho\u0007ne"}, {good, good, 7L}, {null, good, "Phone"}, {good, null, "Phone"}, {1L, good, "Phone"}};
+    for (Object[] body : malformed) {
+      Fakes.Reply refused = send("POST", "/v2/pair/start", null, Json.write(Json.object("commit", body[0], "tokenHash", body[1], "deviceName", body[2])));
+      same(400, refused.status, "malformed start " + Json.write(java.util.Arrays.asList(body)));
     }
-    Fakes.Reply fifth = finish(wrongCode());
-    same(429, fifth.status, "the fifth wrong attempt is rate limited");
-    same("rate_limited", fifth.error(), "429 slug");
-    check(events.code == null, "an exhausted code is hidden");
-    same(429, finish(guarded).status, "the right code no longer works after five wrong attempts");
-    same(429, send("POST", "/v1/pair/start", null, null).status, "pairing is locked out after an exhausted code");
-    clock.now += Pairing.FIRST_LOCKOUT - 1;
-    same(429, send("POST", "/v1/pair/start", null, null).status, "still locked just before the lockout ends");
-    clock.now += 1;
-    same(204, send("POST", "/v1/pair/start", null, null).status, "pairing resumes after the lockout");
-    same(200, finish(events.code).status, "a fresh code pairs");
+    same(400, send("POST", "/v2/pair/start", null, "[]").status, "start needs an object");
+    same(413, raw("POST /v2/pair/start HTTP/1.1\r\nContent-Length: 4097\r\n\r\n").status, "unpaired bodies are limited to 4 KiB");
+    check(accepting(), "a malformed start does not use up the window");
 
-    clock.now += 700000L;
-    for (int started = 1; started <= Pairing.MAX_STARTS; started++) {
-      same(204, send("POST", "/v1/pair/start", null, null).status, "start " + started);
+    Fakes.Phone decoyed = new Fakes.Phone();
+    Fakes.Reply started = decoyed.start(wire, "  " + repeat("n", 40) + "  ");
+    same(200, started.status, "the first start in a window");
+    check(decoyed.session.matches("[0-9a-f]{32}") && Digests.hex(decoyed.nF).matches("[0-9a-f]{64}") && started.object().size() == 2, "start returns a session and nF and nothing else");
+    check(!started.text().contains("token"), "the frame never sends a token");
+    check(!accepting(), "the window is used up by the first start");
+    for (int again = 0; again < 2; again++) {
+      Fakes.Reply busy = new Fakes.Phone().start(wire, "Second phone");
+      same(409, busy.status, "a second start in the same window");
+      same("pairing_busy", busy.error(), "a second start slug");
     }
-    same(429, send("POST", "/v1/pair/start", null, null).status, "too many starts in ten minutes");
-    clock.now += Pairing.START_WINDOW;
-    same(204, send("POST", "/v1/pair/start", null, null).status, "starts are allowed again later");
+    same("waiting", events.pairing.get("phase"), "the frame shows no code before reveal");
+    same(202, decoyed.result(wire).status, "result before reveal");
+    check(!api.pairingTap("00"), "nothing can be tapped before reveal");
+    same(400, send("GET", "/v2/pair/result?session=" + decoyed.session.toUpperCase(), null, null).status, "uppercase session");
+    same(400, send("GET", "/v2/pair/result?session=" + decoyed.session.substring(2), null, null).status, "short session");
+    same(400, send("GET", "/v2/pair/result", null, null).status, "missing session");
+    same(404, send("GET", "/v2/pair/result?session=" + repeat("0", 32), null, null).status, "another session's result");
+    same(400, send("POST", "/v2/pair/reveal", null, "{\"session\":\"" + decoyed.session + "\",\"nP\":\"" + Digests.hex(decoyed.nP).toUpperCase() + "\"}").status, "uppercase nP");
+    same(400, send("POST", "/v2/pair/reveal", null, "{\"session\":\"" + decoyed.session + "\",\"nP\":\"" + Digests.hex(decoyed.nP).substring(2) + "\"}").status, "short nP");
+    same(409, send("POST", "/v2/pair/reveal", null, "{\"session\":\"" + repeat("0", 32) + "\",\"nP\":\"" + Digests.hex(decoyed.nP) + "\"}").status, "reveal for another session");
+    same(204, decoyed.reveal(wire, api.identity().fpRaw).status, "reveal");
+    same("code", events.pairing.get("phase"), "the frame shows the code after reveal");
+    same(decoyed.code, events.pairing.get("code"), "the frame and the phone compute the same code");
+    check(decoyed.code.matches("[0-9]{6}") && decoyed.pick.matches("[0-9]{2}"), "six digits and two digits");
+    List<Object> numbers = Json.list(events.pairing.get("numbers"));
+    check(numbers.size() == 3 && new java.util.HashSet<>(numbers).size() == 3 && numbers.contains(decoyed.pick), "three different numbers include the phone's");
+    check(!Json.write(events.pairing).contains("pick"), "the dashboard is not told which number is right");
+    same(decoyed.pick, api.pairingPick(), "the frame knows the pick");
+    same(409, decoyed.reveal(wire, api.identity().fpRaw).status, "reveal twice");
+    same("code", events.pairing.get("phase"), "a repeated reveal changes nothing");
+    same(202, decoyed.result(wire).status, "result before approval");
+    check(!api.pairingTap(decoy(decoyed)), "a decoy does not approve");
+    same("cancelled", events.pairing.get("phase"), "a decoy ends the session on the frame");
+    same("decoy", events.pairing.get("reason"), "and says why");
+    Fakes.Reply refused = decoyed.result(wire);
+    same(403, refused.status, "result after a decoy");
+    same("forbidden", refused.error(), "403 slug");
+    check(!api.pairingTap(decoyed.pick), "the right number no longer works after a decoy");
+    same(401, send("GET", "/v1/state", decoyed.bearer(), null).status, "a refused phone holds no token");
+    same(409, new Fakes.Phone().start(wire, "Phone").status, "the window stays closed after a decoy");
+    same(1, call("GET", "/v1/devices", null).list().size(), "nothing was paired");
+
+    Fakes.Phone liar = new Fakes.Phone();
+    open();
+    liar.start(wire, "Liar");
+    Fakes.Reply lie = send("POST", "/v2/pair/reveal", null, "{\"session\":\"" + liar.session + "\",\"nP\":\"" + run(0x60) + "\"}");
+    same(400, lie.status, "reveal with the wrong nP");
+    same("cancelled", events.pairing.get("phase"), "a wrong nP ends the session");
+    same(403, liar.result(wire).status, "result after a wrong nP");
+    same(409, liar.reveal(wire, api.identity().fpRaw).status, "the right nP is too late");
+
+    Fakes.Phone quitter = revealed("Quitter");
+    same(204, quitter.cancel(wire).status, "cancel from the phone");
+    same("phone", events.pairing.get("reason"), "the frame says the phone cancelled");
+    same(204, quitter.cancel(wire).status, "cancel twice");
+    same(403, quitter.result(wire).status, "result after cancel");
+    check(!api.pairingTap(quitter.pick), "the number no longer works after cancel");
+    same(400, send("POST", "/v2/pair/cancel", null, "{\"session\":\"" + quitter.session.toUpperCase() + "\"}").status, "uppercase session in cancel");
+    same(409, send("POST", "/v2/pair/cancel", null, "{\"session\":\"" + repeat("0", 32) + "\"}").status, "cancel for another session");
+
+    Fakes.Phone dismissed = revealed("Dismissed");
+    check(api.pairingCancel(), "Cancel on the frame");
+    same("frame", events.pairing.get("reason"), "the frame says it was cancelled there");
+    same(403, dismissed.result(wire).status, "result after Cancel on the frame");
+    check(api.pairingCancel(), "closing the cancelled screen");
+    same("idle", events.pairing.get("phase"), "returns the frame to idle");
+    same(403, dismissed.result(wire).status, "the result outlives the screen");
+    open();
+    check(api.pairingCancel(), "Cancel before any phone connects");
+    same(409, new Fakes.Phone().start(wire, "Late").status, "closes the window");
+    same(404, dismissed.result(wire).status, "a new window forgets the session before it");
+
+    Fakes.Phone slow = revealed("Slow");
+    uptime.now += Pairing.WINDOW - 1;
+    clock.now += 30 * DAY;
+    same(202, slow.result(wire).status, "a wall clock jumping forward does not close the window");
+    clock.now -= 90 * DAY;
+    same(202, slow.result(wire).status, "nor does one jumping back");
+    same(1L, Json.map(Json.map(Json.parse(api.pairingStatus(8765, true, ""))).get("pairing")).get("remaining"), "one millisecond is left");
+    uptime.now += 1;
+    Fakes.Reply expired = slow.result(wire);
+    same(410, expired.status, "result after expiry");
+    same("gone", expired.error(), "410 slug");
+    same("cancelled", events.pairing.get("phase"), "the frame leaves the code screen at expiry");
+    same("expired", events.pairing.get("reason"), "and says it ran out");
+    same(410, slow.cancel(wire).status == 204 ? slow.result(wire).status : 0, "cancel after expiry leaves it expired");
+    check(!api.pairingTap(slow.pick), "the number no longer works after expiry");
+    clock.now = START;
+    open();
+    clock.now -= 365 * DAY;
+    uptime.now += Pairing.WINDOW;
+    same(409, new Fakes.Phone().start(wire, "Phone").status, "turning the wall clock back does not keep a window open");
+    same("expired", events.pairing.get("reason"), "an unused window expires too");
+    clock.now = START;
+    Fakes.Phone unrevealed = new Fakes.Phone();
+    open();
+    unrevealed.start(wire, "Unrevealed");
+    uptime.now += Pairing.WINDOW;
+    same(410, unrevealed.reveal(wire, api.identity().fpRaw).status, "reveal after expiry");
+
+    Fakes.Phone welcome = revealed("Karan's iPhone");
+    check(api.pairingTap(welcome.pick), "tapping the phone's number approves");
+    same("paired", events.pairing.get("phase"), "the frame shows success");
+    same("Karan's iPhone", events.pairing.get("name"), "with the device name");
+    Fakes.Reply approved = welcome.result(wire);
+    same(200, approved.status, "result after approval");
+    same(api.frameId(), approved.object().get("frameId"), "result frame id");
+    same("Skylit", approved.object().get("name"), "result name");
+    check(((String) approved.object().get("deviceId")).matches("[0-9a-f]{16}") && approved.object().size() == 3, "result carries deviceId, frameId and name only");
+    same(200, welcome.result(wire).status, "the result can be read again");
+    same(200, send("GET", "/v1/state", welcome.bearer(), null).status, "the phone's own token now works");
+    check(!api.pairingTap(welcome.pick), "an approved session cannot be approved twice");
+    same(2, call("GET", "/v1/devices", null).list().size(), "exactly one device was added");
+    same(409, welcome.reveal(wire, api.identity().fpRaw).status, "reveal after approval");
+    same(204, welcome.cancel(wire).status, "cancel after approval is accepted");
+    same(200, send("GET", "/v1/state", welcome.bearer(), null).status, "but does not unpair");
+    check(api.pairingCancel() && !api.pairingCancel(), "closing the success screen once");
+
+    for (int round = 0; round < 40; round++) {
+      Fakes.Phone sampled = revealed("Sampled");
+      List<Object> shown = Json.list(events.pairing.get("numbers"));
+      check(new java.util.HashSet<>(shown).size() == 3 && shown.contains(sampled.pick), "decoys differ from the pick and each other");
+      for (Object number : shown) check(((String) number).matches("[0-9]{2}"), "numbers have two digits");
+      api.pairingCancel();
+    }
 
     storage = new Fakes.Storage();
     events = new Fakes.Recorder();
-    api = new LocalApi(storage, clock, calendars, photos, sync(events), events);
-    for (int paired = 0; paired < Pairing.MAX_DEVICES; paired++) {
-      clock.now += 700000L;
-      pair("Phone " + paired);
-    }
-    clock.now += 700000L;
-    send("POST", "/v1/pair/start", null, null);
-    same(409, finish(events.code).status, "device limit");
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), events);
+    for (int paired = 0; paired < Pairing.MAX_DEVICES; paired++) pair("Phone " + paired);
+    Map<String, Object> full = Json.map(Json.parse(api.pairingOpen()));
+    same(Boolean.FALSE, full.get("ok"), "the frame will not open a window for a 21st device");
+    check(full.get("error") instanceof String, "and says why");
+    Fakes.Reply extra = new Fakes.Phone().start(wire, "Phone 21");
+    same(409, extra.status, "device limit");
+    same("conflict", extra.error(), "device limit slug");
   }
 
   static void tokens() throws Exception {
@@ -304,24 +450,51 @@ public final class LocalApiTest {
     }
     same(401, send("POST", "/v1/people", null, "{\"name\":\"Maya\",\"color\":\"#00A36C\"}").status, "mutations need a token");
 
-    clock.now += 700000L;
     String second = pair("Second phone");
     List<Object> devices = call("GET", "/v1/devices", null).list();
     same(2, devices.size(), "two devices");
+    String firstId = null;
     String secondId = null;
-    for (Object device : devices) if (Json.map(device).get("name").equals("Second phone")) secondId = (String) Json.map(device).get("id");
-    same(404, call("DELETE", "/v1/devices/unknown", null).status, "unknown device");
-    same(204, call("DELETE", "/v1/devices/" + secondId, null).status, "revoke over HTTP");
-    same(401, send("GET", "/v1/state", second, null).status, "revoked token stops working");
+    for (Object device : devices) {
+      boolean mine = Json.map(device).get("name").equals("Test phone");
+      same(mine, Json.map(device).get("self"), "only the caller's device is self");
+      if (mine) firstId = (String) Json.map(device).get("id");
+      else secondId = (String) Json.map(device).get("id");
+    }
+    Fakes.Reply stranger = call("DELETE", "/v1/devices/unknown", null);
+    same(403, stranger.status, "unknown device");
+    same("forbidden", stranger.error(), "403 slug");
+    same(403, call("DELETE", "/v1/devices/" + secondId, null).status, "a phone cannot remove another phone");
+    same(200, send("GET", "/v1/state", second, null).status, "the other phone keeps working");
+    same(401, send("DELETE", "/v1/devices/" + secondId, null, null).status, "removing needs a token");
+    same(204, send("DELETE", "/v1/devices/" + secondId, second, null).status, "a phone removes itself");
+    same(401, send("GET", "/v1/state", second, null).status, "its token stops working");
     same(200, call("GET", "/v1/state", null).status, "other tokens keep working");
-    same(404, call("DELETE", "/v1/devices/" + secondId, null).status, "revoking twice");
+    same(401, send("DELETE", "/v1/devices/" + secondId, second, null).status, "removing twice");
 
-    Map<String, Object> status = Json.map(Json.parse(api.pairingStatus(8765, true)));
+    String unit = storage.values.get(Identity.KEY);
+    clock.now += DAY - 1;
+    same(200, call("GET", "/v1/state", null).status, "a request within a day of the last one seen");
+    same(unit, storage.values.get(Identity.KEY), "writes nothing");
+    clock.now += 1;
+    call("GET", "/v1/state", null);
+    same(FrameTime.iso(START + DAY), Json.map(call("GET", "/v1/devices", null).list().get(0)).get("lastSeen"), "lastSeen moves after a day");
+    clock.now -= 5 * DAY;
+    call("GET", "/v1/state", null);
+    same(FrameTime.iso(START + DAY), Json.map(call("GET", "/v1/devices", null).list().get(0)).get("lastSeen"), "lastSeen never moves backwards");
+    clock.now = START + 800 * DAY;
+    same(200, call("GET", "/v1/state", null).status, "tokens do not expire");
+    same(FrameTime.iso(START + 800 * DAY), Json.map(call("GET", "/v1/devices", null).list().get(0)).get("lastSeen"), "and lastSeen follows");
+    clock.now = START;
+
+    Map<String, Object> status = Json.map(Json.parse(api.pairingStatus(8765, true, "192.168.1.20")));
     same(8765L, status.get("port"), "status port");
     same(Boolean.TRUE, status.get("advertised"), "status advertised");
+    same("192.168.1.20", status.get("address"), "status address");
+    same("idle", Json.map(status.get("pairing")).get("phase"), "status pairing phase");
     same(1, Json.list(status.get("devices")).size(), "status devices");
+    same("[id, name, pairedAt, lastSeen]", Json.map(Json.list(status.get("devices")).get(0)).keySet().toString(), "status device fields");
     check(!api.pairingRevoke("unknown"), "bridge revoke of an unknown device");
-    clock.now += 700000L;
     String third = pair("Third phone");
     String thirdId = null;
     for (Object device : call("GET", "/v1/devices", null).list()) {
@@ -331,7 +504,7 @@ public final class LocalApiTest {
     same(401, send("GET", "/v1/state", third, null).status, "bridge revoked token stops working");
     check(api.pairingRevokeAll(), "bridge revoke all");
     same(401, call("GET", "/v1/state", null).status, "revoke all removes every token");
-    same("[]", Json.write(Json.map(Json.parse(api.pairingStatus(0, false))).get("devices")), "no devices remain");
+    same("[]", Json.write(Json.map(Json.parse(api.pairingStatus(0, false, ""))).get("devices")), "no devices remain");
   }
 
   static void household() throws Exception {
@@ -671,6 +844,84 @@ public final class LocalApiTest {
     same(6L, rev(), "a picture arriving by email is a revision for the phone");
   }
 
+  static void identity() throws Exception {
+    fresh();
+    String fp = api.identity().fp;
+    check(fp.matches("[0-9a-f]{64}") && api.frameId().equals(fp.substring(0, 32)), "frameId is the first 32 hex characters of fp");
+    same(api.frameId(), send("GET", "/v2/info", null, null).object().get("frameId"), "info carries it");
+    Map<String, Object> unit = Json.map(Json.parse(storage.values.get(Identity.KEY)));
+    same("[key, certificate, devices]", unit.keySet().toString(), "key, certificate and devices are stored as one unit");
+    byte[] der = Digests.bytes(unit.get("certificate"));
+    same(fp, Digests.sha256(der), "fp is the SHA-256 of the certificate DER");
+    java.security.cert.X509Certificate certificate = (java.security.cert.X509Certificate)
+        java.security.cert.CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(der));
+    same(Digests.hex(der), Digests.hex(certificate.getEncoded()), "the hand-built DER is canonical");
+    same(3, certificate.getVersion(), "X.509 v3");
+    check(certificate.getCriticalExtensionOIDs() == null && certificate.getNonCriticalExtensionOIDs() == null, "no extensions");
+    check(certificate.getSerialNumber().signum() > 0 && certificate.getSerialNumber().toByteArray().length == 8, "a positive 8-byte serial");
+    same("CN=Skylit", certificate.getSubjectX500Principal().getName(), "subject");
+    same(certificate.getSubjectX500Principal(), certificate.getIssuerX500Principal(), "issuer equals subject");
+    same("2020-01-01T00:00:00Z", FrameTime.iso(certificate.getNotBefore().getTime()), "notBefore");
+    same("2049-12-31T23:59:59Z", FrameTime.iso(certificate.getNotAfter().getTime()), "notAfter");
+    check(Digests.hex(der).contains("170d3230303130313030303030305a170d3439313233313233353935395a"), "validity is two UTCTime values");
+    same("1.2.840.10045.4.3.2", certificate.getSigAlgOID(), "ecdsa-with-SHA256");
+    check(certificate.getSigAlgParams() == null, "no algorithm parameters");
+    same(3, Digests.hex(der).split("300a06082a8648ce3d040302", -1).length, "the algorithm appears twice with no NULL");
+    same(256, ((java.security.interfaces.ECPublicKey) certificate.getPublicKey()).getParams().getCurve().getField().getFieldSize(), "a P-256 key");
+    certificate.verify(certificate.getPublicKey());
+    java.security.KeyFactory.getInstance("EC").generatePrivate(new java.security.spec.PKCS8EncodedKeySpec(Digests.bytes(unit.get("key"))));
+    check(api.identity().tls() != null, "the stored identity makes a TLS context");
+    check(!Identity.open(new Fakes.Storage()).fp.equals(fp), "every frame makes its own identity");
+
+    String stored = storage.values.get(Identity.KEY);
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    same(fp, api.identity().fp, "the identity survives a restart");
+    same(stored, storage.values.get(Identity.KEY), "a restart rewrites nothing");
+    same(200, call("GET", "/v1/state", null).status, "and so does the paired phone");
+
+    String key = (String) unit.get("key");
+    String cert = (String) unit.get("certificate");
+    Fakes.Storage spare = new Fakes.Storage();
+    Identity.open(spare);
+    Map<String, Object> other = Json.map(Json.parse(spare.values.get(Identity.KEY)));
+    String[] losses = {"{broken", "[]", Json.write(Json.object("certificate", cert, "devices", unit.get("devices"))),
+        Json.write(Json.object("key", key, "devices", unit.get("devices"))),
+        Json.write(Json.object("key", key, "certificate", cert.substring(0, cert.length() - 8), "devices", unit.get("devices"))),
+        Json.write(Json.object("key", key.substring(0, 40), "certificate", cert, "devices", unit.get("devices"))),
+        Json.write(Json.object("key", key.toUpperCase(), "certificate", cert, "devices", unit.get("devices"))),
+        Json.write(Json.object("key", other.get("key"), "certificate", cert, "devices", unit.get("devices"))),
+        Json.write(Json.object("key", key, "certificate", other.get("certificate"), "devices", unit.get("devices")))};
+    for (String loss : losses) {
+      storage.values.put(Identity.KEY, loss);
+      api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+      check(!api.identity().fp.equals(fp) && api.identity().fp.matches("[0-9a-f]{64}"), "a lost key or certificate means a new identity");
+      same(401, call("GET", "/v1/state", null).status, "and an empty device list");
+      same("[]", Json.write(Json.map(Json.parse(storage.values.get(Identity.KEY))).get("devices")), "which is stored empty");
+    }
+
+    storage.values.put(Identity.KEY, Json.write(Json.object("key", key, "certificate", cert, "devices", "nonsense")));
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    same(fp, api.identity().fp, "an unreadable device list alone keeps the identity");
+    same(401, call("GET", "/v1/state", null).status, "but pairs nobody");
+    storage.values.put(Identity.KEY, Json.write(Json.object("key", key, "certificate", cert, "devices",
+        java.util.Arrays.asList(Json.object("id", "d1", "name", "Old", "hash", "not a hash")))));
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    same("[]", Json.write(Json.map(Json.parse(api.pairingStatus(0, false, ""))).get("devices")), "a device row without a hash is dropped with the rest");
+
+    Fakes.Storage upgraded = new Fakes.Storage();
+    String oldToken = repeat("ab", 32);
+    upgraded.values.put("frameId", "0b4f8a52-7f7e-4c44-9d0b-3f1f0a0c1d2e");
+    upgraded.values.put("devices", Json.write(java.util.Arrays.asList(Json.object("id", "d1", "name", "Old phone", "pairedAt", "2026-10-01T00:00:00Z",
+        "hash", Digests.sha256(oldToken.getBytes(StandardCharsets.US_ASCII))))));
+    upgraded.values.put("household", storage.values.get("household"));
+    LocalApi after = new LocalApi(upgraded, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    check(upgraded.values.get("devices") == null && upgraded.values.get("frameId") == null, "an upgrade erases the first version's devices and id");
+    same(401, Fakes.inMemory(after, Fakes.json("GET", "/v1/state", oldToken, null)).status, "a first-version token no longer works");
+    same("[]", Json.write(Json.map(Json.parse(after.pairingStatus(0, false, ""))).get("devices")), "the upgraded frame lists no devices");
+    check(after.frameId().matches("[0-9a-f]{32}"), "and takes its id from the certificate");
+    same(storage.values.get("household"), upgraded.values.get("household"), "household data is untouched by the upgrade");
+  }
+
   static void persistence() throws Exception {
     fresh();
     call("POST", "/v1/people", "{\"name\":\"Maya\",\"color\":\"#00A36C\"}");
@@ -683,7 +934,7 @@ public final class LocalApiTest {
     String frameId = api.frameId();
     String devices = call("GET", "/v1/devices", null).text();
 
-    api = new LocalApi(storage, clock, calendars, photos, sync(events), new Fakes.Recorder());
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
     same(before, call("GET", "/v1/state", null).text(), "state survives a restart byte for byte");
     same(frameId, api.frameId(), "frame id survives a restart");
     same(devices, call("GET", "/v1/devices", null).text(), "paired devices survive a restart");
@@ -692,20 +943,18 @@ public final class LocalApiTest {
     same(7L, rev(), "rev continues after a restart");
 
     storage.values.put("household", "{broken");
-    storage.values.put("devices", "{\"not\":\"a list\"}");
+    storage.values.put(Identity.KEY, "{broken");
     storage.values.put("settings", "[]");
-    storage.values.put("frameId", "../../etc");
-    api = new LocalApi(storage, clock, calendars, photos, sync(events), new Fakes.Recorder());
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
     same(401, call("GET", "/v1/state", null).status, "unreadable device storage pairs nobody");
     token = null;
     events = new Fakes.Recorder();
-    api = new LocalApi(storage, clock, calendars, photos, sync(events), events);
-    clock.now += 700000L;
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), events);
     token = pair("Recovered");
     Map<String, Object> recovered = state();
     same(0L, recovered.get("rev"), "unreadable household storage starts empty");
     same("{\"location\":null,\"appearance\":{\"palette\":\"linen\",\"mode\":\"auto\"},\"icloudAlbum\":null}", Json.write(recovered.get("settings")), "unreadable settings fall back to defaults");
-    check(api.frameId().matches("[0-9a-f\\-]{36}"), "an unreadable frame id is replaced");
+    check(api.frameId().matches("[0-9a-f]{32}") && !api.frameId().equals(frameId), "an unreadable identity is replaced");
 
     HouseholdStore store = new HouseholdStore(new Fakes.Storage());
     same(1L, store.touch(), "touch is one revision");
@@ -720,7 +969,7 @@ public final class LocalApiTest {
 
   static int statusFor(String host) throws Exception {
     String line = host == null ? "" : "Host: " + host + "\r\n";
-    return Fakes.inMemory(api, ("GET /v1/info HTTP/1.1\r\n" + line + "\r\n").getBytes(StandardCharsets.ISO_8859_1)).status;
+    return Fakes.inMemory(api, ("GET /v2/info HTTP/1.1\r\n" + line + "\r\n").getBytes(StandardCharsets.ISO_8859_1)).status;
   }
 
   static void hardening() throws Exception {
@@ -734,64 +983,9 @@ public final class LocalApiTest {
         "192.168.1.20:", "192.168.1.20:123456", "[evil.test]", ".local", "a b.local", "192.168.1", "local"}) {
       same(400, statusFor(host), "refused host " + host);
     }
-    same("bad_request", Fakes.inMemory(api, "GET /v1/info HTTP/1.1\r\nHost: evil.test\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1)).error(), "host refusal slug");
+    same("bad_request", Fakes.inMemory(api, "GET /v2/info HTTP/1.1\r\nHost: evil.test\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1)).error(), "host refusal slug");
     same(400, Fakes.inMemory(api, ("GET /v1/state HTTP/1.1\r\nHost: evil.test\r\nAuthorization: Bearer " + token + "\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1)).status,
         "a valid token does not excuse a rebound host");
-
-    clock.now += 700000L;
-    int accepted = 0;
-    int lockouts = 0;
-    int refusedStarts = 0;
-    for (int round = 0; round < 5; round++) {
-      if (send("POST", "/v1/pair/start", null, null).status != 204) {
-        refusedStarts++;
-        continue;
-      }
-      for (int guess = 0; guess < 4; guess++) {
-        int status = events.code == null ? finish("000000").status : finish(wrongCode()).status;
-        if (status == 401) accepted++;
-        if (status == 429) lockouts++;
-      }
-    }
-    same(4, accepted, "twenty wrong guesses across fresh codes get four answers");
-    check(lockouts >= 4, "a new code does not grant fresh guesses");
-    same(3, refusedStarts, "starts are refused during the lockout");
-    clock.now += Pairing.FIRST_LOCKOUT;
-    same(204, send("POST", "/v1/pair/start", null, null).status, "pairing resumes after the first lockout");
-    for (int guess = 0; guess < 4; guess++) same(401, finish(wrongCode()).status, "guess after lockout " + guess);
-    same(429, finish(wrongCode()).status, "the fifth guess locks out again");
-    clock.now += Pairing.FIRST_LOCKOUT;
-    same(429, send("POST", "/v1/pair/start", null, null).status, "the second lockout lasts longer than the first");
-    clock.now += Pairing.FIRST_LOCKOUT;
-    same(204, send("POST", "/v1/pair/start", null, null).status, "and then ends");
-    same(401, finish(wrongCode()).status, "one mistake");
-    same(200, finish(events.code).status, "the right code still pairs after mistakes");
-
-    clock.now += 700000L;
-    Fakes.peer = "192.168.1.66";
-    for (int started = 0; started < Pairing.MAX_STARTS; started++) same(204, send("POST", "/v1/pair/start", null, null).status, "hostile start " + started);
-    same(429, send("POST", "/v1/pair/start", null, null).status, "one address runs out of starts");
-    Fakes.peer = "192.168.1.50";
-    same(204, send("POST", "/v1/pair/start", null, null).status, "another address can still start");
-    same(200, finish(events.code).status, "and pair");
-    Fakes.peer = "192.168.1.66";
-    same(429, send("POST", "/v1/pair/start", null, null).status, "the limited address stays limited");
-    clock.now += Pairing.START_WINDOW;
-    same(204, send("POST", "/v1/pair/start", null, null).status, "until its window passes");
-    clock.now += 700000L;
-    for (int source = 0; source < Pairing.MAX_STARTS_EVERYONE; source++) {
-      Fakes.peer = "10.0.0." + source;
-      same(204, send("POST", "/v1/pair/start", null, null).status, "start from address " + source);
-    }
-    Fakes.peer = "10.0.1.1";
-    same(429, send("POST", "/v1/pair/start", null, null).status, "a flood of addresses is bounded");
-    for (int source = 0; source < 300; source++) {
-      clock.now += Pairing.START_WINDOW;
-      Fakes.peer = "10.1." + source / 250 + "." + source % 250;
-      same(204, send("POST", "/v1/pair/start", null, null).status, "address " + source + " over time");
-    }
-    Fakes.peer = "192.168.1.50";
-    clock.now += 700000L;
 
     token = pair("Clean phone");
     String[] unsafe = {"\\ud83d", "\\ude00", "\\ude00\\ud83d", "a\\ud83db", "\\ufffe", "\\uffff", "\\u202e", "\\u202a", "\\u202b", "\\u202c", "\\u202d",
@@ -808,9 +1002,6 @@ public final class LocalApiTest {
       same(Boolean.FALSE, mutate("{\"op\":\"item.add\",\"name\":\"" + value + "\"}").get("ok"), "bridge item with " + text);
       check(!api.reportSettings("{\"location\":{\"name\":\"" + value + "\",\"latitude\":1,\"longitude\":1}}"), "reported city with " + text);
     }
-    clock.now += 700000L;
-    send("POST", "/v1/pair/start", null, null);
-    same(400, send("POST", "/v1/pair/finish", null, "{\"code\":\"" + events.code + "\",\"deviceName\":\"Pho\\u202ene\"}").status, "device name with a direction override");
     same(400, Fakes.inMemory(api, Fakes.request("POST", "/v1/people", token, "application/json",
         new byte[] {'{', '"', 'n', 'a', 'm', 'e', '"', ':', '"', (byte) 0xED, (byte) 0xA0, (byte) 0x80, '"', ',', '"', 'c', 'o', 'l', 'o', 'r', '"', ':', '"', '#', '0', '0', 'A', '3', '6', 'C', '"', '}'})).status,
         "a raw encoded surrogate is not stored either");
@@ -846,28 +1037,17 @@ public final class LocalApiTest {
     fresh();
     api.pairingRevokeAll();
     final List<String> tokens = new java.util.ArrayList<>();
-    final List<String> addresses = new java.util.ArrayList<>();
-    String firstCode = null;
-    for (int device = 0; device < Pairing.MAX_DEVICES; device++) {
-      Fakes.peer = "192.168.1." + (100 + device);
-      same(204, send("POST", "/v1/pair/start", null, null).status, "device " + device + " starts with its own code");
-      if (device == 0) firstCode = events.code;
-      tokens.add((String) finish(events.code).object().get("token"));
-      addresses.add(Fakes.peer);
-      if (device == 0) same(409, finish(firstCode).status, "the next device cannot reuse the previous code");
-    }
+    for (int device = 0; device < Pairing.MAX_DEVICES; device++) tokens.add(pair("Family phone " + device));
     same(Pairing.MAX_DEVICES, new java.util.HashSet<>(tokens).size(), "twenty devices hold twenty different tokens");
     same(Pairing.MAX_DEVICES, send("GET", "/v1/devices", tokens.get(0), null).list().size(), "twenty devices are listed");
-    Fakes.peer = "192.168.1.200";
-    same(204, send("POST", "/v1/pair/start", null, null).status, "a twenty-first device may ask for a code");
-    Fakes.Reply full = finish(events.code);
-    same(409, full.status, "but the twenty-first pairing is refused");
+    check(api.pairingOpen().contains("\"ok\":false"), "the frame opens no window for a twenty-first device");
+    Fakes.Reply full = new Fakes.Phone().start(wire, "Phone 21");
+    same(409, full.status, "and the twenty-first pairing is refused");
     same("conflict", full.error(), "with the conflict slug");
     for (String each : tokens) same(200, send("GET", "/v1/state", each, null).status, "every paired device still works after the refusal");
 
     long rev = 0;
     for (int writer = 0; writer < tokens.size(); writer++) {
-      Fakes.peer = addresses.get(writer);
       Fakes.Reply written = send("POST", "/v1/shopping", tokens.get(writer), "{\"name\":\"From device " + writer + "\"}");
       same(rev + 1, written.object().get("rev"), "a change by device " + writer + " is exactly one revision");
       for (int reader = 0; reader < tokens.size(); reader++) {
@@ -921,7 +1101,7 @@ public final class LocalApiTest {
     same(20 + devices * each / 2, Json.list(settled.get("shopping")).size(), "no shopping write is lost");
     same(devices * each / 2, Json.list(settled.get("chores")).size(), "no chore write is lost");
     same(settled, send("GET", "/v1/state", tokens.get(19), null).object(), "every device reads the same state");
-    LocalApi reopened = new LocalApi(storage, clock, calendars, photos, sync(events), new Fakes.Recorder());
+    LocalApi reopened = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
     same(Json.write(settled), Fakes.inMemory(reopened, Fakes.json("GET", "/v1/state", tokens.get(3), null)).text(), "and it is what was saved");
 
     String victim = tokens.get(7);
@@ -930,19 +1110,18 @@ public final class LocalApiTest {
     for (Object device : send("GET", "/v1/devices", tokens.get(0), null).list()) {
       if (position++ == 7) victimId = (String) Json.map(device).get("id");
     }
-    same(204, send("DELETE", "/v1/devices/" + victimId, tokens.get(0), null).status, "one device is revoked by another");
+    same(403, send("DELETE", "/v1/devices/" + victimId, tokens.get(0), null).status, "one device cannot revoke another");
+    same(200, send("GET", "/v1/state", victim, null).status, "which keeps working");
+    check(api.pairingRevoke(victimId), "the frame revokes it");
     same(401, send("GET", "/v1/state", victim, null).status, "the revoked token stops");
     for (int device = 0; device < tokens.size(); device++) {
       if (device != 7) same(200, send("GET", "/v1/state", tokens.get(device), null).status, "device " + device + " is unaffected by the revocation");
     }
-    Fakes.peer = addresses.get(7);
-    same(204, send("POST", "/v1/pair/start", null, null).status, "the revoked device asks to pair again");
-    String renewed = (String) finish(events.code).object().get("token");
+    String renewed = pair("Family phone 7");
     check(renewed.matches("[0-9a-f]{64}") && !tokens.contains(renewed), "re-pairing issues a token nobody held before");
     same(200, send("GET", "/v1/state", renewed, null).status, "the new token works");
     same(401, send("GET", "/v1/state", victim, null).status, "the old token stays dead");
     same(Pairing.MAX_DEVICES, send("GET", "/v1/devices", renewed, null).list().size(), "the household is back to twenty devices");
-    Fakes.peer = "192.168.1.50";
   }
 
   public static void main(String[] args) throws Exception {
@@ -957,6 +1136,7 @@ public final class LocalApiTest {
     settings();
     calendarsOverHttp();
     photosOverHttp();
+    identity();
     persistence();
     hardening();
     manyDevices();

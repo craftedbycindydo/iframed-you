@@ -67,14 +67,6 @@
     if(native&&native.photoExclude){const excluded=new Set(state.excluded);for(const photo of state.photos){const id=frame.photoId(photo);if(excluded.has(id)||curated[id])curated[id]=Object.assign({},choice(photo),{hidden:excluded.has(id)});}}
     saveChoices();render();if(opened){buildPlaylist(playing||idle);if(!playlist.length)close();else {index=Math.max(0,playlist.findIndex(p=>frame.photoId(p)===frame.photoId(previous)));show();}}window.dispatchEvent(new Event('skylit-service-status'));}
   function refresh(){if(!native||!native.photoStatus)return;try{receive(native.photoStatus());}catch(e){$('photo-mail-status').textContent='Could not read the photo status from this frame.';}}
-  function renderOverviewPhotos(){
-    const items=frame.overviewPictures(state.photos,curated,preferences());
-    const button=$('overview-photos'),host=$('overview-photo-stack');
-    button.hidden=!items.length;
-    document.querySelector('.overview-grid').classList.toggle('with-photos',items.length>0);
-    host.replaceChildren();
-    items.forEach((photo,i)=>{const image=document.createElement('img');image.src=photo.url;image.alt='';image.style.setProperty('--photo-angle',playback.angle(i)+'deg');host.append(image)});
-  }
   function render(){
     const album=source==='album',local=state.photos.length>0,albumShown=album&&(!local||!!$('album-url').value);
     $('photo-source').value=source;
@@ -103,7 +95,7 @@
       const exclude=document.createElement('button');exclude.type='button';exclude.className='photo-exclude';exclude.dataset.photoId=frame.photoId(photo);exclude.setAttribute('aria-label',(choice(photo).hidden?'Restore':'Exclude')+' picture '+(i+1)+(choice(photo).hidden?'':' from gallery'));exclude.innerHTML='<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+(choice(photo).hidden?'M3 10h6M3 10V4M3 10a9 9 0 1 1 1 9':'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7')+'"/></svg>';
       exclude.onclick=()=>{if(!updateChoice(frame.photoId(photo),{hidden:!choice(photo).hidden}))return;const remaining=Array.from(tiles.querySelectorAll('.photo-exclude'));(remaining[Math.min(i,remaining.length-1)]||$('photo-undo')).focus({preventScroll:true});};card.append(button,exclude);tiles.append(card);
     });
-    renderOverviewPhotos();paintChoice();if(scroll)window.scrollTo(0,scroll);const visibility=$('photo-visibility');if(visibility)visibility.textContent=(native&&native.photoExclude?state.excluded.length:state.photos.filter(p=>choice(p).hidden).length)+' excluded · Checks and retention pruning keep exclusions. Restore to allow import again. Email is never deleted.';
+    paintChoice();if(scroll)window.scrollTo(0,scroll);const visibility=$('photo-visibility');if(visibility)visibility.textContent=(native&&native.photoExclude?state.excluded.length:state.photos.filter(p=>choice(p).hidden).length)+' excluded · Checks and retention pruning keep exclusions. Restore to allow import again. Email is never deleted.';
     const headline=page.querySelector('.photo-copy .eyebrow'),title=page.querySelector('.photo-copy h2'),description=page.querySelector('.photo-copy p:not(.eyebrow)');
     headline.textContent=album?'YOUR SHARED GOOGLE PHOTOS ALBUM':'PICTURES SENT TO YOUR INBOX';
     title.textContent=album?'Shared album':'Recent photos';
@@ -156,7 +148,6 @@
   function close(){if(!opened)return;opened=false;++imageSequence;clearInterval(timer);clearTimeout(controlsTimer);timer=null;overlay.hidden=true;layers.forEach(image=>{image.classList.remove('visible');image.removeAttribute('src')});Array.from(collage.children).forEach(image=>image.removeAttribute('src'));layer=0;document.body.classList.remove('photo-playing');document.querySelector('.shell').removeAttribute('aria-hidden');if(native&&native.localPhotoClosed)native.localPhotoClosed();if(returnFocus&&returnFocus.isConnected)returnFocus.focus({preventScroll:true});else {const target=returnFocus&&returnFocus.dataset&&returnFocus.dataset.photoId?Array.from($('photo-tiles').querySelectorAll('.photo-tile')).find(x=>x.dataset.photoId===returnFocus.dataset.photoId):null;(target||$('photo-play')).focus({preventScroll:true});}}
   window.SkylitPhotos={open,close,receive,refresh,selectedSource,setSource,health:()=>({configured:state.connected,updated:state.lastSync,busy:state.busy,error:!!state.error,count:state.photos.length,imported:state.imported,skipped:state.skipped}),isOpen:()=>opened};
   $('photo-source').onchange=()=>setSource($('photo-source').value);
-  $('overview-photos').onclick=()=>window.SkylitApp.go('photos');
   const playLocal=()=>{if(native&&native.photoOpen)native.photoOpen(false);else open(false)};$('photo-play').onclick=playLocal;
   function openSettings(){if(window.SkylitApp.openSettings)window.SkylitApp.openSettings('photos','photos');else {window.SkylitApp.go('settings');settings.open=true;settings.scrollIntoView();}}
   photoSettingsButton.onclick=openSettings;page.querySelector('.photo-copy .quiet').onclick=openSettings;
