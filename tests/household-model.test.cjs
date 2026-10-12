@@ -92,3 +92,12 @@ test('long emoji names, notes and emoji from the phone are kept whole, matching 
  assert.notEqual(model.check(s,{op:'person.add',name:faces+'😀',color:'#2D5BFF'}),'');assert.notEqual(model.check(s,{op:'chore.add',title:'T',emoji:'😀'.repeat(17)}),'');
  assert.equal(model.limits.emoji,16);
 });
+test('a name with no visible character is refused, joined emoji and joiners inside words are not',()=>{
+ const s=base(),bad=name=>model.check(s,{op:'item.add',name});
+ for(const hidden of ['​','​‍⁠','‍️','ㅤ','­͏','⠀','\u{E0041}'])assert.equal(bad(hidden),'Use 1 to 80 characters.',JSON.stringify(hidden));
+ assert.equal(model.check(s,{op:'person.add',name:'​',color:'#123456'}),'Use 1 to 80 characters.');
+ assert.equal(model.check(s,{op:'chore.add',title:'⁠'}),'Use 1 to 80 characters.');
+ assert.equal(model.check(s,{op:'chore.update',id:'c1',title:'‍'}),'Use 1 to 80 characters.');
+ for(const fine of ['👨‍👩‍👧','می‌خواهم','a​','🛏️'])assert.equal(bad(fine),'',fine);
+ assert.equal(model.check(s,{op:'item.add',name:'Tea',note:'​'}),'');
+});

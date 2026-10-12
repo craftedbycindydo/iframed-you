@@ -35,6 +35,7 @@ final class TccSync {
   private final TccClient client;
   private final Secrets secrets;
   private final FrameTime.Clock clock;
+  private final FrameTime.Uptime uptime;
   private final Runner runner;
   private final Timer timer;
   private final Listener listener;
@@ -46,8 +47,10 @@ final class TccSync {
   private List<TccClient.State> states = new ArrayList<>();
   private String status;
   private long polledAt;
+  private long polledUp;
   private long lastAttempt;
   private long lockedUntil;
+  private long lockedUp;
   private int failures;
   private int generation;
   private boolean watched;
@@ -55,10 +58,11 @@ final class TccSync {
   private boolean again;
   private boolean queued;
 
-  TccSync(TccClient client, Secrets secrets, FrameTime.Clock clock, Runner runner, Timer timer, Listener listener) {
+  TccSync(TccClient client, Secrets secrets, FrameTime.Clock clock, FrameTime.Uptime uptime, Runner runner, Timer timer, Listener listener) {
     this.client = client;
     this.secrets = secrets;
     this.clock = clock;
+    this.uptime = uptime;
     this.runner = runner;
     this.timer = timer;
     this.listener = listener;
@@ -136,15 +140,15 @@ final class TccSync {
     return !"unconfigured".equals(status) && !"signed_out".equals(status);
   }
 
-  synchronized long pause(long now) {
-    if ("locked_out".equals(status)) return Math.max(0, lockedUntil - now);
+  synchronized long pause() {
     long cadence = watched ? WATCHED : IDLE;
     return failures == 0 ? cadence : Math.min(LONGEST_WAIT, cadence << Math.min(failures, 4));
   }
 
   synchronized boolean due() {
-    long now = clock.now();
-    return configured() && !polling && (lastAttempt == 0 || now - lastAttempt >= pause(now));
+    if (!configured() || polling) return false;
+    if ("locked_out".equals(status)) return uptime.millis() >= lockedUp;
+    return lastAttempt == 0 || uptime.millis() - lastAttempt >= pause();
   }
 
   boolean request(final boolean force) {
@@ -195,7 +199,7 @@ final class TccSync {
     synchronized (this) {
       started = generation;
       known = devices;
-      lastAttempt = clock.now();
+      lastAttempt = uptime.millis();
     }
     List<TccClient.State> fresh = new ArrayList<>();
     TccClient.Problem failure = null;
@@ -213,6 +217,7 @@ final class TccSync {
       if (failure == null) {
         states = fresh;
         polledAt = clock.now();
+        polledUp = uptime.millis();
         failures = 0;
         status = "ok";
       } else if ("bad_credentials".equals(failure.code) || "signed_out".equals(failure.code)) {
@@ -221,6 +226,7 @@ final class TccSync {
       } else if ("locked".equals(failure.code)) {
         status = "locked_out";
         lockedUntil = failure.until;
+        lockedUp = uptime.millis() + Math.max(0, failure.until - clock.now());
       } else {
         failures = Math.min(failures + 1, 10);
         if (failures >= 3 || !"ok".equals(status)) status = "unavailable";
@@ -233,7 +239,11 @@ final class TccSync {
   }
 
   synchronized Map<String, Object> status() {
-    String shown = "ok".equals(status) && clock.now() - polledAt > STALE ? "stale" : status;
+    long now = clock.now();
+    long up = uptime.millis();
+    if (polledAt != 0) polledAt = FrameTime.anchored(polledAt, now - (up - polledUp));
+    if ("locked_out".equals(status)) lockedUntil = FrameTime.anchored(lockedUntil, now + lockedUp - up);
+    String shown = "ok".equals(status) && up - polledUp > STALE ? "stale" : status;
     List<Object> thermostats = new ArrayList<>();
     String units = null;
     Double outdoorTemperature = null;
@@ -245,7 +255,7 @@ final class TccSync {
       Double high = "heat".equals(active) ? state.heatMax : "cool".equals(active) ? state.coolMax : null;
       String id = "t" + (i + 1);
       Double waiting = pending.get(id);
-      boolean starting = waiting != null && "schedule".equals(state.hold());
+      boolean starting = waiting != null && state.following();
       thermostats.add(Json.object("id", id, "name", state.name, "online", state.online, "units", state.units, "indoor", state.indoor,
           "humidity", state.humidity, "mode", state.mode, "heatAllowed", state.modes.contains("heat"), "coolAllowed", state.modes.contains("cool"),
           "setpoint", waiting != null ? waiting : setpoint(state), "changing", waiting != null, "error", errors.get(id),
@@ -322,7 +332,7 @@ final class TccSync {
   }
 
   private TccClient.State controllable(String id) throws TccClient.Problem {
-    if (!"ok".equals(status) || clock.now() - polledAt > STALE) throw new TccClient.Problem("unavailable");
+    if (!"ok".equals(status) || uptime.millis() - polledUp > STALE) throw new TccClient.Problem("unavailable");
     TccClient.State state = null;
     for (int i = 0; i < states.size(); i++) if (("t" + (i + 1)).equals(id)) state = states.get(i);
     if (state == null) throw new TccClient.Problem("not_found");

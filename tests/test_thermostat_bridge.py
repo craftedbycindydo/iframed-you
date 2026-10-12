@@ -26,7 +26,7 @@ class ThermostatBridgeTest(unittest.TestCase):
             self.assertIsNone(re.search(r'password|sealed|email|username|name\b|cookie|snapshot',re.sub(r'"(\\.|[^"\\])*"','""',call)),call)
         self.assertEqual(re.findall(r'dashboard\.evaluate\(([^;]*)\);',android),['"window.SkylitThermostat&&window.SkylitThermostat.receive(" + snapshot + ")"'])
         activity=(MAIN/'MainActivity.java').read_text()
-        self.assertIn('thermostats=new Thermostats(this,script->{if(dashboard==null)return false;dashboard.evaluateJavascript(Json.scriptSafe(script),null);return true;})',activity)
+        self.assertIn('thermostats=new Thermostats(this,script->{if(dashboard==null)return false;dashboard.evaluateJavascript(Json.scriptSafe(script),null);return true;},()->overviewShowing&&foreground&&remote==null&&!localPhotosOpen&&!quietOpen)',activity)
         secret=(MAIN/'TccSecret.java').read_text()
         self.assertIn('"skylit_thermostat_v1"',secret)
         self.assertNotIn('skylit_photo_mail',secret)

@@ -152,6 +152,11 @@ final class PhoneLink implements LocalApi.Events {
         return System.currentTimeMillis();
       }
     };
+    FrameTime.Uptime uptime = new FrameTime.Uptime() {
+      @Override public long millis() {
+        return SystemClock.elapsedRealtime();
+      }
+    };
     LocalApi.Calendars feeds = new LocalApi.Calendars() {
       @Override public List<Object> list() {
         try {
@@ -269,7 +274,7 @@ final class PhoneLink implements LocalApi.Events {
         return mail.capacity();
       }
     };
-    icloud = new ICloudSync(storage, clock, new ICloudHttp(), albumLibrary, new ICloudSync.Runner() {
+    icloud = new ICloudSync(storage, clock, uptime, new ICloudHttp(), albumLibrary, new ICloudSync.Runner() {
       @Override public void start(Runnable work) {
         try {
           albumWorker.execute(work);
@@ -282,11 +287,6 @@ final class PhoneLink implements LocalApi.Events {
         show("window.SkylitICloud&&window.SkylitICloud.receive(" + api.icloudStatus() + ")");
       }
     });
-    FrameTime.Uptime uptime = new FrameTime.Uptime() {
-      @Override public long millis() {
-        return SystemClock.elapsedRealtime();
-      }
-    };
     api = new LocalApi(storage, clock, uptime, feeds, library, icloud, this);
     server = new LocalServer(api);
   }

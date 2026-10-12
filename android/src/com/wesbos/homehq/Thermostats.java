@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,15 +17,21 @@ final class Thermostats {
   private static final String TAG = "Skylit";
   private static final long TICK = 15000L;
 
+  interface Screen {
+    boolean showing();
+  }
+
   final ThermostatBridge bridge;
   private final Handler main = new Handler(Looper.getMainLooper());
   private final ExecutorService worker = Executors.newSingleThreadExecutor();
   private final ConnectivityManager connectivity;
+  private final Screen screen;
   private boolean running;
   private boolean watchingNetwork;
 
   private final Runnable tick = new Runnable() {
     @Override public void run() {
+      bridge.watch(screen.showing());
       bridge.tick();
       main.postDelayed(this, TICK);
     }
@@ -36,7 +43,8 @@ final class Thermostats {
     }
   };
 
-  Thermostats(Context context, final PhoneLink.Dashboard dashboard) {
+  Thermostats(Context context, final PhoneLink.Dashboard dashboard, Screen screen) {
+    this.screen = screen;
     Context app = context.getApplicationContext();
     connectivity = (ConnectivityManager) app.getSystemService(Context.CONNECTIVITY_SERVICE);
     final SharedPreferences saved = app.getSharedPreferences("skylit-thermostat", Context.MODE_PRIVATE);
@@ -52,6 +60,11 @@ final class Thermostats {
     FrameTime.Clock clock = new FrameTime.Clock() {
       @Override public long now() {
         return System.currentTimeMillis();
+      }
+    };
+    FrameTime.Uptime uptime = new FrameTime.Uptime() {
+      @Override public long millis() {
+        return SystemClock.elapsedRealtime();
       }
     };
     TccSync.Secrets secrets = new TccSync.Secrets() {
@@ -100,7 +113,7 @@ final class Thermostats {
         main.postDelayed(work, millis);
       }
     };
-    bridge = new ThermostatBridge(new TccClient(new TccHttp(), storage, clock), secrets, clock, runner, timer, new ThermostatBridge.Output() {
+    bridge = new ThermostatBridge(new TccClient(new TccHttp(), storage, clock, uptime), secrets, clock, uptime, runner, timer, new ThermostatBridge.Output() {
       @Override public void changed(final String snapshot) {
         main.post(new Runnable() {
           @Override public void run() {

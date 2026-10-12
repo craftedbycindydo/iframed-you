@@ -16,7 +16,19 @@ final class Fields {
     for (int i = 0; i < trimmed.length(); i++) {
       if (forbidden(trimmed, i)) throw ApiException.badRequest(key + " has characters that cannot be shown");
     }
+    if (minimum > 0 && !visible(trimmed)) throw ApiException.badRequest(key + " needs at least one visible character");
     return trimmed;
+  }
+
+  static boolean visible(String text) {
+    for (int i = 0; i < text.length(); i += Character.charCount(text.codePointAt(i))) {
+      int c = text.codePointAt(i);
+      boolean hidden = Character.getType(c) == Character.FORMAT || Character.isWhitespace(c) || Character.isSpaceChar(c)
+          || c >= 0xFE00 && c <= 0xFE0F || c >= 0xE0100 && c <= 0xE01EF || c == 0x034F || c == 0x115F || c == 0x1160 || c == 0x3164 || c == 0xFFA0
+          || c == 0x2800;
+      if (!hidden) return true;
+    }
+    return false;
   }
 
   private static boolean blank(char c) {

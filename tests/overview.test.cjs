@@ -10,3 +10,8 @@ test('weather distinguishes fresh, stale, absent and invalid observations',()=>{
  assert.equal(M.weather(data,1801000).stale,false);assert.equal(M.weather(data,1801001).stale,true);
  assert.equal(M.weather(data).temperature,19);assert.equal(M.weather(null),null);assert.equal(M.weather({current:{temperature_2m:null}}),null);
 });
+test('only events that fit completely are shown, down to none when nothing fits',()=>{
+ assert.equal(M.fitting([120,180,240],250),3);assert.equal(M.fitting([120,180,240],240),3);assert.equal(M.fitting([120,180,240.4],240),3);
+ assert.equal(M.fitting([120,180,240],239),2);assert.equal(M.fitting([120,180,240],130),1);assert.equal(M.fitting([120,180,240],100),0);
+ assert.equal(M.fitting([],100),0);assert.equal(M.fitting([120,300,150],200),1);
+});

@@ -110,7 +110,7 @@ public final class DevServer {
       }
     };
     final ICloudSync[] album = new ICloudSync[1];
-    album[0] = new ICloudSync(storage, clock, fakeAlbum ? Fakes.sampleAlbum() : new ICloudHttp(), photos.library, new ICloudSync.Runner() {
+    album[0] = new ICloudSync(storage, clock, uptime, fakeAlbum ? Fakes.sampleAlbum() : new ICloudHttp(), photos.library, new ICloudSync.Runner() {
       @Override public void start(Runnable work) {
         Thread thread = new Thread(work, "album-sync");
         thread.setDaemon(true);

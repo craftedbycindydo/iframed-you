@@ -40,11 +40,12 @@ public class MainActivity extends Activity {
   private Thermostats thermostats;
   private boolean idlePhotos,localPhotosOpen,remotePhotos,foreground,slideshowScheduled,slideshowStarted;
   private boolean swallowIdleTouch,quietOpen;
+  private volatile boolean overviewShowing;
   private int idleGeneration,localPhotoGeneration;
   private int remoteGeneration=0, dashboardCrashes=0;
   private boolean exitArmed;
   private float exitX,exitY;
-  private final Runnable idleTask=()->{final int generation=idleGeneration;if(dashboard==null)return;dashboard.evaluateJavascript("window.SkylitApp&&window.SkylitApp.settingsOpen&&window.SkylitApp.settingsOpen()?null:!!(window.SkylitWorkspace&&window.SkylitWorkspace.idle())",value->{if(generation!=idleGeneration||!foreground||remote!=null||localPhotosOpen)return;if("null".equals(value)){resetIdle();return;}if("true".equals(value)){quietOpen=true;pauseMomo(true);dashboard.evaluateJavascript("window.SkylitWorkspace&&window.SkylitWorkspace.pause(true)",null);}else if(prefs.getInt("idle",120)>0&&localSlideshow())openLocalPhotos(true);else if(prefs.getInt("idle",120)>0&&validAlbum(prefs.getString("album","")))openRemote(prefs.getString("album",""),true,true);else resetIdle();});};
+  private final Runnable idleTask=()->{final int generation=idleGeneration;if(dashboard==null)return;dashboard.evaluateJavascript("window.SkylitApp&&window.SkylitApp.settingsOpen&&(window.SkylitApp.settingsOpen()||window.SkylitPairing&&window.SkylitPairing.isOpen())?null:!!(window.SkylitWorkspace&&window.SkylitWorkspace.idle())",value->{if(generation!=idleGeneration||!foreground||remote!=null||localPhotosOpen)return;if("null".equals(value)){resetIdle();return;}if("true".equals(value)){quietOpen=true;pauseMomo(true);dashboard.evaluateJavascript("window.SkylitWorkspace&&window.SkylitWorkspace.pause(true)",null);}else if(prefs.getInt("idle",120)>0&&localSlideshow())openLocalPhotos(true);else if(prefs.getInt("idle",120)>0&&validAlbum(prefs.getString("album","")))openRemote(prefs.getString("album",""),true,true);else resetIdle();});};
   private final Runnable photoCheckTask=new Runnable(){@Override public void run(){if(photoMail!=null)photoMail.maybeSync();handler.postDelayed(this,60000L);}};
   private final Runnable exitTask=()->{exitArmed=false;openStockApp();};
 
@@ -57,7 +58,7 @@ public class MainActivity extends Activity {
     WebView.setWebContentsDebuggingEnabled(debugging(getIntent()));
     root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(238,232,221));setContentView(root);
     phone=new PhoneLink(this,calendars,photos,photoMail,script->{if(dashboard==null)return false;dashboard.evaluateJavascript(Json.scriptSafe(script),null);return true;});phone.start();
-    thermostats=new Thermostats(this,script->{if(dashboard==null)return false;dashboard.evaluateJavascript(Json.scriptSafe(script),null);return true;});thermostats.start();
+    thermostats=new Thermostats(this,script->{if(dashboard==null)return false;dashboard.evaluateJavascript(Json.scriptSafe(script),null);return true;},()->overviewShowing&&foreground&&remote==null&&!localPhotosOpen&&!quietOpen);thermostats.start();
     createDashboard();handler.post(photoCheckTask);
   }
   private boolean debugging(Intent intent){return (getApplicationInfo().flags&ApplicationInfo.FLAG_DEBUGGABLE)!=0&&intent.getBooleanExtra("debug",false);}
@@ -124,7 +125,7 @@ public class MainActivity extends Activity {
     @JavascriptInterface public String thermostatStep(String id,int delta){return thermostats.bridge.step(id,delta);}
     @JavascriptInterface public boolean thermostatMode(String id,String mode){return thermostats.bridge.mode(id,mode);}
     @JavascriptInterface public boolean thermostatResume(String id){return thermostats.bridge.resume(id);}
-    @JavascriptInterface public void thermostatWatch(boolean visible){thermostats.bridge.watch(visible);}
+    @JavascriptInterface public void thermostatWatch(boolean visible){overviewShowing=visible;thermostats.bridge.watch(visible);}
 
     @JavascriptInterface public String photoStatus(){return photoMail.status().toString();}
     @JavascriptInterface public boolean photoConnect(String email,String appPassword){return photoMail.connect(email,appPassword);}
@@ -235,5 +236,5 @@ public class MainActivity extends Activity {
   @Override public void onWindowFocusChanged(boolean hasFocus){super.onWindowFocusChanged(hasFocus);if(hasFocus)hideBars();}
   private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
   private void hideBars(){getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_STABLE);}
-  @Override protected void onDestroy(){phone.stop();thermostats.stop();calendars.close();photoMail.close();handler.removeCallbacksAndMessages(null);if(remote!=null)remote.destroy();if(dashboard!=null)dashboard.destroy();super.onDestroy();}
+  @Override protected void onDestroy(){phone.stop();thermostats.stop();calendars.close();photoMail.close();handler.removeCallbacksAndMessages(null);if(remote!=null){remote.destroy();remote=null;}if(dashboard!=null){dashboard.destroy();dashboard=null;}super.onDestroy();}
 }

@@ -43,7 +43,7 @@ public final class ThermostatBridgeTest {
     timers.clear();
     pushed.clear();
     notes.clear();
-    bridge = new ThermostatBridge(TccTest.client, vault, TccTest.clock, new TccSync.Runner() {
+    bridge = new ThermostatBridge(TccTest.client, vault, TccTest.clock, TccTest.clock, new TccSync.Runner() {
       @Override public void start(Runnable work) {
         queue.add(work);
       }

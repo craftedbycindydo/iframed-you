@@ -23,7 +23,7 @@ import java.util.Arrays;
 public class MailImportPolicyTest {
  static void yes(boolean value){if(!value)throw new AssertionError();}
  public static void main(String[] args){
-  long now=1000000000L;
+  long now=1791741600000L;
   yes(MailImportPolicy.due(now-900000L,0,0,now,900));
   yes(!MailImportPolicy.due(now-899999L,0,0,now,900));
   yes(!MailImportPolicy.due(now-900000L,0,0,now,3600));
@@ -31,6 +31,13 @@ public class MailImportPolicyTest {
   yes(!MailImportPolicy.due(0,now-1000,1,now,900));
   yes(MailImportPolicy.due(0,now-300000,1,now,900));
   yes(MailImportPolicy.backoff(10)==3600000L);
+  for(long unset:new long[]{0L,5000L,1672531200000L}){
+   yes(!MailImportPolicy.due(now-86400000L,0,0,unset,900));
+   yes(!MailImportPolicy.due(0,0,0,unset,900));
+   yes(!MailImportPolicy.due(now-86400000L,now-3600000L,2,unset,86400));
+  }
+  yes(MailImportPolicy.due(now-86400000L,1672531200000L,1,now,86400));
+  yes(!MailImportPolicy.due(now-3600000L,1672531200000L,1,now,86400));
   yes(MailImportPolicy.due(now+3600000L,0,0,now,900));
   HashSet<String> approved=new HashSet<>(Arrays.asList("sender@example.invalid"));
   yes(MailImportPolicy.allowed(true,approved,new String[]{" SENDER@example.invalid "}));
@@ -50,6 +57,6 @@ public class MailImportPolicyTest {
             harness=Path(directory)/'MailImportPolicyTest.java'
             harness.write_text(source)
             native=ROOT/'android/src/com/wesbos/homehq'
-            subprocess.run([javac,'-d',directory,str(native/'MailImportPolicy.java'),str(native/'YouTubeLink.java'),str(harness)],check=True,capture_output=True,text=True)
+            subprocess.run([javac,'-d',directory,str(native/'MailImportPolicy.java'),str(native/'PhotoPolicy.java'),str(native/'YouTubeLink.java'),str(harness)],check=True,capture_output=True,text=True)
             result=subprocess.run([java,'-cp',directory,'com.wesbos.homehq.MailImportPolicyTest'],capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stderr)

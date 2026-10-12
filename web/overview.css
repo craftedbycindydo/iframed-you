@@ -75,6 +75,9 @@
  #overview .overview-lower-row{flex:1 1 0;flex-direction:row}
  #overview .overview-plans{flex:1.16 1 0;min-height:0;max-height:100%;overflow:hidden;align-self:flex-start}
  #overview .overview-today{flex:1 1 0;align-self:flex-start}
+ :root #overview .overview-grid.is-tall{height:auto;grid-template-rows:auto auto}
+ #overview .overview-grid.is-tall .overview-lower-row{flex:0 0 auto}
+ #overview .overview-grid.is-tall .overview-plans{max-height:none}
 }
 @media(min-width:1100px) and (orientation:landscape){
  #overview .thermostat-tile{max-width:calc((100% - var(--space)) / 2)}

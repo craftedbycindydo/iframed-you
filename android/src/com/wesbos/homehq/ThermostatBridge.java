@@ -20,7 +20,7 @@ final class ThermostatBridge {
   private String shown;
   private String noted;
 
-  ThermostatBridge(TccClient client, final TccSync.Secrets secrets, FrameTime.Clock clock, TccSync.Runner runner, TccSync.Timer timer, Output output) {
+  ThermostatBridge(TccClient client, final TccSync.Secrets secrets, FrameTime.Clock clock, FrameTime.Uptime uptime, TccSync.Runner runner, TccSync.Timer timer, Output output) {
     this.runner = runner;
     this.output = output;
     TccSync.Secrets remembering = new TccSync.Secrets() {
@@ -40,7 +40,7 @@ final class ThermostatBridge {
         remember(null);
       }
     };
-    sync = new TccSync(client, remembering, clock, runner, timer, new TccSync.Listener() {
+    sync = new TccSync(client, remembering, clock, uptime, runner, timer, new TccSync.Listener() {
       @Override public void changed() {
         publish();
       }

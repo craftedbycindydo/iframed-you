@@ -30,9 +30,14 @@ final class HouseholdStore {
       Map<String, Object> saved = Json.map(Json.parse(storage.get(KEY)));
       long savedRev = ((Number) saved.get("rev")).longValue();
       long savedSequence = ((Number) saved.get("sequence")).longValue();
-      List<Object> savedPeople = rows(saved.get("people"));
-      List<Object> savedChores = rows(saved.get("chores"));
-      List<Object> savedShopping = rows(saved.get("shopping"));
+      List<Object> savedPeople = rows(saved.get("people"), "person");
+      List<Object> savedChores = rows(saved.get("chores"), "chore");
+      List<Object> savedShopping = rows(saved.get("shopping"), "item");
+      for (Object chore : savedChores) {
+        boolean owned = false;
+        for (Object person : savedPeople) owned |= Json.map(person).get("id").equals(Json.map(chore).get("personId"));
+        if (!owned) Json.map(chore).put("personId", null);
+      }
       rev = savedRev;
       sequence = savedSequence;
       people = savedPeople;
@@ -43,10 +48,29 @@ final class HouseholdStore {
     }
   }
 
-  private static List<Object> rows(Object value) {
-    List<Object> rows = Json.list(value);
-    for (Object row : rows) if (Json.map(row) == null) throw new IllegalArgumentException("row");
-    return rows;
+  private static List<Object> rows(Object value, String kind) {
+    List<Object> sound = new ArrayList<>();
+    if (Json.list(value) == null) return sound;
+    for (Object entry : Json.list(value)) {
+      Map<String, Object> row = Json.map(entry);
+      if (row == null || !(row.get("id") instanceof String)) continue;
+      boolean whole;
+      if (kind.equals("person")) {
+        whole = row.get("name") instanceof String && row.get("color") instanceof String;
+      } else if (kind.equals("chore")) {
+        whole = row.get("title") instanceof String && row.get("emoji") instanceof String && all(row.get("days"), Number.class) && all(row.get("done"), String.class);
+      } else {
+        whole = row.get("name") instanceof String && row.get("note") instanceof String && row.get("qty") instanceof Number && row.get("done") instanceof Boolean;
+      }
+      if (whole) sound.add(row);
+    }
+    return sound;
+  }
+
+  private static boolean all(Object value, Class<?> kind) {
+    if (Json.list(value) == null) return false;
+    for (Object entry : Json.list(value)) if (!kind.isInstance(entry)) return false;
+    return true;
   }
 
   synchronized long rev() {

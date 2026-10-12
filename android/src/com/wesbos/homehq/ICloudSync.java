@@ -38,6 +38,7 @@ final class ICloudSync {
 
   private final KeyValue storage;
   private final FrameTime.Clock clock;
+  private final FrameTime.Uptime uptime;
   private final ICloudAlbum.Transport transport;
   private final Library library;
   private final Runner runner;
@@ -57,10 +58,11 @@ final class ICloudSync {
   private Map<String, String> known = new HashMap<>();
   private Set<String> rejected = new HashSet<>();
 
-  ICloudSync(KeyValue storage, FrameTime.Clock clock, ICloudAlbum.Transport transport, Library library, Runner runner,
+  ICloudSync(KeyValue storage, FrameTime.Clock clock, FrameTime.Uptime uptime, ICloudAlbum.Transport transport, Library library, Runner runner,
       Listener listener) {
     this.storage = storage;
     this.clock = clock;
+    this.uptime = uptime;
     this.transport = transport;
     this.library = library;
     this.runner = runner;
@@ -69,18 +71,18 @@ final class ICloudSync {
       Map<String, Object> saved = Json.map(Json.parse(storage.get(KEY)));
       String savedToken = (String) saved.get("token");
       if (!savedToken.matches("[A-Za-z0-9]{8,64}")) throw new IllegalArgumentException();
-      Map<String, String> savedKnown = new HashMap<>();
-      for (Map.Entry<String, Object> entry : Json.map(saved.get("known")).entrySet()) savedKnown.put(entry.getKey(), (String) entry.getValue());
-      Set<String> savedRejected = new HashSet<>();
-      for (Object guid : Json.list(saved.get("rejected"))) savedRejected.add((String) guid);
       token = savedToken;
-      host = (String) saved.get("host");
-      name = (String) saved.get("name");
-      error = (String) saved.get("error");
-      lastSync = (Long) saved.get("lastSync");
-      failures = ((Number) saved.get("failures")).intValue();
-      known = savedKnown;
-      rejected = savedRejected;
+      if (saved.get("host") instanceof String) host = (String) saved.get("host");
+      if (saved.get("name") instanceof String) name = (String) saved.get("name");
+      if (saved.get("error") instanceof String) error = (String) saved.get("error");
+      if (saved.get("lastSync") instanceof Long) lastSync = (Long) saved.get("lastSync");
+      if (saved.get("failures") instanceof Number) failures = Math.max(0, Math.min(10, ((Number) saved.get("failures")).intValue()));
+      if (Json.map(saved.get("known")) != null) {
+        for (Map.Entry<String, Object> entry : Json.map(saved.get("known")).entrySet()) if (entry.getValue() instanceof String) known.put(entry.getKey(), (String) entry.getValue());
+      }
+      if (Json.list(saved.get("rejected")) != null) {
+        for (Object guid : Json.list(saved.get("rejected"))) if (guid instanceof String) rejected.add((String) guid);
+      }
     } catch (Json.Malformed | RuntimeException absentOrUnreadable) {
       token = null;
     }
@@ -137,7 +139,7 @@ final class ICloudSync {
 
   synchronized boolean due() {
     long wait = failures == 0 ? INTERVAL : Math.min(LONGEST_WAIT, INTERVAL << Math.min(failures, 4));
-    return token != null && !syncing && (lastAttempt == 0 || clock.now() - lastAttempt >= wait);
+    return token != null && !syncing && (lastAttempt == 0 || uptime.millis() - lastAttempt >= wait);
   }
 
   synchronized boolean troubled() {
@@ -199,7 +201,7 @@ final class ICloudSync {
       started = generation;
       mapping = new HashMap<>(known);
       refused = new HashSet<>(rejected);
-      lastAttempt = clock.now();
+      lastAttempt = uptime.millis();
     }
     String failure = null;
     String label = null;

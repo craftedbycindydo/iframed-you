@@ -35,3 +35,8 @@ test('curated YouTube links normalize only known video/playlist routes',()=>{
  assert.equal(model.youtubeLink('https://m.youtube.com/watch?v=abcdefghijk&tracking=x'),'https://www.youtube.com/watch?v=abcdefghijk');
  for(const value of ['http://youtube.com/watch?v=abcdefghijk','https://youtube.com.evil.test/watch?v=abcdefghijk','https://owner@youtube.com/watch?v=abcdefghijk','https://youtube.com:443/watch?v=abcdefghijk#token','https://youtube.com/embed/abcdefghijk','https://youtube.com/watch?v=short'])assert.equal(model.youtubeLink(value),null,value);
 });
+test('Settings left alone closes after three minutes, or fifteen while typing or working',()=>{
+ assert.equal(model.settingsExpired(179999,false),false);assert.equal(model.settingsExpired(180000,false),true);
+ assert.equal(model.settingsExpired(180000,true),false);assert.equal(model.settingsExpired(899999,true),false);assert.equal(model.settingsExpired(900000,true),true);
+ assert.equal(model.settingsExpired(-5,false),false);assert.equal(model.settingsExpired(NaN,false),false);
+});

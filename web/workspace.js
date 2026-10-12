@@ -37,12 +37,12 @@
       if(returnTo==='settings')returnTo='overview';
       if(from&&app.status().tab!==from)app.go(from);
       backgroundAria=shell.getAttribute('aria-hidden');
-      lightbox.hidden=false;document.body.classList.add('settings-open');shell.setAttribute('aria-hidden','true');
+      lightbox.hidden=false;settingsTouched=performance.now();document.body.classList.add('settings-open');shell.setAttribute('aria-hidden','true');
       document.querySelector('[data-tab="settings"]').setAttribute('aria-expanded','true');
     }
     category=panels.has(id)?id:'appearance';
     for(const [key,panel] of panels)panel.hidden=key!==category;
-    categorySelect.value=category;for(const [key,button] of categoryButtons){button.setAttribute('aria-current',key===category?'true':'false');button.classList.toggle('active',key===category);}content.scrollTop=0;feedback.textContent='';
+    categorySelect.value=category;for(const [key,button] of categoryButtons){button.setAttribute('aria-current',key===category?'true':'false');button.classList.toggle('active',key===category);}content.classList.remove('is-typing');content.scrollTop=0;feedback.textContent='';
     close.setAttribute('aria-label',returnTo==='setup'?'Continue setup':'Close settings');
     if(category==='calendar-review')gateConfiguration.open=false;
     if(category==='device')renderHealth();if(category==='photos')loadDelivery();if(category==='phone')window.SkylitPairing.refresh();
@@ -74,6 +74,8 @@
     else if(!e.shiftKey&&(document.activeElement===last||!settings.contains(document.activeElement))){e.preventDefault();first.focus();}
   },true);
   document.addEventListener('focusin',e=>{if(settingsOpen()&&!window.SkylitPairing.isOpen()&&!settings.contains(e.target))settings.focus({preventScroll:true});});
+  const typed='textarea,input:not([type=checkbox]):not([type=file]):not([type=color])';
+  settings.addEventListener('focusin',e=>{if(!e.target.matches(typed))return;content.classList.add('is-typing');if(e.target.getBoundingClientRect().bottom>innerHeight*.45)content.scrollTop+=e.target.getBoundingClientRect().top-content.getBoundingClientRect().top-48;});
   app.openSettings=openSettings;app.closeSettings=closeSettings;app.settingsOpen=settingsOpen;
   app.back=()=>{if(paused)restore();else if(settingsOpen())closeSettings();else app.go('overview');};
   settings.addEventListener('change',e=>{if(e.target!==categorySelect&&e.target.matches('select,input[type=checkbox]')&&!e.target.closest('form,#calendar-inviters'))saved();});
@@ -149,7 +151,12 @@
   function weatherAction(){if(app.setupState().city)app.go('weather');else openSettings('weather','overview');}document.querySelector('.overview-forecast-link').onclick=weatherAction;
   const overviewWeather=document.querySelector('.overview-weather');overviewWeather.setAttribute('role','link');overviewWeather.tabIndex=0;overviewWeather.setAttribute('aria-label','Open Weather forecast');overviewWeather.addEventListener('click',e=>{if(!e.target.closest('button'))weatherAction();});overviewWeather.addEventListener('keydown',e=>{if(e.target===overviewWeather&&(e.key==='Enter'||e.key===' ')){e.preventDefault();weatherAction();}});
   window.addEventListener('skylit-tab',e=>{if(e.detail==='household')renderHousehold();});
-  setInterval(()=>{tickAmbient();paintTimers();if(settingsOpen()&&category==='device')renderHealth();},1000);
+  const plans=$('overview-plans'),lower=plans.parentElement,overviewGrid=document.querySelector('.overview-grid');
+  function fitOverview(){if(!plans.getClientRects().length)return;const rows=Array.from(plans.querySelectorAll('.overview-event')),today=$('overview-today');overviewGrid.classList.remove('is-tall');for(const node of plans.querySelectorAll('.overview-event,.overview-event-group'))node.hidden=false;const floor=lower.getBoundingClientRect().bottom,keep=window.SkylitOverview.fitting(rows.map(row=>row.getBoundingClientRect().bottom),floor-parseFloat(getComputedStyle(plans).paddingBottom));if(!today.hidden&&today.getBoundingClientRect().bottom>document.documentElement.clientHeight){overviewGrid.classList.add('is-tall');return;}rows.forEach((row,i)=>{row.hidden=i>=keep;});for(const group of plans.querySelectorAll('.overview-event-group'))group.hidden=!group.querySelector('.overview-event:not([hidden])');}
+  new MutationObserver(fitOverview).observe($('overview-events'),{childList:true});const resized=new ResizeObserver(fitOverview);resized.observe(lower);resized.observe($('thermostat-tiles'));for(const name of ['skylit-display','skylit-household','skylit-tab','resize'])window.addEventListener(name,fitOverview);
+  let settingsTouched=0;const touchSettings=()=>{settingsTouched=performance.now();};for(const name of ['pointerdown','keydown','input','wheel'])lightbox.addEventListener(name,touchSettings,true);
+  function settingsEngaged(){const field=document.activeElement,pending=window.SkylitThermostat.status().signIn;return !!field&&settings.contains(field)&&field.matches(typed)||window.SkylitPairing.isOpen()||!!pending&&pending.pending||window.SkylitCalendar.health().busy||window.SkylitPhotos.health().busy||window.SkylitICloud.health().busy||app.status().weatherBusy;}
+  setInterval(()=>{tickAmbient();paintTimers();if(settingsOpen()&&category==='device')renderHealth();if(settingsOpen()&&model.settingsExpired(performance.now()-settingsTouched,settingsEngaged()))closeSettings();},1000);
   const settingsButton=document.querySelector('[data-tab="settings"]');settingsButton.onclick=()=>openSettings();settingsButton.setAttribute('aria-haspopup','dialog');settingsButton.setAttribute('aria-controls','settings');settingsButton.setAttribute('aria-expanded','false');
   panels.get('appearance').hidden=false;categorySelect.value='appearance';categoryButtons.get('appearance').setAttribute('aria-current','true');categoryButtons.get('appearance').classList.add('active');app.go(initialTab==='settings'?'overview':initialTab);apply();loadDelivery();resetBrowserIdle();if(initialTab==='settings')openSettings();
 })();

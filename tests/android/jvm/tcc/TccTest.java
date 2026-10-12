@@ -24,11 +24,16 @@ public final class TccTest {
   static final String PASS = "frame-password";
   static int checks;
 
-  static final class Clock implements FrameTime.Clock {
+  static final class Clock implements FrameTime.Clock, FrameTime.Uptime {
     long now = START;
+    long jumped;
 
     @Override public long now() {
-      return now;
+      return now + jumped;
+    }
+
+    @Override public long millis() {
+      return now - START + 5000L;
     }
   }
 
@@ -253,7 +258,7 @@ public final class TccTest {
     server.add(1002, "level-1", ui(3, 74, 62, 76, 1, "F"), false);
     clock = new Clock();
     storage = new Storage();
-    client = new TccClient(server, storage, clock);
+    client = new TccClient(server, storage, clock, clock);
   }
 
   static TccClient.Device device(long id) {
@@ -299,7 +304,7 @@ public final class TccTest {
     same(before, server.calls.size(), "nothing is sent while locked");
     check(!storage.get("tcc.guard").contains("nope") && !storage.get("tcc.guard").contains(USER), "guard record holds no secrets");
 
-    final TccClient relaunched = new TccClient(server, storage, clock);
+    final TccClient relaunched = new TccClient(server, storage, clock, clock);
     fails("locked", new Action() {
       @Override public void run() throws Exception {
         relaunched.signIn(USER, PASS);
@@ -316,7 +321,7 @@ public final class TccTest {
     clock.now += 1200001L;
     relaunched.signIn(USER, PASS);
     same(0, relaunched.failures(), "success clears the count");
-    same(0L, new TccClient(server, storage, clock).lockedUntil(), "cleared state is persisted");
+    same(0L, new TccClient(server, storage, clock, clock).lockedUntil(), "cleared state is persisted");
 
     fresh();
     server.login = "tooMany";
@@ -643,7 +648,7 @@ public final class TccTest {
         timers.add(work);
       }
     };
-    final TccSync sync = new TccSync(client, vault, clock, runner, timer, listener);
+    final TccSync sync = new TccSync(client, vault, clock, clock, runner, timer, listener);
     Map<String, Object> status = sync.status();
     same(false, status.get("configured"), "starts unconfigured");
     same("unconfigured", status.get("status"), "unconfigured status");
@@ -879,7 +884,7 @@ public final class TccTest {
     fresh();
     Vault kept = new Vault();
     kept.save(USER, PASS);
-    TccSync restored = new TccSync(client, kept, clock, runner, timer, listener);
+    TccSync restored = new TccSync(client, kept, clock, clock, runner, timer, listener);
     same("loading", restored.status().get("status"), "restored credential starts loading");
     check(restored.due(), "first poll is due at once");
     restored.poll();
@@ -910,8 +915,8 @@ public final class TccTest {
         return server.send(method, path, headers, body);
       }
     };
-    client = new TccClient(wire, storage, clock);
-    final TccSync sync = new TccSync(client, vault, clock, new TccSync.Runner() {
+    client = new TccClient(wire, storage, clock, clock);
+    final TccSync sync = new TccSync(client, vault, clock, clock, new TccSync.Runner() {
       @Override public void start(Runnable work) {
         queue.add(work);
       }
@@ -1058,7 +1063,7 @@ public final class TccTest {
       TccHttp transport = new TccHttp("http://127.0.0.1:" + local.getAddress().getPort());
       TccClient.Reply raw = transport.send("GET", "/portal", new HashMap<String, String>(), null);
       same(401, raw.status, "status is passed through");
-      final TccClient real = new TccClient(transport, new Storage(), clock);
+      final TccClient real = new TccClient(transport, new Storage(), clock, clock);
       real.signIn(USER, PASS);
       same(5, server.calls.size() - 1, "redirects are followed by the client, not the connection");
       check(real.hasSession(), "cookies with a malformed expiry survive real HTTP headers");
@@ -1086,6 +1091,176 @@ public final class TccTest {
     }
   }
 
+  static TccClient.State held(long mode, Object heat, Object cool) throws Exception {
+    fresh();
+    Map<String, Object> ui = ui(mode, 70, 68, 76, 0, "F");
+    ui.put("StatusHeat", heat);
+    ui.put("StatusCool", cool);
+    ui.put("HeatNextPeriod", 72L);
+    ui.put("CoolNextPeriod", 88L);
+    server.add(1003, "Loft", ui, false);
+    client.signIn(USER, PASS);
+    return client.read(new TccClient.Device(1003, 4242, "Loft", null));
+  }
+
+  static void holds() throws Exception {
+    Map<String, Object> change = held(1, 0L, 2L).setpoint("heat", 69, false);
+    same(1, change.get("StatusHeat"), "heating on schedule starts a temporary hold whatever the idle cool status says");
+    same(1, change.get("StatusCool"), "both statuses move together");
+    same(72L, ((Number) change.get("HeatNextPeriod")).longValue(), "the hold ends at the heating schedule's next period");
+    same(72L, ((Number) change.get("CoolNextPeriod")).longValue(), "the cool period follows the active one");
+    change = held(3, 2L, 0L).setpoint("cool", 75, false);
+    same(1, change.get("StatusCool"), "cooling on schedule starts a temporary hold whatever the idle heat status says");
+    same(88L, ((Number) change.get("CoolNextPeriod")).longValue(), "the hold ends at the cooling schedule's next period");
+    change = held(1, null, null).setpoint("heat", 69, false);
+    same(1, change.get("StatusHeat"), "a missing status is treated as following the schedule");
+    change = held(1, null, 1L).setpoint("heat", 69, false);
+    same(1, change.get("StatusHeat"), "a missing active status is treated as following the schedule");
+    change = held(1, 1L, 0L).setpoint("heat", 69, false);
+    check(change.get("StatusHeat") == null && change.get("StatusCool") == null && change.get("HeatNextPeriod") == null, "a temporary hold on the active mode is kept as it is");
+    change = held(1, 2L, null).setpoint("heat", 69, false);
+    check(change.get("StatusHeat") == null && change.get("StatusCool") == null, "a permanent hold on the active mode is kept as it is");
+    change = held(3, 0L, 5L).setpoint("cool", 75, false);
+    check(change.get("StatusHeat") == null && change.get("StatusCool") == null, "an unknown hold on the active mode is left alone");
+    TccClient.State unknown = held(1, null, 2L);
+    same(null, unknown.hold(), "a missing status is not reported as a hold");
+    check(unknown.following(), "a missing status follows the schedule");
+    check(!held(1, 5L, 0L).following(), "an unknown status is not the schedule");
+  }
+
+  static final long YEARS = 3L * 365 * 86400000L;
+
+  static void jumps() throws Exception {
+    fresh();
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      fails("bad_credentials", new Action() {
+        @Override public void run() throws Exception {
+          client.signIn(USER, "nope");
+        }
+      }, "wrong password before the clock is set " + attempt);
+    }
+    clock.jumped = YEARS;
+    int sent = server.calls.size();
+    TccClient.Problem locked = fails("locked", new Action() {
+      @Override public void run() throws Exception {
+        client.signIn(USER, PASS);
+      }
+    }, "a lock survives the clock being set forward");
+    same(sent, server.calls.size(), "and nothing is sent while it lasts");
+    same(clock.now() + 600000L, locked.until, "the retry time moves with the clock");
+    same(clock.now() + 600000L, client.lockedUntil(), "and is reported the same way");
+    same(clock.now() + 600000L, ((Number) Json.map(Json.parse(storage.get("tcc.guard"))).get("lockedUntil")).longValue(), "and saved for the next start");
+    clock.now += 300000L;
+    clock.jumped = -YEARS;
+    locked = fails("locked", new Action() {
+      @Override public void run() throws Exception {
+        client.signIn(USER, PASS);
+      }
+    }, "a lock survives the clock being set back");
+    same(clock.now() + 300000L, locked.until, "with the time that is really left");
+    clock.now += 300001L;
+    client.signIn(USER, PASS);
+    check(client.hasSession(), "and ends after its ten minutes whatever the clock says");
+    same(0L, client.lockedUntil(), "no lock is left");
+    same(0L, ((Number) Json.map(Json.parse(storage.get("tcc.guard"))).get("lockedUntil")).longValue(), "none is saved either");
+
+    fresh();
+    client.signIn(USER, PASS);
+    clock.jumped = -YEARS;
+    clock.now += 601000L;
+    server.sessions.clear();
+    same("Level-0", client.read(device(1001)).name, "a clock set back does not block the next automatic sign-in");
+    same(2, server.logins(), "it happens once");
+    clock.jumped = YEARS;
+    clock.now += 60000L;
+    server.sessions.clear();
+    fails("session_expired", new Action() {
+      @Override public void run() throws Exception {
+        client.read(device(1001));
+      }
+    }, "a clock set forward does not allow an early automatic sign-in");
+    same(2, server.logins(), "no extra sign-in");
+
+    fresh();
+    storage.put("tcc.guard", Json.write(Json.object("failures", 3, "lockedUntil", START + 300000L)));
+    client = new TccClient(server, storage, clock, clock);
+    fails("locked", new Action() {
+      @Override public void run() throws Exception {
+        client.signIn(USER, PASS);
+      }
+    }, "a saved lock holds after a restart");
+    clock.now += 300001L;
+    client.signIn(USER, PASS);
+    check(client.hasSession(), "and ends at its saved time");
+
+    for (String saved : new String[] {Json.write(Json.object("failures", 3, "lockedUntil", START + YEARS)), Json.write(Json.object("failures", 3, "lockedUntil", Long.MAX_VALUE)),
+        "{broken", "[]", "{\"failures\":\"many\",\"lockedUntil\":true}", ""}) {
+      fresh();
+      storage.put("tcc.guard", saved);
+      client = new TccClient(server, storage, clock, clock);
+      same(0L, client.lockedUntil(), "a saved lock that cannot be real is not reported " + saved);
+      client.signIn(USER, PASS);
+      check(client.hasSession(), "and does not shut the account out " + saved);
+      same("{\"failures\":0,\"lockedUntil\":0}", storage.get("tcc.guard"), "a good sign-in replaces it " + saved);
+    }
+
+    fresh();
+    final Vault vault = new Vault();
+    final List<Runnable> queue = new ArrayList<>();
+    TccSync.Runner runner = new TccSync.Runner() {
+      @Override public void start(Runnable work) {
+        queue.add(work);
+      }
+    };
+    TccSync.Timer timer = new TccSync.Timer() {
+      @Override public void after(long millis, Runnable work) {}
+    };
+    TccSync.Listener listener = new TccSync.Listener() {
+      @Override public void changed() {}
+    };
+    final TccSync sync = new TccSync(client, vault, clock, clock, runner, timer, listener);
+    sync.configure(USER, PASS);
+    sync.watch(true);
+    clock.now += 30000L;
+    clock.jumped = YEARS;
+    Map<String, Object> status = sync.status();
+    same("ok", status.get("status"), "a clock set forward does not make fresh readings stale");
+    same(true, status.get("controllable"), "they stay controllable");
+    same(FrameTime.iso(clock.now() - 30000L), status.get("polledAt"), "the poll time is shown on the corrected clock");
+    check(!sync.due(), "and no extra poll fires");
+    same(71.0, sync.step("t1", 1, false), "a step still works after the jump");
+    clock.now += 30000L;
+    check(sync.due(), "the next poll comes at its usual minute");
+    sync.poll();
+    clock.jumped = -YEARS;
+    check(!sync.due(), "a clock set back does not fire a poll early");
+    same(FrameTime.iso(clock.now()), sync.status().get("polledAt"), "the poll time follows the clock back");
+    clock.now += TccSync.WATCHED;
+    check(sync.due(), "nor does it stop the next poll");
+    clock.now += TccSync.STALE;
+    same("stale", sync.status().get("status"), "readings still go stale after ten real minutes");
+    sync.poll();
+    same("ok", sync.status().get("status"), "and recover with a poll");
+
+    clock.now += 601000L;
+    server.sessions.clear();
+    server.login = "tooMany";
+    sync.poll();
+    same("locked_out", sync.status().get("status"), "locked out before the clock jumps");
+    clock.jumped = YEARS;
+    same(FrameTime.iso(clock.now() + 600000L), sync.status().get("retryAt"), "the retry time is never left in the past");
+    check(!sync.due(), "the lock still holds after a jump forward");
+    clock.now += 300000L;
+    clock.jumped = -YEARS;
+    same(FrameTime.iso(clock.now() + 300000L), sync.status().get("retryAt"), "nor in the far future");
+    check(!sync.due(), "the lock still holds after a jump back");
+    server.login = "normal";
+    clock.now += 300001L;
+    check(sync.due(), "and ends after its real ten minutes");
+    sync.poll();
+    same("ok", sync.status().get("status"), "unlocked on time");
+  }
+
   public static void main(String[] args) throws Exception {
     java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
     login();
@@ -1093,6 +1268,8 @@ public final class TccTest {
     sessions();
     reading();
     writing();
+    holds();
+    jumps();
     failures();
     syncing();
     keeping();

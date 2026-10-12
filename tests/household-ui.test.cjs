@@ -10,8 +10,8 @@ class Element{
 }
 const snapshot=()=>({rev:3,people:[{id:'p1',name:'Maya',color:'#00A36C'}],chores:[{id:'c1',title:'Make bed',emoji:'🛏️',personId:'p1',days:[],done:[]},{id:'c2',title:'Recycling',emoji:'',personId:null,days:[],done:['2026-10-12']},{id:'c3',title:'Sunday only',emoji:'',personId:'p1',days:[0],done:[]}],shopping:[{id:'s1',name:'Milk',qty:2,note:'',done:false}]});
 function launch({bridge='real',initial=snapshot(),storage={},fail=null,pairing={phase:'idle'}}={}){
- const now={value:Date.parse('2026-10-12T09:00:00Z')},elements=new Map(),listeners={},keys=[],timers=[],waits=[],events=[],toasts=[],calls=[],reports=[],values=new Map(Object.entries(storage));
- class FixedDate extends Date{constructor(...a){super(...(a.length?a:[now.value]))}static now(){return now.value}}
+ const now={value:Date.parse('2026-10-12T09:00:00Z'),jumped:0},elements=new Map(),listeners={},keys=[],timers=[],waits=[],events=[],toasts=[],calls=[],reports=[],values=new Map(Object.entries(storage));
+ class FixedDate extends Date{constructor(...a){super(...(a.length?a:[now.value+now.jumped]))}static now(){return now.value+now.jumped}}
  const document={activeElement:null,body:new Element('body'),createElement:tag=>{const e=new Element(tag);e.doc=document;return e},getElementById:id=>{if(!elements.has(id)){const e=document.createElement('div');e.id=id;elements.set(id,e)}return elements.get(id)},addEventListener:(name,fn)=>{if(name==='keydown')keys.push(fn)}};
  let store=model.normalize(initial),n=0,devices=[{id:'d1',name:'Karan phone',pairedAt:'2026-10-08T17:30:00Z',lastSeen:'2026-10-11T08:00:00Z'},{id:'d2',name:'Tablet',pairedAt:'2026-10-09T10:00:00Z',lastSeen:'2026-10-09T10:00:00Z'}];
  const frame={pairing,pick:'64',address:'192.168.0.12',openError:null},busy=()=>['waiting','code'].includes(frame.pairing.phase);
@@ -26,7 +26,7 @@ function launch({bridge='real',initial=snapshot(),storage={},fail=null,pairing={
  const window={SkylitApp:app,SkylitHouseholdModel:model,SkylitAppearance:appearance,addEventListener:(name,fn)=>(listeners[name]=listeners[name]||[]).push(fn),dispatchEvent:event=>{events.push(event.type);(listeners[event.type]||[]).forEach(fn=>fn(event))}};
  if(bridge==='real')window.Skylit=real;if(bridge==='old')window.Skylit={configure(){},calendarList:()=>'[]'};
  const localStorage={getItem:k=>values.has(k)?values.get(k):null,setItem:(k,v)=>values.set(k,String(v))};
- vm.runInNewContext(source,{window,document,localStorage,Date:FixedDate,Intl,JSON,Math,Number,Object,Array,String,Set,Map,Event:class{constructor(type){this.type=type}},setTimeout:(fn,ms)=>{waits.push([fn,ms]);return waits.length},clearTimeout:id=>{if(id)waits[id-1]=null},setInterval:fn=>{timers.push(fn);return timers.length},clearInterval:id=>{timers[id-1]=null}});
+ vm.runInNewContext(source,{window,document,localStorage,performance:{now:()=>now.value-1791700000000},Date:FixedDate,Intl,JSON,Math,Number,Object,Array,String,Set,Map,Event:class{constructor(type){this.type=type}},setTimeout:(fn,ms)=>{waits.push([fn,ms]);return waits.length},clearTimeout:id=>{if(id)waits[id-1]=null},setInterval:fn=>{timers.push(fn);return timers.length},clearInterval:id=>{timers[id-1]=null}});
  const $=document.getElementById,rows=()=>$('chores-today').all('chore-row');
  return {frame,window,$,rows,calls,toasts,reports,events,waits,tab:name=>(listeners['skylit-tab']||[]).forEach(f=>f({detail:name})),values,now,applied,settings,overlay:()=>document.body.children[0],tick:()=>timers.filter(Boolean).forEach(f=>f()),key:key=>{const e={key,preventDefault(){},stopImmediatePropagation(){}};keys.forEach(f=>f(e))},setStore:s=>{store=model.normalize(s)},store:()=>store,document};
 }
@@ -226,4 +226,24 @@ for(const bridge of ['none','old'])test('without the new bridge ('+bridge+') an 
  h.window.SkylitRemote.apply({appearance:{palette:'plum',mode:'dark'}});assert.equal(h.settings.appearance.palette,'plum');
  assert.equal(h.$('phone-address').textContent,'');h.window.SkylitPairing.update({phase:'idle'});assert.deepEqual(h.toasts,[]);h.$('phone-pair').onclick();assert.deepEqual(h.toasts.splice(0),['Pairing works on the Android frame.']);assert.equal(h.window.SkylitPairing.isOpen(),false);
  const again=launch({bridge,storage:Object.fromEntries(h.values)});assert.equal(again.rows().length,1);assert.equal(again.rows()[0].attrs['aria-pressed'],'true');
+});
+test('the pairing countdown follows real elapsed time when the frame clock is set forward or back',()=>{
+ const h=launch(),o=h.overlay(),year=365*86400000;
+ h.$('phone-pair').onclick();assert.match(o.textContent,/Time left 2:00/);
+ h.now.jumped=3*year;h.now.value+=10000;h.tick();assert.match(o.textContent,/Time left 1:50/);assert.equal(h.window.SkylitPairing.isOpen(),true);assert.equal(h.calls.filter(c=>c.cancel).length,0);
+ h.now.jumped=-3*year;h.now.value+=50000;h.tick();assert.match(o.textContent,/Time left 1:00/);
+ h.now.jumped=0;h.now.value+=59000;h.tick();assert.match(o.textContent,/Time left 0:01/);
+});
+test('confirming once does not cut the next "tap again" short',()=>{
+ const h=launch(),all=h.$('phone-revoke-all'),fire=at=>h.waits.forEach((w,i)=>{if(w&&w[2]===undefined&&i<at){w[2]=true;w[0]()}});
+ all.onclick();assert.match(all.textContent,/again/);const armed=h.waits.length;all.onclick();assert.deepEqual(h.calls.at(-1),{revokeAll:true});assert.equal(all.textContent,'Remove all phones');
+ all.onclick();assert.match(all.textContent,/again/);fire(armed);assert.match(all.textContent,/again/,'the first timer no longer disarms the second confirmation');
+ all.onclick();assert.equal(h.calls.filter(c=>c.revokeAll).length,2);
+ all.onclick();assert.match(all.textContent,/again/);h.waits.at(-1)[0]();assert.equal(all.textContent,'Remove all phones');all.onclick();assert.match(all.textContent,/again/);assert.equal(h.calls.filter(c=>c.revokeAll).length,2,'a lapsed confirmation asks again');
+});
+test('the "paired just now" line does not outlive the visit to Phone app',()=>{
+ const h=launch({pairing:{phase:'code',remaining:90000,code:'299871',numbers:['07','64','91']}});h.frame.name='Maya phone';
+ h.overlay().all('pairing-pick')[1].onclick();assert.equal(h.$('phone-note').textContent,'Maya phone paired just now.');
+ h.window.SkylitPairing.update({phase:'idle'});assert.equal(h.$('phone-note').textContent,'Maya phone paired just now.');
+ h.window.SkylitPairing.refresh();assert.equal(h.$('phone-note').textContent,'');
 });

@@ -32,7 +32,7 @@ public final class LocalApiTest {
   static ICloudSync icloud;
 
   static ICloudSync sync(Fakes.Recorder recorder) {
-    icloud = new ICloudSync(storage, clock, album, photos.library, Fakes.inline(), recorder.album);
+    icloud = new ICloudSync(storage, clock, clock.steady, album, photos.library, Fakes.inline(), recorder.album);
     return icloud;
   }
 
@@ -670,6 +670,74 @@ public final class LocalApiTest {
     same("Maya", row(call("POST", "/v1/people", Json.write(Json.object("name", "\u00a0Maya\u3000", "color", "#00A36C"))), "person").get("name"), "every kind of space is trimmed");
   }
 
+  static void invisible() throws Exception {
+    fresh();
+    for (String hidden : new String[] {"\u200b", "\u200b\u200d\u2060", "\u200d\ufe0f", "\u3164", "\u00ad\u034f", "\u2800", "\udb40\udc41"}) {
+      same(400, call("POST", "/v1/people", Json.write(Json.object("name", hidden, "color", "#00A36C"))).status, "a name nobody can see is refused " + Json.write(hidden));
+      same(400, call("POST", "/v1/chores", Json.write(Json.object("title", hidden))).status, "a title nobody can see is refused " + Json.write(hidden));
+      same(400, call("POST", "/v1/shopping", Json.write(Json.object("name", hidden))).status, "an item nobody can see is refused " + Json.write(hidden));
+      same(400, call("PUT", "/v1/settings/location", Json.write(Json.object("name", hidden, "latitude", 1, "longitude", 1))).status, "a place nobody can see is refused " + Json.write(hidden));
+    }
+    String family = "\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67";
+    same(family, row(call("POST", "/v1/people", Json.write(Json.object("name", family, "color", "#00A36C"))), "person").get("name"), "an emoji joined with zero-width joiners is a name");
+    String persian = "\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645";
+    same(persian, row(call("POST", "/v1/shopping", Json.write(Json.object("name", persian))), "item").get("name"), "a zero-width non-joiner inside a word is kept");
+    same("a\u200b", row(call("POST", "/v1/shopping", Json.write(Json.object("name", "a\u200b"))), "item").get("name"), "one visible character is enough");
+    same(200, call("POST", "/v1/chores", Json.write(Json.object("title", "Bins", "emoji", ""))).status, "an empty emoji is still allowed");
+    same(200, call("POST", "/v1/shopping", Json.write(Json.object("name", "Tea", "note", "\u200b"))).status, "an optional note is not held to this");
+    api.pairingOpen();
+    same(400, new Fakes.Phone().start(wire, "\u200b\u2060").status, "a device name nobody can see is refused");
+    same(true, Json.map(Json.parse(call("GET", "/v2/info", null).text())).get("pairing"), "and does not use up the window");
+  }
+
+  static void damaged() throws Exception {
+    fresh();
+    call("PUT", "/v1/settings/appearance", "{\"palette\":\"sage\",\"mode\":\"dark\"}");
+    storage.values.put("household", "{\"rev\":9,\"sequence\":12,\"people\":[{\"id\":\"p1\",\"name\":\"Maya\",\"color\":\"#00A36C\"},{\"id\":\"p2\",\"name\":7,\"color\":\"#00A36C\"},{\"name\":\"Nobody\",\"color\":\"#00A36C\"}],"
+        + "\"chores\":[{\"id\":\"c3\",\"title\":\"Make bed\",\"emoji\":\"\",\"personId\":\"p1\",\"days\":[1],\"done\":[\"2026-10-11\"]},{\"id\":\"c4\",\"title\":\"Bins\",\"emoji\":\"\",\"personId\":null,\"days\":[],\"done\":\"yes\"},"
+        + "{\"id\":\"c5\",\"title\":\"Dog\",\"emoji\":\"\",\"personId\":null,\"days\":[],\"done\":[20261011]},{\"id\":\"c6\",\"title\":\"Plants\",\"emoji\":\"\",\"personId\":null,\"days\":\"daily\",\"done\":[]},{\"title\":\"Lost\"},"
+        + "{\"id\":\"c7\",\"title\":\"Dishes\",\"emoji\":\"\",\"personId\":\"p2\",\"days\":[],\"done\":[]}],"
+        + "\"shopping\":[{\"id\":\"s8\",\"name\":\"Milk\",\"qty\":2,\"note\":\"\",\"done\":false},{\"id\":\"s9\",\"name\":\"Tea\",\"qty\":\"lots\",\"note\":\"\",\"done\":false},{\"id\":\"s10\",\"name\":\"Jam\",\"qty\":1,\"note\":\"\",\"done\":\"no\"},{\"id\":11}]}");
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    Map<String, Object> kept = state();
+    same("[{\"id\":\"p1\",\"name\":\"Maya\",\"color\":\"#00A36C\"}]", Json.write(kept.get("people")), "a damaged person is dropped and the others stay");
+    same("[{\"id\":\"c3\",\"title\":\"Make bed\",\"emoji\":\"\",\"personId\":\"p1\",\"days\":[1],\"done\":[\"2026-10-11\"]},{\"id\":\"c7\",\"title\":\"Dishes\",\"emoji\":\"\",\"personId\":null,\"days\":[],\"done\":[]}]",
+        Json.write(kept.get("chores")), "damaged chores are dropped, and a chore whose person is gone becomes anyone's");
+    same("[{\"id\":\"s8\",\"name\":\"Milk\",\"qty\":2,\"note\":\"\",\"done\":false}]", Json.write(kept.get("shopping")), "damaged items are dropped");
+    same(9L, kept.get("rev"), "the revision is kept");
+    same("sage", Json.map(Json.map(kept.get("settings")).get("appearance")).get("palette"), "unrelated settings are untouched");
+    same(200, call("GET", "/v1/devices", null).status, "paired phones are untouched");
+    same("p13", row(call("POST", "/v1/people", "{\"name\":\"Noor\",\"color\":\"#123456\"}"), "person").get("id"), "new ids continue after the damage");
+    same(200, call("PUT", "/v1/chores/c3/done", "{\"date\":\"2026-10-10\",\"done\":true}").status, "the surviving chore still works");
+    check(Json.map(Json.parse(api.householdMutate("{\"op\":\"chore.remove\",\"id\":\"c7\"}"))).get("ok").equals(true), "the dashboard can still change the list");
+
+    storage.values.put("household", "{\"rev\":3,\"sequence\":4,\"people\":{},\"chores\":[[]],\"shopping\":null}");
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    kept = state();
+    same("[][][]", Json.write(kept.get("people")) + Json.write(kept.get("chores")) + Json.write(kept.get("shopping")), "lists of the wrong kind start empty");
+    same(3L, kept.get("rev"), "without losing the revision");
+
+    StringBuilder big = new StringBuilder("{\"rev\":1,\"sequence\":400,\"people\":[],\"chores\":[");
+    String title = new String(new char[80]).replace("\0", "\ud83d\ude00");
+    for (int i = 0; i < 100; i++) {
+      big.append(i == 0 ? "" : ",").append("{\"id\":\"c").append(i).append("\",\"title\":\"").append(title).append("\",\"emoji\":\"\",\"personId\":null,\"days\":[],\"done\":[");
+      for (int day = 0; day < 14; day++) big.append(day == 0 ? "" : ",").append('"').append(FrameTime.shift("2026-10-11", -day)).append('"');
+      big.append("]}");
+    }
+    big.append("],\"shopping\":[");
+    String note = new String(new char[200]).replace("\0", "\ud83d\ude00");
+    for (int i = 0; i < 200; i++) big.append(i == 0 ? "" : ",").append("{\"id\":\"s").append(100 + i).append("\",\"name\":\"").append(title).append("\",\"qty\":99,\"note\":\"").append(note).append("\",\"done\":false}");
+    storage.values.put("household", big.append("]}").toString());
+    long began = System.nanoTime();
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    String full = api.householdSnapshot();
+    same(200, call("PATCH", "/v1/shopping/s150", "{\"done\":true}").status, "the fullest list can still be changed");
+    long millis = (System.nanoTime() - began) / 1000000L;
+    check(millis < 1500, "the fullest household loads, lists and saves quickly, took " + millis + " ms");
+    check(storage.values.get("household").getBytes(StandardCharsets.UTF_8).length < 400 * 1024, "and stays far below what private storage holds comfortably: " + storage.values.get("household").length());
+    check(full.length() > 100000, "with everything in it");
+  }
+
   static void limits() throws Exception {
     fresh();
     for (int i = 0; i < HouseholdStore.MAX_PEOPLE; i++) same(200, call("POST", "/v1/people", "{\"name\":\"P" + i + "\",\"color\":\"#112233\"}").status, "person " + i);
@@ -822,6 +890,12 @@ public final class LocalApiTest {
     same("[{\"id\":\"" + calendar.get("id") + "\",\"name\":\"Family\",\"color\":\"#2D5BFF\"}]", Json.write(stateReply.object().get("calendars")), "state lists calendars");
     check(!stateReply.text().contains("private-") && !stateReply.text().contains("url"), "state never carries feed urls");
     same(409, call("POST", "/v1/calendars", "{\"name\":\"Again\",\"color\":\"#2D5BFF\",\"url\":\"" + FEED + "\"}").status, "duplicate feed");
+    String sixty = new String(new char[60]).replace("\0", "n");
+    same(400, call("POST", "/v1/calendars", "{\"name\":\"" + sixty + "n\",\"color\":\"#2D5BFF\",\"url\":\"" + FEED.replace("private-test", "private-long") + "\"}").status,
+        "a calendar name longer than the frame stores is refused, not cut");
+    same(400, call("POST", "/v1/calendars", "{\"name\":\"" + new String(new char[31]).replace("\0", "\ud83d\udcc5") + "\",\"color\":\"#2D5BFF\",\"url\":\"" + FEED.replace("private-test", "private-emoji") + "\"}").status,
+        "nor is one the frame would cut in the middle of an emoji");
+    same(1, Json.list(state().get("calendars")).size(), "neither was added");
     String[] badUrls = {FEED.replace("https:", "http:"), FEED.replace("calendar.google.com", "calendar.google.com.evil.test"), FEED + "?x=1",
         "https://127.0.0.1/calendar/ical/test/public/basic.ics", "https://calendar.google.com/calendar/u/0/r", "file:///etc/passwd", ""};
     for (String url : badUrls) {
@@ -1200,6 +1274,8 @@ public final class LocalApiTest {
     household();
     limits();
     blanks();
+    invisible();
+    damaged();
     bridge();
     settings();
     settingsTogether();

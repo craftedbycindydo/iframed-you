@@ -16,7 +16,16 @@ This file is the contract between the Android viewer, the dashboard and the iOS 
 - HTTP/1.1 inside TLS 1.2 (never plain HTTP), JSON bodies, UTF-8. `Connection: close` on every
   response; one request per connection. Bodies need `Content-Length`; chunked bodies and requests
   carrying an `Origin` header are `400`. `Host` must be an IP address or a `.local` name.
-- Request body limit 64 KiB, except `/v2/pair/*` (4 KiB) and photo upload (15 MiB).
+- Request body limit 64 KiB, except `/v2/pair/*` (4 KiB) and photo upload (15 MiB). A body over
+  its limit is `413` from the `Content-Length` alone, before any of it is read.
+- Only `/v2/info` and `/v2/pair/*` are version 2 routes. Every other route keeps its `/v1/` path,
+  is served only over this TLS listener and needs a token from a v2 pairing.
+- The frame serves at most three requests from one address at a time and keeps at most twelve more
+  from it waiting; further connections are closed without an answer, as is one that waits 15 s, takes
+  more than 5 s to send its headers, or sends its body slower than 64 KiB/s after a 3 s start. One
+  photo is received at a time; a second upload waits up to 20 s and is then `429`. A phone should use
+  one connection at a time and retry a dropped one.
+- Responses carry `Cache-Control: no-store`. `204` and `304` have no body.
 - Errors: `{"error":{"code":"<slug>","message":"<text>"}}` with status
   400 `bad_request`, 401 `unauthorized`, 403 `forbidden`, 404 `not_found`, 409 `conflict` or
   `pairing_busy`, 410 `gone`, 413 `too_large`, 429 `rate_limited`, 500 `internal`.
@@ -50,7 +59,8 @@ Everything below replaces the first version, which spoke plain HTTP and let a re
   frame.
 - The phone speaks only HTTPS, never falls back, and deletes any token saved by the first version
   at launch. A frame updated from the first version erases its paired-device list.
-- `GET /v2/info` (no token) returns `{"v":2,"frameId","name","pairing":true|false}`.
+- `GET /v2/info` (no token) returns `{"v":2,"frameId","name","pairing":true|false}`. `pairing` is
+  `true` only while a pairing window is open and no phone has started in it yet.
 
 ## Pairing (v2)
 
@@ -107,8 +117,8 @@ All hex on the wire is lowercase; receivers reject anything but `[0-9a-f]` of th
 The phone never restarts pairing by itself; a new attempt needs the person to ask and the frame to
 open a new window. There is no lock-out: each attempt already needs someone at the frame.
 
-Device names are 1–40 characters after trimming, with control and direction-override characters
-refused, and are shown as plain text. They are chosen by the device, so the frame never treats a
+Device names are 1–40 characters after trimming, with at least one visible character and with
+control and direction-override characters refused, and are shown as plain text. They are chosen by the device, so the frame never treats a
 name as proof of anything.
 
 What this gives: a device in the middle makes the phone and the frame compute different codes
@@ -143,7 +153,8 @@ It does not protect against someone who can read the frame's screen and touch it
   "shopping": [{"id":"s1","name":"Milk","qty":2,"note":"","done":false}],
   "settings": {
     "location": {"name":"Calgary","latitude":51.05,"longitude":-114.07,"timezone":"America/Edmonton"},
-    "appearance": {"palette":"linen","mode":"auto"}
+    "appearance": {"palette":"linen","mode":"auto"},
+    "icloudAlbum": null
   },
   "calendars": [{"id":"k1","name":"Family","color":"#2D5BFF"}],
   "photos": {"count": 12}
@@ -158,7 +169,10 @@ It does not protect against someone who can read the frame's screen and touch it
   an empty list means every day. `done` holds local dates (`YYYY-MM-DD`, frame timezone);
   the frame keeps the last 14 days. `PUT …/done` accepts dates from 13 days ago to tomorrow in the
   frame's timezone (the chosen city's zone, else the device's) and `400`s anything else.
-- `settings.location` is `null` until a city is chosen. Calendar feed URLs are never returned.
+- `settings.location` is `null` until a city is chosen, and its `timezone` is `null` when the city
+  was set without one. `settings.icloudAlbum` is described under iCloud shared album. Calendar feed
+  URLs are never returned.
+- Dropping chore dates older than 14 days does not change `rev`.
 
 ## Mutations
 
@@ -173,21 +187,24 @@ own key (`person`, `chore`, `item`, `calendar`, `photo`) where one exists.
 | `POST /v1/chores` | `{"title","emoji"?,"personId"?,"days"?}` |
 | `PATCH /v1/chores/{id}` | any of `title`, `emoji`, `personId`, `days` |
 | `DELETE /v1/chores/{id}` | |
-| `PUT /v1/chores/{id}/done` | `{"date":"YYYY-MM-DD","done":true}` |
+| `PUT /v1/chores/{id}/done` | `{"date":"YYYY-MM-DD","done":true\|false}` |
 | `POST /v1/shopping` | `{"name","qty"?,"note"?}` |
 | `PATCH /v1/shopping/{id}` | any of `name`, `qty`, `note`, `done` |
 | `DELETE /v1/shopping/{id}` | |
 | `POST /v1/shopping/clear-done` | Removes every ticked item. |
 | `PUT /v1/settings/location` | `{"name","latitude","longitude","timezone"?}` |
 | `PUT /v1/settings/appearance` | `{"palette","mode"}`; values are those `web/appearance.js` accepts. |
-| `POST /v1/calendars` | `{"name","color","url"}`; same validation as on-frame entry. |
+| `POST /v1/calendars` | `{"name","color","url"}`; `url` is a Google Calendar secret iCal address, as on the frame. |
 | `DELETE /v1/calendars/{id}` | |
 
 Limits: 12 people, 100 chores, 200 shopping items, 6 calendars; names and titles
 1–80 characters after trimming; `emoji` 0–16; `note` 0–200; `qty` a whole number 1–99; colours
 `#RRGGBB`; `days` whole numbers 0–6. Lengths count Unicode code points, and trimming removes
 every kind of leading and trailing white space (including no-break and ideographic spaces), as
-JavaScript's `trim()` does. Control characters and direction overrides are refused. Violations
+JavaScript's `trim()` does. Control characters and direction overrides are refused. A name or
+title needs at least one visible character: one made only of zero-width or other invisible
+characters is refused, while joined emoji and a zero-width non-joiner inside a word are fine.
+A calendar name is 1–60 characters and, unlike the others, an emoji counts as two. Violations
 are `400`; an unknown `id` is `404`; a calendar feed that is already on the frame is `409`.
 Unknown fields are ignored, and a body `id` never overrides the one in the path.
 
@@ -196,11 +213,14 @@ Unknown fields are ignored, and a body `id` never overrides the one in the path.
 | Call | Notes |
 | --- | --- |
 | `GET /v1/photos` | `[{"id":"<64 hex>","addedAt":"ISO-8601"}]`, newest first |
-| `POST /v1/photos` | Body is one JPEG, `Content-Type: image/jpeg`. Returns `{"rev","photo":{"id","addedAt"}}`. The same bytes uploaded twice return the existing photo. |
-| `GET /v1/photos/{id}` | The stored JPEG |
+| `POST /v1/photos` | Body is one JPEG, `Content-Type: image/jpeg`, 4 KiB to 15 MiB and at least 320×240 pixels; anything else is `400`. Returns `{"rev","photo":{"id","addedAt"}}`. `id` is the SHA-256 of the uploaded bytes, so the same bytes uploaded twice return the existing photo. |
+| `GET /v1/photos/{id}` | The stored JPEG. The frame resizes and re-encodes what it keeps, so these are not the uploaded bytes. |
 | `DELETE /v1/photos/{id}` | `204` |
 
-Uploaded photos join the frame's local picture library and its slideshow.
+Uploaded photos join the frame's local picture library and its slideshow. The list holds every
+picture in that library that is not hidden on the frame: phone, email and album pictures alike.
+The library keeps the newest pictures up to its limit (30 by default, 50 at most), so an upload
+can push the oldest one out.
 
 ## iCloud shared album
 
@@ -220,7 +240,8 @@ This relies on the unofficial `sharedstreams` web endpoints Apple's own album pa
   privately on the frame and never returned, logged or shown again.
 - `GET /v1/state` gains `settings.icloudAlbum`: `null`, or
   `{"name":"Family","count":24,"lastSync":"ISO-8601"|null,"syncing":false,"error":null|"<text>"}`.
-- The frame syncs on connect, on start, and every 30 minutes. It keeps the newest pictures up
+- The frame syncs on connect, on start, and every 30 minutes; after a failed sync it waits longer
+  each time, up to six hours, and tries at once when Wi-Fi returns. It keeps the newest pictures up
   to the library limit, removes pictures deleted from the album, and skips videos.
 - A sync, a status change or an error each bump `rev` once. `PUT` returns before the first
   sync finishes; `name` is `""` until it has. `DELETE` with no album is `200`; `sync` with no
@@ -253,7 +274,8 @@ Native → dashboard (via `evaluateJavascript`, each guarded with `window.X&&`):
 - `SkylitRemote.apply({location?,appearance?})`: a phone changed a setting that lives in
   dashboard `localStorage`. The dashboard applies it and then calls `reportSettings`.
 - `SkylitCalendar.receive(...)` and `SkylitPhotos.receive(...)` as today, when the phone
-  adds a calendar or photo.
+  adds a calendar or photo. A calendar removed from a phone arrives as
+  `SkylitCalendar.receive({"id","removed":true,"error":"…"})`.
 
 Dashboard → native (`window.Skylit.*`, all return a JSON string or boolean):
 
@@ -297,12 +319,28 @@ native code signs in and polls; there are no thermostat routes in the phone API.
   step per call in the direction of `delta`, kept inside the thermostat's own range; taps within a
   second are sent to Honeywell as one change. A thermostat following its schedule gets a temporary
   hold until its next schedule period; one already on a temporary or permanent hold keeps that
-  hold and its end time. While such a change is pending the snapshot already reports
+  hold and its end time. Which of the two it is comes from the hold status of the mode that is
+  running (heat or cool) only, and a thermostat that reports no status counts as following its
+  schedule. While such a change is pending the snapshot already reports
   `hold:"temporary"` and `holdUntil`, so the tile does not claim to follow the schedule.
 - `thermostatMode(id, "heat"|"cool")` and `thermostatResume(id)` → `true` when started; the result
   arrives through `receive` (`changing`, then the new state or `error` and `message`).
 - `thermostatWatch(visible)`: poll every 60 s while the Overview is showing, every 5 min otherwise.
-  The dashboard calls it on every tab change and once at load when it starts on the Overview.
+  The dashboard calls it on every tab change and once at load when it starts on the Overview. The
+  frame itself drops to the 5 min pace while the dashboard is covered by the slideshow, the quiet
+  clock or another site, or is in the background.
+- Times in the snapshot follow the frame's clock, but polling, staleness and the lock-out are
+  counted in elapsed time, so setting the clock (as happens shortly after a start) neither delays
+  nor repeats a poll, and `retryAt` and `polledAt` are moved to match the new clock.
+
+The bridge calls Skylit already had are unchanged and are not part of the phone contract:
+`calendarList`, `calendarAdd`, `calendarMetadata`, `calendarRemove`, `calendarRefresh`,
+`calendarAccept`; `photoStatus`, `photoConnect`, `photoConfigure`, `photoExclude`,
+`photoRestoreExcluded`, `photoDelivery`, `photoDeliverySettings`, `photoEraseCache`,
+`photoRefresh`, `photoOpen`, `photoBrowse`, `photoDisconnect`, `photoSource`, `localPhotoClosed`;
+`configure`, `configureQuiet`, `privacyPause`, `ambientClosed`; `openPhotos`, `openHome`,
+`openYouTube`, `openYouTubeLink`, `openCalendar`, `openWifiSettings`, `openDeveloperSettings`,
+`openStock`.
 
 Chores and shopping have one source of truth: the native household store. The dashboard's
 old `skylit.household` shopping list is migrated into it once, then no longer written.

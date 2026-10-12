@@ -52,6 +52,7 @@ final class LocalApi {
   static final int MAX_UNPAIRED_JSON = 4 * 1024;
   static final int MAX_PHOTO = 15 * 1024 * 1024;
   static final int MAX_CALENDARS = 6;
+  static final int MAX_CALENDAR_NAME = 60;
   private static final int UPLOAD_WAIT_SECONDS = 20;
   private static final String[] PALETTES = {"linen", "sage", "stone", "ocean", "plum", "contrast"};
   private static final String[] MODES = {"light", "dark", "auto"};
@@ -421,7 +422,8 @@ final class LocalApi {
   }
 
   private LocalHttp.Response addCalendar(Map<String, Object> fields) throws ApiException {
-    String name = Fields.text(fields, "name", 1, 80);
+    String name = Fields.text(fields, "name", 1, MAX_CALENDAR_NAME);
+    if (name.length() > MAX_CALENDAR_NAME) throw ApiException.badRequest("name must be 1 to " + MAX_CALENDAR_NAME + " characters, counting an emoji as two");
     String color = Fields.color(fields, "color");
     Object url = fields.get("url");
     if (!(url instanceof String) || !CalendarFeed.valid((String) url)) {

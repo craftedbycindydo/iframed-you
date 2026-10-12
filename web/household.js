@@ -81,18 +81,19 @@
 
   let managing = false, editingPerson = null, editingChore = null, personColor = model.colors[0][0], renderedDate = '';
   const choreDays = new Set(), dayButtons = [], rowButtons = new Map();
-  const confirmations = new Set();
+  const confirmations = new Map();
 
   function confirmTap(button, label, action) {
     button.textContent = label;
     button.onclick = () => {
       if (!confirmations.has(button)) {
-        confirmations.add(button);
         button.textContent = 'Tap again to confirm';
-        setTimeout(() => { confirmations.delete(button); button.textContent = label; }, 6000);
+        confirmations.set(button, setTimeout(() => { confirmations.delete(button); button.textContent = label; }, 6000));
         return;
       }
+      clearTimeout(confirmations.get(button));
       confirmations.delete(button);
+      button.textContent = label;
       action();
     };
   }
@@ -388,7 +389,7 @@
 
   const syncPairing = () => updatePairing(parse(call('pairingStatus'), {}).pairing);
   function tickPairing() {
-    const seconds = Math.ceil((pairingExpires - Date.now()) / 1000);
+    const seconds = Math.ceil((pairingExpires - performance.now()) / 1000);
     if (seconds <= 0) { syncPairing(); return; }
     pairingCountdown.textContent = 'Time left ' + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
   }
@@ -441,7 +442,7 @@
       pairingLeave = setTimeout(() => { if (ending === pairingEnding && !overlay.hidden) pairingClose.onclick(); }, 6000);
     }
     if (active) {
-      pairingExpires = Date.now() + (Number.isFinite(state.remaining) && state.remaining >= 0 ? state.remaining : 120000);
+      pairingExpires = performance.now() + (Number.isFinite(state.remaining) && state.remaining >= 0 ? state.remaining : 120000);
       pairingTimer = setInterval(tickPairing, 500);
       pairingCountdown.textContent = '';
       tickPairing();
@@ -534,7 +535,7 @@
 
   window.SkylitHousehold = {receive, snapshot: () => state, mutate, connected};
   window.SkylitShopping = {mount: mountShopping};
-  window.SkylitPairing = {update: updatePairing, isOpen: () => !overlay.hidden, refresh: renderPhone, health: () => { const status = parse(call('pairingStatus'), {}); return {connected, count: Array.isArray(status.devices) ? status.devices.length : 0, advertised: status.advertised === true}; }};
+  window.SkylitPairing = {update: updatePairing, isOpen: () => !overlay.hidden, refresh: () => { $('phone-note').textContent = ''; renderPhone(); }, health: () => { const status = parse(call('pairingStatus'), {}); return {connected, count: Array.isArray(status.devices) ? status.devices.length : 0, advertised: status.advertised === true}; }};
   window.SkylitRemote = {apply: applyRemote};
 
   window.addEventListener('skylit-settings', () => { report(false); if (today() !== renderedDate) renderToday(); });

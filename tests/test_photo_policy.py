@@ -30,13 +30,21 @@ public class PhotoPolicyTest {
     yes(!PhotoPolicy.limits(91,30)&&!PhotoPolicy.limits(30,500));
     yes(PhotoPolicy.imageSize(320,240)&&!PhotoPolicy.imageSize(1,1));
     yes(PhotoPolicy.sampleSize(8000,6000)>=4);
-    long now=400L*86400000L;
+    long now=1791741600000L;
     yes(PhotoPolicy.retain(now-30L*86400000L,now,30));
     yes(!PhotoPolicy.retain(now-31L*86400000L,now,30));
     yes(!PhotoPolicy.retain(now+2L*86400000L,now,30));
     yes(PhotoPolicy.retain(now-200L*86400000L,now,0));
     yes(!PhotoPolicy.retain(0,now,0)&&!PhotoPolicy.retain(now+2L*86400000L,now,0));
     yes(!PhotoPolicy.retain(now-8L*86400000L,now,7));
+    long kept=now-86400000L;
+    for(long unset:new long[]{0L,5000L,1672531200000L}){
+      yes(!PhotoPolicy.clockSet(unset));
+      yes(PhotoPolicy.retain(kept,unset,30)&&PhotoPolicy.retain(kept,unset,7)&&PhotoPolicy.retain(kept,unset,0));
+      yes(PhotoPolicy.retain(kept-400L*86400000L,unset,30));
+      yes(!PhotoPolicy.retain(0,unset,30));
+    }
+    yes(PhotoPolicy.clockSet(now)&&PhotoPolicy.clockSet(1767225600000L)&&!PhotoPolicy.clockSet(1767225599999L));
     yes(PhotoPolicy.syncDue(0,now));
     yes(!PhotoPolicy.syncDue(now-3600000L,now));
     yes(PhotoPolicy.syncDue(now-86400000L,now));

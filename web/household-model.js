@@ -10,7 +10,8 @@
 
   const trimmed = value => typeof value === 'string' ? value.trim() : '';
   const count = text => Array.from(text).length;
-  const validText = value => { const size = count(trimmed(value)); return size >= 1 && size <= limits.text; };
+  const visible = /[^\s\p{Cf}\p{Zs}\uFE00-\uFE0F\u{E0100}-\u{E01EF}\u034F\u115F\u1160\u3164\uFFA0\u2800]/u;
+  const validText = value => { const text = trimmed(value), size = count(text); return size >= 1 && size <= limits.text && visible.test(text); };
   const validColor = value => typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value);
   const validId = value => typeof value === 'string' && value.length > 0 && value.length <= limits.id;
   const validQty = value => Number.isInteger(value) && value >= 1 && value <= limits.qty;

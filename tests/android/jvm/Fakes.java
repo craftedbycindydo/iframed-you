@@ -43,13 +43,19 @@ final class Fakes {
 
   static final class Clock implements FrameTime.Clock {
     volatile long now;
+    volatile long jumped;
+    final FrameTime.Uptime steady = new FrameTime.Uptime() {
+      @Override public long millis() {
+        return now;
+      }
+    };
 
     Clock(long now) {
       this.now = now;
     }
 
     @Override public long now() {
-      return now;
+      return now + jumped;
     }
   }
 

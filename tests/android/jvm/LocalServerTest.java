@@ -418,7 +418,7 @@ public final class LocalServerTest {
     Fakes.Clock clock = new Fakes.Clock(1791676800000L);
     Fakes.Storage storage = new Fakes.Storage();
     Fakes.PhotoShelf shelf = new Fakes.PhotoShelf();
-    ICloudSync icloud = new ICloudSync(storage, clock, Fakes.sampleAlbum(), shelf.library, Fakes.inline(), events.album);
+    ICloudSync icloud = new ICloudSync(storage, clock, clock.steady, Fakes.sampleAlbum(), shelf.library, Fakes.inline(), events.album);
     api = new LocalApi(storage, clock, new Fakes.Uptime(), new Fakes.CalendarShelf(), shelf, icloud, events);
     LocalServer server = new LocalServer(api);
     InetAddress loopback = InetAddress.getLoopbackAddress();

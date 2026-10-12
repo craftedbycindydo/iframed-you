@@ -15,6 +15,7 @@ final class FrameTime {
     long millis();
   }
 
+  static final long DRIFT = 60000L;
   private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
 
   private FrameTime() {}
@@ -24,6 +25,10 @@ final class FrameTime {
     format.setTimeZone(zone);
     format.setLenient(false);
     return format;
+  }
+
+  static long anchored(long shown, long actual) {
+    return Math.abs(shown - actual) > DRIFT ? actual : shown;
   }
 
   static String iso(long millis) {

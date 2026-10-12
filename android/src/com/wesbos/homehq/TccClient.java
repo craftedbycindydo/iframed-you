@@ -114,6 +114,11 @@ final class TccClient {
       return status == null || status < 0 || status >= HOLDS.length ? null : HOLDS[status];
     }
 
+    boolean following() {
+      Integer status = cooling() ? statusCool : statusHeat;
+      return status == null || status == 0;
+    }
+
     String holdUntil() {
       return "temporary".equals(hold()) ? nextPeriod() : null;
     }
@@ -147,7 +152,7 @@ final class TccClient {
       if (permanent) {
         change.put("StatusHeat", 2);
         change.put("StatusCool", 2);
-      } else if (Integer.valueOf(0).equals(statusHeat) && Integer.valueOf(0).equals(statusCool)) {
+      } else if (following()) {
         Integer period = heat ? heatNextPeriod : coolNextPeriod;
         change.put("StatusHeat", 1);
         change.put("StatusCool", 1);
@@ -190,6 +195,7 @@ final class TccClient {
   private final Transport transport;
   private final KeyValue storage;
   private final FrameTime.Clock clock;
+  private final FrameTime.Uptime uptime;
   private final Map<String, String> cookies = new LinkedHashMap<>();
   private String username;
   private String password;
@@ -198,11 +204,13 @@ final class TccClient {
   private long counter;
   private int failures;
   private long lockedUntil;
+  private long lockedUp;
 
-  TccClient(Transport transport, KeyValue storage, FrameTime.Clock clock) {
+  TccClient(Transport transport, KeyValue storage, FrameTime.Clock clock, FrameTime.Uptime uptime) {
     this.transport = transport;
     this.storage = storage;
     this.clock = clock;
+    this.uptime = uptime;
     counter = clock.now();
     try {
       Map<String, Object> saved = Json.map(Json.parse(storage.get(GUARD)));
@@ -233,7 +241,17 @@ final class TccClient {
   }
 
   synchronized long lockedUntil() {
-    return lockedUntil > clock.now() ? lockedUntil : 0;
+    long left = locked();
+    return left > 0 ? clock.now() + left : 0;
+  }
+
+  private long locked() {
+    long now = clock.now();
+    if (lockedUp == 0) return lockedUntil - now > LONGEST_LOCK_MILLIS ? 0 : Math.max(0, lockedUntil - now);
+    long left = Math.max(0, lockedUp - uptime.millis());
+    long until = left > 0 ? FrameTime.anchored(lockedUntil, now + left) : 0;
+    if (until != lockedUntil) save(until);
+    return left;
   }
 
   synchronized Kept keep() {
@@ -404,9 +422,11 @@ final class TccClient {
   private void login(boolean automatic) throws Problem {
     if (!hasCredentials()) throw new Problem("signed_out");
     long now = clock.now();
-    if (lockedUntil > now) throw new Problem("locked", lockedUntil);
-    if (automatic && lastLogin != 0 && now - lastLogin < RELOGIN_MILLIS) throw new Problem("session_expired", lastLogin + RELOGIN_MILLIS);
-    lastLogin = now;
+    long up = uptime.millis();
+    long left = locked();
+    if (left > 0) throw new Problem("locked", now + left);
+    if (automatic && lastLogin != 0 && up - lastLogin < RELOGIN_MILLIS) throw new Problem("session_expired", now + lastLogin + RELOGIN_MILLIS - up);
+    lastLogin = up;
     cookies.clear();
     try {
       String form = "timeOffset=" + (-TimeZone.getDefault().getOffset(now) / 60000) + "&UserName=" + encode(username) + "&Password=" + encode(password)
@@ -437,14 +457,18 @@ final class TccClient {
 
   private void fail(int floor) {
     int next = Math.max(failures + 1, floor);
-    long lock = next < MAX_LOGIN_FAILURES ? 0 : clock.now() + Math.min(LONGEST_LOCK_MILLIS, LOCK_MILLIS << Math.min(next - MAX_LOGIN_FAILURES, 10));
-    guard(next, lock);
+    guard(next, next < MAX_LOGIN_FAILURES ? 0 : Math.min(LONGEST_LOCK_MILLIS, LOCK_MILLIS << Math.min(next - MAX_LOGIN_FAILURES, 10)));
   }
 
-  private void guard(int count, long until) {
+  private void guard(int count, long lock) {
     failures = count;
+    lockedUp = lock > 0 ? uptime.millis() + lock : 0;
+    save(lock > 0 ? clock.now() + lock : 0);
+  }
+
+  private void save(long until) {
     lockedUntil = until;
-    storage.put(GUARD, Json.write(Json.object("failures", count, "lockedUntil", until)));
+    storage.put(GUARD, Json.write(Json.object("failures", failures, "lockedUntil", until)));
   }
 
   private Reply follow(String method, String path, String contentType, String body) throws Problem {

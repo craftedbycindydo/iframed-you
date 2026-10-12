@@ -53,7 +53,7 @@ public final class ICloudTest {
     album = new Fakes.Album();
     for (int i = 1; i <= 4; i++) album.add(guid(i), day(i), image(i), 342, 2048);
     album.addVideo(guid(90), day(20));
-    sync = new ICloudSync(storage, clock, album, photos.library, Fakes.inline(), events.album);
+    sync = new ICloudSync(storage, clock, clock.steady, album, photos.library, Fakes.inline(), events.album);
   }
 
   static void rejectedLink(Object link, String reason) {
@@ -415,7 +415,7 @@ public final class ICloudTest {
     sync.request(true);
     same(4L, ((Number) status().get("count")).longValue(), "a larger limit fills up again");
 
-    ICloudSync reopened = new ICloudSync(storage, clock, album, photos.library, Fakes.inline(), events.album);
+    ICloudSync reopened = new ICloudSync(storage, clock, clock.steady, album, photos.library, Fakes.inline(), events.album);
     same(Json.write(status()), Json.write(reopened.status()), "status survives a restart");
     check(reopened.due(), "a sync is due at start");
     int before = album.downloads;
@@ -514,14 +514,14 @@ public final class ICloudTest {
     same(1, photos.list().size(), "disconnect removes only album pictures");
     check(!storage.values.get("icloud").contains(TOKEN), "disconnect forgets the link");
     check(!sync.request(true) && !sync.due(), "no sync after disconnect");
-    check(new ICloudSync(storage, clock, album, photos.library, Fakes.inline(), events.album).status() == null, "disconnect survives a restart");
+    check(new ICloudSync(storage, clock, clock.steady, album, photos.library, Fakes.inline(), events.album).status() == null, "disconnect survives a restart");
 
     fresh();
     sync.connect(LINK);
     Fakes.Album other = new Fakes.Album();
     other.name = "Holiday";
     other.add(guid(41), day(11), image(41), 2048);
-    ICloudSync switching = new ICloudSync(storage, clock, other, photos.library, Fakes.inline(), events.album);
+    ICloudSync switching = new ICloudSync(storage, clock, clock.steady, other, photos.library, Fakes.inline(), events.album);
     switching.connect("https://www.icloud.com/sharedalbum/#B0Anotheralbum1");
     same("{\"name\":\"Holiday\",\"count\":1,\"lastSync\":\"2026-10-11T00:00:00Z\",\"syncing\":false,\"error\":null}", Json.write(switching.status()), "a different link replaces the album and its pictures");
     int again = other.posts.size();
@@ -544,7 +544,7 @@ public final class ICloudTest {
       }
     };
     watched.add(guid(1), day(1), image(1), 2048);
-    reentrant[0] = new ICloudSync(storage, clock, watched, photos.library, new ICloudSync.Runner() {
+    reentrant[0] = new ICloudSync(storage, clock, clock.steady, watched, photos.library, new ICloudSync.Runner() {
       @Override public void start(Runnable work) {
         queued.add(work);
       }
@@ -568,7 +568,7 @@ public final class ICloudTest {
     };
     interrupted.add(guid(1), day(1), image(1), 2048);
     interrupted.add(guid(2), day(2), image(2), 2048);
-    leaving[0] = new ICloudSync(storage, clock, interrupted, photos.library, Fakes.inline(), events.album);
+    leaving[0] = new ICloudSync(storage, clock, clock.steady, interrupted, photos.library, Fakes.inline(), events.album);
     leaving[0].connect(LINK);
     same(0, photos.list().size(), "disconnecting during a sync leaves no album pictures behind");
     same(null, leaving[0].status(), "and stays disconnected");
@@ -736,7 +736,7 @@ public final class ICloudTest {
         }
       };
       fragile.add(guid(1), day(1), image(1), 2048);
-      ICloudSync survivor = new ICloudSync(storage, clock, fragile, photos.library, Fakes.inline(), events.album);
+      ICloudSync survivor = new ICloudSync(storage, clock, clock.steady, fragile, photos.library, Fakes.inline(), events.album);
       survivor.connect(LINK);
       failing[0] = true;
       survivor.request(true);
@@ -760,7 +760,7 @@ public final class ICloudTest {
       }
     };
     counted.add(guid(1), day(1), image(1), 2048);
-    busy[0] = new ICloudSync(storage, clock, counted, photos.library, new ICloudSync.Runner() {
+    busy[0] = new ICloudSync(storage, clock, clock.steady, counted, photos.library, new ICloudSync.Runner() {
       @Override public void start(Runnable work) {
         queued.add(work);
       }
@@ -776,6 +776,46 @@ public final class ICloudTest {
     same(2, queued.size(), "a request after it finished queues the next sync");
   }
 
+  static void jumps() throws Exception {
+    fresh();
+    sync.connect(LINK);
+    int posts = album.posts.size();
+    clock.jumped = 3L * 365 * 86400000L;
+    check(!sync.due(), "a clock set forward does not bring the next sync early");
+    sync.request(false);
+    same(posts, album.posts.size(), "nothing is fetched because of the jump");
+    clock.jumped = -3L * 365 * 86400000L;
+    clock.now += ICloudSync.INTERVAL - 1;
+    check(!sync.due(), "a clock set back still waits the usual interval");
+    clock.now += 1;
+    check(sync.due(), "and does not stop the next sync");
+    sync.request(false);
+    same(posts + 1, album.posts.size(), "which runs once");
+    clock.jumped = 0;
+  }
+
+  static void damaged() throws Exception {
+    for (String saved : new String[] {"{broken", "[]", "{\"token\":7}", "{\"token\":\"no\"}", "\"" + TOKEN + "\""}) {
+      fresh();
+      storage.values.put("icloud", saved);
+      sync = new ICloudSync(storage, clock, clock.steady, album, photos.library, Fakes.inline(), events.album);
+      same(null, status(), "unreadable album state is no album " + saved);
+      check(!sync.request(true) && !sync.due(), "and nothing is fetched for it " + saved);
+      sync.connect(LINK);
+      same(4, Json.map(status()).get("count"), "and the album can be connected again " + saved);
+    }
+    for (String saved : new String[] {"{\"token\":\"" + TOKEN + "\"}", "{\"token\":\"" + TOKEN + "\",\"host\":5,\"name\":null,\"error\":[],\"lastSync\":\"soon\",\"failures\":\"x\",\"known\":[],\"rejected\":{}}",
+        "{\"token\":\"" + TOKEN + "\",\"known\":{\"a\":1},\"rejected\":[2]}"}) {
+      fresh();
+      storage.values.put("icloud", saved);
+      sync = new ICloudSync(storage, clock, clock.steady, album, photos.library, Fakes.inline(), events.album);
+      same("{\"name\":\"\",\"count\":0,\"lastSync\":null,\"syncing\":false,\"error\":null}", Json.write(status()), "a saved link with damaged details stays connected " + saved);
+      check(sync.due(), "and is synced again " + saved);
+      sync.request(false);
+      same("{\"name\":\"Family\",\"count\":4,\"lastSync\":\"2026-10-11T00:00:00Z\",\"syncing\":false,\"error\":null}", Json.write(status()), "back to a full album " + saved);
+    }
+  }
+
   public static void main(String[] args) throws Exception {
     java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
     links();
@@ -783,6 +823,8 @@ public final class ICloudTest {
     listing();
     planning();
     syncing();
+    jumps();
+    damaged();
     endpoints();
     robustness();
     System.out.println("ICloud: " + checks + " checks passed");
