@@ -109,6 +109,14 @@ public final class ThermostatBridgeTest {
     bridge.publish();
     same(before, pushed.size(), "an unchanged snapshot is not pushed again");
 
+    bridge.signIn(TccTest.USER, "mistyped");
+    drain();
+    Map<String, Object> mistyped = shown();
+    same("bad_credentials", Json.map(mistyped.get("signIn")).get("code"), "a wrong password typed over a working account is refused");
+    check(Boolean.TRUE.equals(mistyped.get("configured")) && "ok".equals(mistyped.get("status")) && TccTest.USER.equals(mistyped.get("account")), "but the working account stays signed in");
+    check(vault.saved != null && TccTest.PASS.equals(vault.saved[1]), "with its credential still saved");
+    same(2, Json.list(mistyped.get("thermostats")).size(), "and its thermostats still listed");
+
     Map<String, Object> stepped = parsed(bridge.step("t1", 5));
     same(true, stepped.get("ok"), "a step is accepted");
     same(71.0, stepped.get("setpoint"), "and moves one degree whatever the delta");

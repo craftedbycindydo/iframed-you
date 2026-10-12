@@ -56,7 +56,7 @@ test('validation mirrors the contract limits',()=>{
  good({op:'person.add',name:'A',color:'#123abc'});good({op:'person.add',name:'n'.repeat(80),color:'#123ABC'});
  for(const op of [{op:'person.add',name:'   ',color:'#123abc'},{op:'person.add',name:'n'.repeat(81),color:'#123abc'},{op:'person.add',name:'A',color:'blue'},{op:'person.add',name:'A'},{op:'person.update',id:'nope',name:'A'},{op:'person.update',id:'p1',color:'#12'},{op:'person.remove',id:'nope'}])bad(op);
  good({op:'chore.add',title:'Sweep'});good({op:'chore.add',title:'Sweep',emoji:'👨‍👩‍👧‍👦',personId:null,days:[0,6]});good({op:'chore.update',id:'c1',days:[]});
- for(const op of [{op:'chore.add',title:''},{op:'chore.add',title:'x',personId:'nope'},{op:'chore.add',title:'x',days:[7]},{op:'chore.add',title:'x',days:[1,1]},{op:'chore.add',title:'x',days:'mon'},{op:'chore.add',title:'x',emoji:'😀'.repeat(9)},{op:'chore.update',id:'zz',title:'x'},{op:'chore.remove',id:'zz'}])bad(op);
+ for(const op of [{op:'chore.add',title:''},{op:'chore.add',title:'x',personId:'nope'},{op:'chore.add',title:'x',days:[7]},{op:'chore.add',title:'x',days:[1,1]},{op:'chore.add',title:'x',days:'mon'},{op:'chore.add',title:'x',emoji:'😀'.repeat(17)},{op:'chore.update',id:'zz',title:'x'},{op:'chore.remove',id:'zz'}])bad(op);
  good({op:'item.add',name:'Eggs'});good({op:'item.add',name:'Eggs',qty:99,note:''});good({op:'item.update',id:'s1',done:true});good({op:'items.clearDone'});
  for(const op of [{op:'item.add',name:''},{op:'item.add',name:'x',qty:0},{op:'item.add',name:'x',qty:100},{op:'item.add',name:'x',qty:1.5},{op:'item.update',id:'s1',done:'yes'},{op:'item.update',id:'zz',done:true},{op:'item.remove',id:'zz'},{op:'unknown'},null])bad(op);
  const full=model.normalize({people:Array.from({length:12},(_,i)=>({id:'p'+i,name:'P',color:'#000000'})),chores:Array.from({length:100},(_,i)=>({id:'c'+i,title:'t'})),shopping:Array.from({length:200},(_,i)=>({id:'s'+i,name:'n'}))});
@@ -81,4 +81,14 @@ test('day summaries and avatar ink are readable',()=>{
  assert.equal(model.describeDays([]),'Every day');assert.equal(model.describeDays([1,2,3,4,5]),'Weekdays');assert.equal(model.describeDays([0,6]),'Weekends');assert.equal(model.describeDays([1,3]),'Mon, Wed');
  assert.equal(model.ink('#000000'),'#ffffff');assert.equal(model.ink('#FFFFFF'),'#1c1814');assert.equal(model.ink('bad'),'#ffffff');
  for(const [value] of model.colors)assert.match(value,/^#[0-9A-F]{6}$/);
+});
+test('long emoji names, notes and emoji from the phone are kept whole, matching the frame API limits',()=>{
+ const faces='😀'.repeat(80),mixed='a'+'😀'.repeat(79),family='👨‍👩‍👧‍👦👨‍👩‍👧‍👦',note='🧀'.repeat(200);
+ const s=model.normalize({rev:1,people:[{id:'p1',name:faces,color:'#00A36C'},{id:'p2',name:mixed+'😀😀',color:'#00A36C'}],chores:[{id:'c1',title:mixed,emoji:family,personId:'p1',days:[],done:[]}],shopping:[{id:'s1',name:faces,qty:1,note:note+'🧀',done:false}]});
+ assert.equal(s.people[0].name,faces);assert.equal(s.people[1].name,mixed);assert.equal(s.chores[0].title,mixed);assert.equal(s.chores[0].emoji,family);assert.equal(s.shopping[0].name,faces);assert.equal(s.shopping[0].note,note);
+ for(const text of [s.people[1].name,s.chores[0].title,s.shopping[0].note])assert.equal(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(text),false);
+ assert.equal(model.check(s,{op:'person.update',id:'p1',name:faces,color:'#2D5BFF'}),'');assert.equal(model.check(s,{op:'chore.update',id:'c1',title:mixed,emoji:family,personId:'p1',days:[]}),'');
+ assert.equal(model.check(s,{op:'item.update',id:'s1',note}),'');assert.notEqual(model.check(s,{op:'item.update',id:'s1',note:note+'🧀'}),'');
+ assert.notEqual(model.check(s,{op:'person.add',name:faces+'😀',color:'#2D5BFF'}),'');assert.notEqual(model.check(s,{op:'chore.add',title:'T',emoji:'😀'.repeat(17)}),'');
+ assert.equal(model.limits.emoji,16);
 });

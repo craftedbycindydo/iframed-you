@@ -8,7 +8,7 @@ final class Fields {
   static String text(Map<String, Object> fields, String key, int minimum, int maximum) throws ApiException {
     Object value = fields.get(key);
     if (!(value instanceof String)) throw ApiException.badRequest(key + " must be text");
-    String trimmed = ((String) value).trim();
+    String trimmed = trim((String) value);
     int length = trimmed.codePointCount(0, trimmed.length());
     if (length < minimum || length > maximum) {
       throw ApiException.badRequest(key + " must be " + minimum + " to " + maximum + " characters");
@@ -17,6 +17,18 @@ final class Fields {
       if (forbidden(trimmed, i)) throw ApiException.badRequest(key + " has characters that cannot be shown");
     }
     return trimmed;
+  }
+
+  private static boolean blank(char c) {
+    return Character.isWhitespace(c) || Character.isSpaceChar(c) || c == 0xFEFF;
+  }
+
+  static String trim(String text) {
+    int start = 0;
+    int end = text.length();
+    while (start < end && blank(text.charAt(start))) start++;
+    while (end > start && blank(text.charAt(end - 1))) end--;
+    return text.substring(start, end);
   }
 
   static boolean forbidden(String text, int index) {

@@ -106,8 +106,8 @@ final class Pairing {
     String offeredHash = Digests.hex(hex(fields, "tokenHash", 32));
     String offeredName = Fields.text(fields, "deviceName", 1, 40);
     expireIfDue();
+    if (active() && session != null) throw ApiException.pairingBusy("Another phone is already using this pairing window. Tap Pair a phone on the frame again.");
     if (!phase.equals("waiting")) throw ApiException.conflict("No pairing window is open. Tap Pair a phone on the frame.");
-    if (session != null) throw ApiException.pairingBusy("This pairing window was already used. Tap Pair a phone on the frame again.");
     commit = offeredCommit;
     tokenHash = offeredHash;
     name = offeredName;
@@ -166,6 +166,9 @@ final class Pairing {
     }
     String now = FrameTime.iso(clock.now());
     deviceId = secret(8);
+    for (Iterator<Object> rows = devices.iterator(); rows.hasNext();) {
+      if (Digests.same((String) Json.map(rows.next()).get("hash"), tokenHash)) rows.remove();
+    }
     devices.add(Json.object("id", deviceId, "name", name, "pairedAt", now, "lastSeen", now, "hash", tokenHash));
     identity.save();
     outcome = APPROVED;

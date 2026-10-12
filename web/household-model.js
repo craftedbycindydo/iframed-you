@@ -4,17 +4,18 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.SkylitHouseholdModel = api;
 })(typeof window !== 'undefined' ? window : globalThis, function() {
-  const limits = {people: 12, chores: 100, shopping: 200, text: 80, qty: 99, note: 200, emoji: 8, id: 64, history: 14};
+  const limits = {people: 12, chores: 100, shopping: 200, text: 80, qty: 99, note: 200, emoji: 16, id: 64, history: 14};
   const colors = [['#9A513B', 'Terracotta'], ['#687354', 'Olive'], ['#547D91', 'Blue'], ['#916980', 'Plum'], ['#AD7937', 'Honey'], ['#3F7F7A', 'Teal'], ['#B5606E', 'Rose'], ['#5C6680', 'Slate']];
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   const trimmed = value => typeof value === 'string' ? value.trim() : '';
-  const validText = value => { const text = trimmed(value); return text.length >= 1 && text.length <= limits.text; };
+  const count = text => Array.from(text).length;
+  const validText = value => { const size = count(trimmed(value)); return size >= 1 && size <= limits.text; };
   const validColor = value => typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value);
   const validId = value => typeof value === 'string' && value.length > 0 && value.length <= limits.id;
   const validQty = value => Number.isInteger(value) && value >= 1 && value <= limits.qty;
   const validEmoji = value => typeof value === 'string' && Array.from(value.trim()).length <= limits.emoji;
-  const validNote = value => typeof value === 'string' && value.length <= limits.note;
+  const validNote = value => typeof value === 'string' && count(value) <= limits.note;
   const validDays = value => Array.isArray(value) && value.every(day => Number.isInteger(day) && day >= 0 && day <= 6) && new Set(value).size === value.length;
 
   function isDate(value) {
@@ -49,7 +50,7 @@
     }
     return result;
   }
-  const clip = value => trimmed(value).slice(0, limits.text);
+  const clip = value => Array.from(trimmed(value)).slice(0, limits.text).join('');
   const cleanDays = value => Array.isArray(value) ? [...new Set(value.filter(day => Number.isInteger(day) && day >= 0 && day <= 6))].sort() : [];
   const cleanEmoji = value => Array.from(trimmed(value)).slice(0, limits.emoji).join('');
 
@@ -69,7 +70,7 @@
       id: item.id,
       name: clip(item.name),
       qty: validQty(item.qty) ? item.qty : 1,
-      note: typeof item.note === 'string' ? item.note.slice(0, limits.note) : '',
+      note: typeof item.note === 'string' ? Array.from(item.note).slice(0, limits.note).join('') : '',
       done: item.done === true
     } : null);
     return {rev: Number.isInteger(raw.rev) && raw.rev >= 0 ? raw.rev : 0, people, chores, shopping};

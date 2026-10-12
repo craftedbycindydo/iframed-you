@@ -130,15 +130,12 @@ final class LocalApi {
   boolean reportSettings(String json) {
     try {
       Map<String, Object> reported = Json.map(Json.parse(json));
-      Map<String, Object> next;
-      synchronized (this) {
-        next = new LinkedHashMap<>(settings);
-      }
+      Map<String, Object> changed = new LinkedHashMap<>();
       if (reported.containsKey("location")) {
-        next.put("location", reported.get("location") == null ? null : location(Json.map(reported.get("location"))));
+        changed.put("location", reported.get("location") == null ? null : location(Json.map(reported.get("location"))));
       }
-      if (reported.containsKey("appearance")) next.put("appearance", appearance(Json.map(reported.get("appearance"))));
-      store(next);
+      if (reported.containsKey("appearance")) changed.put("appearance", appearance(Json.map(reported.get("appearance"))));
+      merge(changed);
       return true;
     } catch (Json.Malformed | ApiException | RuntimeException rejected) {
       return false;
@@ -240,7 +237,9 @@ final class LocalApi {
     return result;
   }
 
-  private synchronized long store(Map<String, Object> next) {
+  private synchronized long merge(Map<String, Object> changed) {
+    Map<String, Object> next = new LinkedHashMap<>(settings);
+    next.putAll(changed);
     if (Json.write(next).equals(Json.write(settings))) return household.rev();
     settings = next;
     storage.put("settings", Json.write(settings));
@@ -406,13 +405,8 @@ final class LocalApi {
   }
 
   private LocalHttp.Response setting(String key, Map<String, Object> value) {
-    Map<String, Object> next;
-    synchronized (this) {
-      next = new LinkedHashMap<>(settings);
-    }
-    next.put(key, value);
     observe();
-    long rev = store(next);
+    long rev = merge(Json.object(key, value));
     events.settingsRequested(Json.write(Json.object(key, value)));
     return LocalHttp.Response.json(200, Json.object("rev", rev));
   }

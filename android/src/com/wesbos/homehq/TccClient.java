@@ -61,6 +61,20 @@ final class TccClient {
     }
   }
 
+  static final class Kept {
+    private final String username;
+    private final String password;
+    private final Map<String, String> cookies;
+    private final long lastLogin;
+
+    private Kept(String username, String password, Map<String, String> cookies, long lastLogin) {
+      this.username = username;
+      this.password = password;
+      this.cookies = cookies;
+      this.lastLogin = lastLogin;
+    }
+  }
+
   static final class State {
     long id;
     String name;
@@ -101,8 +115,12 @@ final class TccClient {
     }
 
     String holdUntil() {
+      return "temporary".equals(hold()) ? nextPeriod() : null;
+    }
+
+    String nextPeriod() {
       Integer period = cooling() ? coolNextPeriod : heatNextPeriod;
-      if (!"temporary".equals(hold()) || period == null || period < 0 || period > 95) return null;
+      if (period == null || period < 0 || period > 95) return null;
       return String.format(Locale.ROOT, "%02d:%02d", period / 4, period % 4 * 15);
     }
 
@@ -216,6 +234,18 @@ final class TccClient {
 
   synchronized long lockedUntil() {
     return lockedUntil > clock.now() ? lockedUntil : 0;
+  }
+
+  synchronized Kept keep() {
+    return new Kept(username, password, new LinkedHashMap<>(cookies), lastLogin);
+  }
+
+  synchronized void restore(Kept kept) {
+    username = kept.username;
+    password = kept.password;
+    lastLogin = kept.lastLogin;
+    cookies.clear();
+    cookies.putAll(kept.cookies);
   }
 
   synchronized void signIn(String name, String secret) throws Problem {

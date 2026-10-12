@@ -319,6 +319,10 @@ public final class LocalApiTest {
     same(409, send("POST", "/v2/pair/reveal", null, "{\"session\":\"" + repeat("0", 32) + "\",\"nP\":\"" + Digests.hex(decoyed.nP) + "\"}").status, "reveal for another session");
     same(204, decoyed.reveal(wire, api.identity().fpRaw).status, "reveal");
     same("code", events.pairing.get("phase"), "the frame shows the code after reveal");
+    Fakes.Reply racing = new Fakes.Phone().start(wire, "Racing phone");
+    same(409, racing.status, "a second phone while the code is showing");
+    same("pairing_busy", racing.error(), "is told another phone holds the window");
+    same("code", events.pairing.get("phase"), "and does not disturb the first phone's code");
     same(decoyed.code, events.pairing.get("code"), "the frame and the phone compute the same code");
     check(decoyed.code.matches("[0-9]{6}") && decoyed.pick.matches("[0-9]{2}"), "six digits and two digits");
     List<Object> numbers = Json.list(events.pairing.get("numbers"));
@@ -337,6 +341,7 @@ public final class LocalApiTest {
     check(!api.pairingTap(decoyed.pick), "the right number no longer works after a decoy");
     same(401, send("GET", "/v1/state", decoyed.bearer(), null).status, "a refused phone holds no token");
     same(409, new Fakes.Phone().start(wire, "Phone").status, "the window stays closed after a decoy");
+    same("conflict", new Fakes.Phone().start(wire, "Phone").error(), "and is reported as no window, not as a busy one");
     same(1, call("GET", "/v1/devices", null).list().size(), "nothing was paired");
 
     Fakes.Phone liar = new Fakes.Phone();
@@ -389,6 +394,7 @@ public final class LocalApiTest {
     clock.now -= 365 * DAY;
     uptime.now += Pairing.WINDOW;
     same(409, new Fakes.Phone().start(wire, "Phone").status, "turning the wall clock back does not keep a window open");
+    same("conflict", new Fakes.Phone().start(wire, "Phone").error(), "a window that only timed out is not reported as busy");
     same("expired", events.pairing.get("reason"), "an unused window expires too");
     clock.now = START;
     Fakes.Phone unrevealed = new Fakes.Phone();
@@ -437,6 +443,20 @@ public final class LocalApiTest {
 
   static void tokens() throws Exception {
     fresh();
+    Fakes.Phone twice = new Fakes.Phone();
+    for (String name : new String[] {"First pairing", "Second pairing"}) {
+      open();
+      twice.start(wire, name);
+      twice.reveal(wire, api.identity().fpRaw);
+      check(api.pairingTap(twice.pick), name + " approved");
+      api.pairingCancel();
+    }
+    List<Object> listed = send("GET", "/v1/devices", twice.bearer(), null).list();
+    same(2, listed.size(), "pairing again with the same token replaces the earlier entry");
+    Map<String, Object> repaired = Json.map(listed.get(1));
+    check("Second pairing".equals(repaired.get("name")) && Boolean.TRUE.equals(repaired.get("self")), "and keeps the newer name");
+    same(204, send("DELETE", "/v1/devices/" + repaired.get("id"), twice.bearer(), null).status, "that phone removes itself");
+    same(401, send("GET", "/v1/state", twice.bearer(), null).status, "and its token stops working");
     same(401, send("GET", "/v1/state", null, null).status, "missing token");
     same("unauthorized", send("GET", "/v1/state", null, null).error(), "401 slug");
     same(401, send("GET", "/v1/state", repeat("0", 64), null).status, "unknown token");
@@ -641,6 +661,15 @@ public final class LocalApiTest {
     same(400, call("GET", "/v1/state?since=", null).status, "since must not be empty");
   }
 
+  static void blanks() throws Exception {
+    fresh();
+    for (String blank : new String[] {"\u00a0", "\u00a0 \u2003", "\u3000\u3000", "\ufeff", "\u2028"}) {
+      same(400, call("POST", "/v1/people", Json.write(Json.object("name", blank, "color", "#00A36C"))).status, "a name of only spaces is refused " + Json.write(blank));
+      same(400, call("POST", "/v1/shopping", Json.write(Json.object("name", blank))).status, "an item of only spaces is refused " + Json.write(blank));
+    }
+    same("Maya", row(call("POST", "/v1/people", Json.write(Json.object("name", "\u00a0Maya\u3000", "color", "#00A36C"))), "person").get("name"), "every kind of space is trimmed");
+  }
+
   static void limits() throws Exception {
     fresh();
     for (int i = 0; i < HouseholdStore.MAX_PEOPLE; i++) same(200, call("POST", "/v1/people", "{\"name\":\"P" + i + "\",\"color\":\"#112233\"}").status, "person " + i);
@@ -742,6 +771,44 @@ public final class LocalApiTest {
     String chore = (String) row(call("POST", "/v1/chores", "{\"title\":\"Tokyo chore\"}"), "chore").get("id");
     same(200, call("PUT", "/v1/chores/" + chore + "/done", "{\"date\":\"2026-10-13\",\"done\":true}").status, "dates follow the chosen city zone");
     same(400, call("PUT", "/v1/chores/" + chore + "/done", "{\"date\":\"2026-10-14\",\"done\":true}").status, "two days ahead in the city zone");
+  }
+
+  static void settingsTogether() throws Exception {
+    fresh();
+    int lost = 0;
+    for (int round = 0; round < 3000 && lost == 0; round++) {
+      final String city = "City " + round;
+      final String palette = round % 2 == 0 ? "ocean" : "stone";
+      final java.util.concurrent.CountDownLatch together = new java.util.concurrent.CountDownLatch(1);
+      Thread phone = new Thread(new Runnable() {
+        @Override public void run() {
+          try {
+            together.await();
+            call("PUT", "/v1/settings/location", "{\"name\":\"" + city + "\",\"latitude\":1,\"longitude\":1}");
+          } catch (Exception failed) {
+            throw new IllegalStateException(failed);
+          }
+        }
+      });
+      Thread frame = new Thread(new Runnable() {
+        @Override public void run() {
+          try {
+            together.await();
+            api.reportSettings("{\"appearance\":{\"palette\":\"" + palette + "\",\"mode\":\"dark\"}}");
+          } catch (InterruptedException failed) {
+            throw new IllegalStateException(failed);
+          }
+        }
+      });
+      phone.start();
+      frame.start();
+      together.countDown();
+      phone.join();
+      frame.join();
+      Map<String, Object> kept = Json.map(state().get("settings"));
+      if (!city.equals(Json.map(kept.get("location")).get("name")) || !palette.equals(Json.map(kept.get("appearance")).get("palette"))) lost++;
+    }
+    same(0, lost, "a city from a phone and a palette from the dashboard saved at the same moment are both kept");
   }
 
   static void calendarsOverHttp() throws Exception {
@@ -1132,8 +1199,10 @@ public final class LocalApiTest {
     tokens();
     household();
     limits();
+    blanks();
     bridge();
     settings();
+    settingsTogether();
     calendarsOverHttp();
     photosOverHttp();
     identity();

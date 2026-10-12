@@ -23,7 +23,7 @@ function setup({multiple=false,organizer='',savedView=null}={}){
  return {$,pending,complete,flush,network,listeners,storage,window,accepted,lists:()=>lists,native:{add:s=>sources.push(s),remove:id=>{sources=sources.filter(s=>s.id!==id)}}};
 }
 test('calendar ignores stale render results and overview stays on today while browsing other months',async()=>{
- const h=setup();h.complete(h.pending.shift());await h.flush();assert.match(h.$('overview-events').textContent,/Upcoming example/);
+ const h=setup();h.complete(h.pending.shift());await h.flush();assert.match(h.$('overview-events').textContent,/Upcoming example/);assert.equal(h.$('overview-plans').dataset.unset,'false');
  h.$('calendar-prev').onclick();const old=h.pending.shift();
  h.$('calendar-next').onclick();const latest=h.pending.shift();h.complete(latest);await h.flush();
  h.complete(old,true);await h.flush();assert.match(h.$('calendar-month-title').textContent,/October 2026/);assert.doesNotMatch(h.$('calendar-sources').textContent,/Could not read/);
@@ -35,7 +35,7 @@ test('calendar ignores stale render results and overview stays on today while br
 test('removing a calendar while parsing immediately clears overview and cannot resurrect events',async()=>{
  const h=setup();h.complete(h.pending.shift());await h.flush();h.$('calendar-next').onclick();const old=h.pending.shift();
  const remove=h.$('calendar-sources').children[0].children[1].children[1];remove.onclick();remove.onclick();await h.flush();
- assert.match(h.$('overview-events').textContent,/Add a calendar/);
+ assert.match(h.$('overview-events').textContent,/Add a calendar/);assert.equal(h.$('overview-plans').dataset.unset,'true');assert.match(h.$('overview-events').textContent,/^No calendar yet\.Add a calendar$/);
  h.complete(old);await h.flush();h.complete(h.pending.shift());await h.flush();
  assert.match(h.$('overview-events').textContent,/Add a calendar/);assert.equal(h.$('calendar-content').hidden,true);
 });

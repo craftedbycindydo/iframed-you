@@ -81,7 +81,8 @@ function paintOverview(){
   content.append(node('strong',e.title));if(sources.length>1)content.append(node('small',e.name));
   row.append(when,content);group.append(row);
  }
- if(!list.length)host.append(node('p',!sources.length?'Add a calendar to see upcoming events.':sources.some(s=>!s.fetchedAt)?'Waiting for the first calendar update.':'No upcoming events in the next two weeks.','subtle'));
+ $('overview-plans').dataset.unset=String(!sources.length);
+ if(!list.length)host.append(node('p',!sources.length?'No calendar yet.':sources.some(s=>!s.fetchedAt)?'Waiting for the first calendar update.':'No upcoming events in the next two weeks.','subtle'));
  if(!sources.length){const add=node('button','Add a calendar','secondary');add.onclick=()=>window.SkylitApp.openSettings?window.SkylitApp.openSettings('calendars','overview'):setup();host.append(add);}
 }
 async function render(){

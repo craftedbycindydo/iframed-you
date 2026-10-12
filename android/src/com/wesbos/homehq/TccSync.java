@@ -74,19 +74,26 @@ final class TccSync {
   void configure(String username, String password) throws TccClient.Problem {
     List<TccClient.Device> found;
     synchronized (remote) {
+      boolean working;
       synchronized (this) {
         generation++;
+        working = configured();
       }
+      TccClient.Kept kept = client.keep();
       try {
         client.signIn(username, password);
         found = client.devices();
       } catch (TccClient.Problem problem) {
-        client.signOut();
-        secrets.clear();
-        synchronized (this) {
-          devices = new ArrayList<>();
-          states = new ArrayList<>();
-          status = "unconfigured";
+        if (working) {
+          client.restore(kept);
+        } else {
+          client.signOut();
+          secrets.clear();
+          synchronized (this) {
+            devices = new ArrayList<>();
+            states = new ArrayList<>();
+            status = "unconfigured";
+          }
         }
         listener.changed();
         throw problem;
@@ -238,12 +245,13 @@ final class TccSync {
       Double high = "heat".equals(active) ? state.heatMax : "cool".equals(active) ? state.coolMax : null;
       String id = "t" + (i + 1);
       Double waiting = pending.get(id);
+      boolean starting = waiting != null && "schedule".equals(state.hold());
       thermostats.add(Json.object("id", id, "name", state.name, "online", state.online, "units", state.units, "indoor", state.indoor,
           "humidity", state.humidity, "mode", state.mode, "heatAllowed", state.modes.contains("heat"), "coolAllowed", state.modes.contains("cool"),
           "setpoint", waiting != null ? waiting : setpoint(state), "changing", waiting != null, "error", errors.get(id),
           "heatSetpoint", state.heatSetpoint, "coolSetpoint", state.coolSetpoint,
           "range", low == null || high == null ? null : Json.object("min", low, "max", high), "step", "C".equals(state.units) ? 0.5 : 1.0,
-          "hold", state.hold(), "holdUntil", state.holdUntil(), "running", state.running, "fan", state.fan, "fanRunning", state.fanRunning));
+          "hold", starting ? "temporary" : state.hold(), "holdUntil", starting ? state.nextPeriod() : state.holdUntil(), "running", state.running, "fan", state.fan, "fanRunning", state.fanRunning));
       if (units == null) units = state.units;
       if (outdoorTemperature == null) outdoorTemperature = state.outdoorTemperature;
       if (outdoorHumidity == null) outdoorHumidity = state.outdoorHumidity;
@@ -305,8 +313,10 @@ final class TccSync {
       failure = problem.code;
     }
     synchronized (this) {
-      if (taps.get(id) != null && taps.get(id) == tap) pending.remove(id);
-      if (failure != null) errors.put(id, failure);
+      if (taps.get(id) != null && taps.get(id) == tap) {
+        pending.remove(id);
+        if (failure != null) errors.put(id, failure);
+      }
     }
     listener.changed();
   }

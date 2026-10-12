@@ -16,6 +16,7 @@
     } catch (_) { return fallback; }
   };
   const today = () => model.dateKey(new Date(), app.calendarPreferences().timezone);
+  const draw = (node, name) => { node.dataset.icon = name; node.innerHTML = app.icon(name); };
 
   function createFake() {
     const key = 'skylit.household.preview';
@@ -96,7 +97,7 @@
     };
   }
   function avatar(person) {
-    const badge = element('span', 'chore-avatar', person ? Array.from(person.name)[0].toUpperCase() : '✦');
+    const badge = element('span', 'chore-avatar', person ? Array.from(person.name)[0].toUpperCase() : '');
     badge.setAttribute('aria-hidden', 'true');
     if (person) { badge.style.background = person.color; badge.style.color = model.ink(person.color); }
     return badge;
@@ -130,12 +131,14 @@
       host.append(empty);
     }
     for (const group of view.groups) {
-      const card = element('article', 'card chore-group'), head = element('div', 'chore-group-head'), names = element('div');
-      names.append(element('h2', '', group.person ? group.person.name : 'Anyone'), element('p', 'chore-count', group.done === group.total ? 'All done' : group.done + ' of ' + group.total + ' done'));
+      const card = element('article', 'card chore-group'), head = element('div', 'chore-group-head'), names = element('div'), heading = element('h2', '', group.person ? group.person.name : 'Anyone');
+      heading.title = heading.textContent;
+      names.append(heading, element('p', 'chore-count', group.done === group.total ? 'All done' : group.done + ' of ' + group.total + ' done'));
       head.append(avatar(group.person), names);
       card.append(head, meter(group.done, group.total));
       for (const row of group.rows) {
-        const button = element('button', 'chore-row'), emoji = element('span', 'chore-emoji', row.chore.emoji), mark = element('span', 'chore-mark', row.done ? '✓' : '');
+        const button = element('button', 'chore-row'), emoji = element('span', 'chore-emoji', row.chore.emoji), mark = element('span', 'chore-mark');
+        if (row.done) draw(mark, 'tick');
         button.type = 'button';
         button.setAttribute('aria-pressed', String(row.done));
         emoji.setAttribute('aria-hidden', 'true');
@@ -196,9 +199,10 @@
     choreDays.clear();
     paintManage();
   }
-  function editRow(parts, onEdit, onRemove) {
-    const row = element('div', 'chore-edit-row'), actions = element('div', 'chore-edit-actions'), edit = element('button', 'quiet', 'Edit'), remove = element('button', 'quiet');
+  function editRow(parts, editing, onEdit, onRemove) {
+    const row = element('div', 'chore-edit-row' + (editing ? ' is-editing' : '')), actions = element('div', 'chore-edit-actions'), edit = element('button', 'quiet', 'Edit'), remove = element('button', 'quiet');
     edit.type = remove.type = 'button';
+    if (editing) row.setAttribute('aria-current', 'true');
     edit.onclick = onEdit;
     confirmTap(remove, 'Remove', onRemove);
     actions.append(edit, remove);
@@ -210,7 +214,7 @@
     if (editingChore && !state.chores.some(chore => chore.id === editingChore)) editingChore = null;
     $('people-list').replaceChildren();
     for (const person of state.people) {
-      $('people-list').append(editRow([avatar(person), element('strong', 'chore-edit-name', person.name)], () => {
+      $('people-list').append(editRow([avatar(person), element('strong', 'chore-edit-name', person.name)], editingPerson === person.id, () => {
         editingPerson = person.id;
         $('person-name').value = person.name;
         personColor = person.color;
@@ -224,7 +228,7 @@
       const owner = state.people.find(person => person.id === chore.personId), copy = element('div', 'chore-edit-name'), emoji = element('span', 'chore-emoji', chore.emoji);
       emoji.setAttribute('aria-hidden', 'true');
       copy.append(element('strong', '', chore.title), element('span', 'small subtle', (owner ? owner.name : 'Anyone') + ' · ' + model.describeDays(chore.days)));
-      $('chore-list').append(editRow([emoji, copy], () => {
+      $('chore-list').append(editRow([emoji, copy], editingChore === chore.id, () => {
         editingChore = chore.id;
         $('chore-title').value = chore.title;
         $('chore-emoji').value = chore.emoji;
@@ -289,6 +293,7 @@
   };
 
   let shoppingMounted = false, undo = null;
+  const ticked = new Set();
   function setUndo(action) {
     undo = action;
     $('shopping-undo').hidden = !action;
@@ -303,23 +308,30 @@
   }
   function renderShopping() {
     if (!shoppingMounted) return;
+    const completed = state.shopping.filter(item => item.done);
     $('shopping-items').replaceChildren();
     $('shopping-completed').replaceChildren();
+    for (const id of [...ticked]) if (!completed.some(item => item.id === id)) ticked.delete(id);
     for (const item of state.shopping) {
-      const button = element('button', 'shopping-item'), mark = element('span', 'shopping-mark', item.done ? '✓' : '○'), copy = element('span', 'shopping-copy');
+      const button = element('button', 'shopping-item'), mark = element('span', 'shopping-mark'), copy = element('span', 'shopping-copy');
       button.type = 'button';
       button.setAttribute('aria-pressed', String(item.done));
       mark.setAttribute('aria-hidden', 'true');
+      if (item.done) draw(mark, 'tick');
       copy.append(element('span', '', item.qty > 1 ? item.name + ' × ' + item.qty : item.name));
       if (item.note) copy.append(element('span', 'small subtle', item.note));
       button.append(mark, copy);
       button.onclick = () => {
-        if (mutate({op: 'item.update', id: item.id, done: !item.done})) setUndo(() => mutate({op: 'item.update', id: item.id, done: item.done}));
+        if (!mutate({op: 'item.update', id: item.id, done: !item.done})) return;
+        if (item.done) ticked.delete(item.id); else ticked.add(item.id);
+        setUndo(() => { ticked.delete(item.id); mutate({op: 'item.update', id: item.id, done: item.done}); });
+        renderShopping();
       };
-      $(item.done ? 'shopping-completed' : 'shopping-items').append(button);
+      $(item.done && !ticked.has(item.id) ? 'shopping-completed' : 'shopping-items').append(button);
     }
-    if (!state.shopping.some(item => !item.done)) $('shopping-items').append(element('p', 'subtle small', 'Your list is clear.'));
-    $('shopping-completed-label').textContent = 'Completed · ' + state.shopping.filter(item => item.done).length;
+    if (!state.shopping.some(item => !item.done || ticked.has(item.id))) $('shopping-items').append(element('p', 'subtle small', 'Your list is clear.'));
+    $('shopping-completed-block').hidden = !completed.length;
+    $('shopping-completed-label').textContent = 'Completed · ' + completed.length;
   }
   function mountShopping() {
     shoppingMounted = true;
@@ -357,11 +369,11 @@
     try { localStorage.setItem('skylit.household', JSON.stringify({...legacy, shopping: []})); } catch (_) {}
   }
 
-  const overlay = element('div', 'pairing-overlay'), pairingCard = element('div', 'pairing-card'), pairingTitle = element('h2'), pairingCode = element('div', 'pairing-code'), pairingText = element('p', 'pairing-text'), pairingPicks = element('div', 'pairing-picks'), pairingCountdown = element('p', 'pairing-countdown'), pairingClose = element('button', 'secondary');
+  const overlay = element('div', 'pairing-overlay'), pairingCard = element('div', 'pairing-card'), pairingTitle = element('h2'), pairingCode = element('div', 'pairing-code'), pairingText = element('p', 'pairing-text'), pairingPicks = element('div', 'pairing-picks'), pairingCountdown = element('p', 'pairing-countdown'), pairingClose = element('button', 'secondary'), pairingHint = element('p', 'pairing-hint small subtle', 'No number on your phone? Tap Cancel.');
   const pairingTitles = {waiting: 'Waiting for your phone…', code: 'Pairing code', paired: 'Phone paired', cancelled: 'Pairing cancelled'};
-  const pairingInstruction = 'Type this code into your phone. Your phone will then show a number. Tap that number here. If your phone shows no number, tap Cancel.';
-  const pairingEndings = {decoy: 'That was not the number on the phone. Nothing was paired.', expired: 'The two minutes ran out. Nothing was paired.', phone: 'The phone stopped pairing. Nothing was paired.'};
-  let pairingTimer = null, pairingExpires = 0, pairingFocus = null;
+  const pairingInstruction = 'Enter this code on your phone, then tap the number your phone shows.';
+  const pairingEndings = {decoy: 'That was not the number on the phone. Nothing was paired.', expired: 'No phone was paired. Open Pair a phone to try again.', phone: 'The phone stopped pairing. Nothing was paired.', refused: 'The phone did not answer correctly. Nothing was paired. If this keeps happening, another device may be interfering.'};
+  let pairingTimer = null, pairingExpires = 0, pairingFocus = null, pairingLeave = 0, pairingEnding = 0;
   overlay.hidden = true;
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
@@ -369,7 +381,8 @@
   pairingTitle.id = 'pairing-title';
   pairingCountdown.setAttribute('role', 'timer');
   pairingClose.type = 'button';
-  pairingCard.append(element('p', 'eyebrow', 'PAIR A PHONE'), pairingTitle, pairingCode, pairingText, pairingPicks, pairingCountdown, pairingClose);
+  pairingHint.hidden = true;
+  pairingCard.append(pairingTitle, pairingCode, pairingText, pairingPicks, pairingCountdown, pairingClose, pairingHint);
   overlay.append(pairingCard);
   document.body.append(overlay);
 
@@ -386,7 +399,10 @@
     const numbers = Array.isArray(state.numbers) ? state.numbers.filter(number => typeof number === 'string' && /^\d\d$/.test(number)) : [];
     if (phase === 'code' && (!code || numbers.length !== 3)) return;
     clearInterval(pairingTimer);
+    clearTimeout(pairingLeave);
     pairingTimer = null;
+    pairingLeave = 0;
+    pairingEnding += 1;
     pairingCode.replaceChildren();
     pairingPicks.replaceChildren();
     if (phase === 'idle') {
@@ -398,12 +414,14 @@
       renderPhone();
       return;
     }
-    pairingTitle.textContent = pairingTitles[phase];
+    const who = typeof state.name === 'string' && state.name.trim() ? state.name.trim().slice(0, 40) : 'This phone', timedOut = phase === 'cancelled' && state.reason === 'expired';
+    pairingTitle.textContent = timedOut ? 'Pairing timed out' : pairingTitles[phase];
+    pairingHint.hidden = phase !== 'code';
     pairingCode.hidden = pairingPicks.hidden = phase !== 'code';
     pairingCountdown.hidden = !active;
     pairingClose.textContent = active ? 'Cancel' : phase === 'paired' ? 'Done' : 'Close';
     if (phase === 'waiting') pairingText.textContent = 'On the same Wi-Fi, open the Skylit app on your phone and choose this frame.';
-    if (phase === 'paired') pairingText.textContent = (typeof state.name === 'string' && state.name.trim() ? state.name.trim().slice(0, 40) : 'This phone') + ' can now use this frame.';
+    if (phase === 'paired') pairingText.textContent = who + ' can now use this frame.';
     if (phase === 'cancelled') pairingText.textContent = pairingEndings[state.reason] || 'Nothing was paired.';
     if (phase === 'code') {
       pairingText.textContent = pairingInstruction;
@@ -415,6 +433,12 @@
         pick.onclick = () => { call('pairingTap', number); syncPairing(); };
         pairingPicks.append(pick);
       }
+    }
+    if (active) $('phone-note').textContent = '';
+    else {
+      const ending = pairingEnding;
+      $('phone-note').textContent = phase === 'paired' ? who + ' paired just now.' : timedOut ? 'Pairing timed out. No phone was paired.' : 'Pairing cancelled. Nothing was paired.';
+      pairingLeave = setTimeout(() => { if (ending === pairingEnding && !overlay.hidden) pairingClose.onclick(); }, 6000);
     }
     if (active) {
       pairingExpires = Date.now() + (Number.isFinite(state.remaining) && state.remaining >= 0 ? state.remaining : 120000);
@@ -446,7 +470,8 @@
     const devices = (Array.isArray(status.devices) ? status.devices : []).filter(device => device && typeof device.id === 'string' && device.id);
     const reachable = typeof status.address === 'string' && /^\d{1,3}(\.\d{1,3}){3}$/.test(status.address) && Number.isInteger(status.port) && status.port > 0;
     $('phone-status').textContent = !connected ? 'Preview only · pairing works on the Android frame.' : status.advertised === true ? 'Ready to pair on your home network.' : 'Not visible on the network right now. Check Wi-Fi.';
-    $('phone-address').textContent = reachable ? 'Address for manual entry: ' + status.address + ':' + status.port : connected ? 'Address for manual entry: unavailable until the frame is on Wi-Fi.' : '';
+    $('phone-address').hidden = !reachable;
+    $('phone-address').textContent = reachable ? 'Address for manual entry: ' + status.address + ':' + status.port : '';
     host.replaceChildren();
     for (const device of devices) {
       const row = element('div', 'preference-row'), copy = element('span'), remove = element('button', 'quiet'), paired = Date.parse(device.pairedAt), seen = Date.parse(device.lastSeen);
@@ -504,15 +529,19 @@
     renderToday();
     paintManage();
     renderShopping();
+    window.dispatchEvent(new Event('skylit-household'));
   }
 
   window.SkylitHousehold = {receive, snapshot: () => state, mutate, connected};
   window.SkylitShopping = {mount: mountShopping};
-  window.SkylitPairing = {update: updatePairing, isOpen: () => !overlay.hidden, refresh: renderPhone};
+  window.SkylitPairing = {update: updatePairing, isOpen: () => !overlay.hidden, refresh: renderPhone, health: () => { const status = parse(call('pairingStatus'), {}); return {connected, count: Array.isArray(status.devices) ? status.devices.length : 0, advertised: status.advertised === true}; }};
   window.SkylitRemote = {apply: applyRemote};
 
   window.addEventListener('skylit-settings', () => { report(false); if (today() !== renderedDate) renderToday(); });
-  window.addEventListener('skylit-tab', event => { if (event.detail === 'chores' || event.detail === 'overview') renderToday(); });
+  window.addEventListener('skylit-tab', event => {
+    if (event.detail === 'chores' || event.detail === 'overview') renderToday();
+    if (event.detail === 'household') { ticked.clear(); renderShopping(); }
+  });
   setInterval(() => { if (today() !== renderedDate) renderToday(); }, 30000);
 
   migrateShopping();

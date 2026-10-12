@@ -886,6 +886,131 @@ public final class TccTest {
     same("ok", restored.status().get("status"), "restored");
   }
 
+  static Map<String, Object> shown(TccSync sync, int index) {
+    return Json.map(Json.list(sync.status().get("thermostats")).get(index));
+  }
+
+  static void keeping() throws Exception {
+    fresh();
+    final Vault vault = new Vault();
+    final List<Runnable> queue = new ArrayList<>();
+    final List<Runnable> timers = new ArrayList<>();
+    final TccSync[] made = new TccSync[1];
+    final boolean[] interrupt = {false};
+    TccClient.Transport wire = new TccClient.Transport() {
+      @Override public TccClient.Reply send(String method, String path, Map<String, String> headers, String body) throws IOException {
+        if (interrupt[0] && path.equals("/portal/Device/SubmitControlScreenChanges")) {
+          interrupt[0] = false;
+          try {
+            made[0].step("t1", 1, false);
+          } catch (TccClient.Problem impossible) {
+            throw new IOException(impossible);
+          }
+        }
+        return server.send(method, path, headers, body);
+      }
+    };
+    client = new TccClient(wire, storage, clock);
+    final TccSync sync = new TccSync(client, vault, clock, new TccSync.Runner() {
+      @Override public void start(Runnable work) {
+        queue.add(work);
+      }
+    }, new TccSync.Timer() {
+      @Override public void after(long millis, Runnable work) {
+        timers.add(work);
+      }
+    }, new TccSync.Listener() {
+      @Override public void changed() {}
+    });
+    made[0] = sync;
+    sync.configure(USER, PASS);
+    same("ok", sync.status().get("status"), "a working account");
+    int logins = server.logins();
+
+    fails("bad_credentials", new Action() {
+      @Override public void run() throws Exception {
+        sync.configure(USER, "typo");
+      }
+    }, "a wrong password typed later");
+    check(Arrays.equals(new String[] {USER, PASS}, vault.saved), "the working credential stays in the vault");
+    same("ok", sync.status().get("status"), "the working account stays signed in");
+    same(2, Json.list(sync.status().get("thermostats")).size(), "its thermostats stay listed");
+    check(client.hasCredentials() && client.hasSession(), "the client keeps its session");
+    same(logins + 1, server.logins(), "only the refused attempt reached the login page");
+    sync.poll();
+    same("ok", sync.status().get("status"), "polling carries on");
+    same(logins + 1, server.logins(), "without signing in again");
+    same(71.0, sync.step("t1", 1, false), "and the thermostat can still be changed");
+    timers.remove(0).run();
+    queue.remove(0).run();
+    same(71.0, shown(sync, 0).get("setpoint"), "through the kept session");
+
+    fails("bad_credentials", new Action() {
+      @Override public void run() throws Exception {
+        sync.configure("other@example.com", PASS);
+      }
+    }, "another account that is refused");
+    check(Arrays.equals(new String[] {USER, PASS}, vault.saved), "does not replace the working one");
+    server.unreachable = true;
+    fails("offline", new Action() {
+      @Override public void run() throws Exception {
+        sync.configure(USER, PASS);
+      }
+    }, "a sign-in while offline");
+    server.unreachable = false;
+    check(Arrays.equals(new String[] {USER, PASS}, vault.saved) && client.hasSession(), "keeps the working account too");
+    sync.poll();
+    same("ok", sync.status().get("status"), "which still polls afterwards");
+    same(2, Json.list(sync.status().get("thermostats")).size(), "with both thermostats");
+
+    sync.resume("t1");
+    same("schedule", shown(sync, 0).get("hold"), "following the schedule");
+    same(null, shown(sync, 0).get("holdUntil"), "with no hold end");
+    sync.step("t1", 1, false);
+    same("temporary", shown(sync, 0).get("hold"), "a step on the schedule shows as a temporary hold at once");
+    same("18:00", shown(sync, 0).get("holdUntil"), "until the next schedule period");
+    timers.remove(0).run();
+    queue.remove(0).run();
+    String sent = server.calls.get(server.calls.size() - 3).body;
+    check(sent.contains("\"StatusHeat\":1") && sent.contains("\"StatusCool\":1") && sent.contains("\"HeatNextPeriod\":72"), "and is sent as one");
+    same("temporary", shown(sync, 0).get("hold"), "the read after it agrees");
+    same("18:00", shown(sync, 0).get("holdUntil"), "with the same end");
+    server.ui(1001).put("HeatNextPeriod", 88L);
+    sync.poll();
+    sync.step("t1", 1, false);
+    same("22:00", shown(sync, 0).get("holdUntil"), "a step during a temporary hold keeps its end on the tile");
+    timers.remove(0).run();
+    queue.remove(0).run();
+    sent = server.calls.get(server.calls.size() - 3).body;
+    check(sent.contains("\"StatusHeat\":null") && sent.contains("\"StatusCool\":null") && sent.contains("\"HeatNextPeriod\":null"), "and leaves the hold as it is");
+    same(88L, server.ui(1001).get("HeatNextPeriod"), "so its end is unchanged");
+    server.ui(1001).put("StatusHeat", 2L);
+    server.ui(1001).put("StatusCool", 2L);
+    sync.poll();
+    sync.step("t1", -1, false);
+    same("permanent", shown(sync, 0).get("hold"), "a step during a permanent hold stays permanent on the tile");
+    timers.remove(0).run();
+    queue.remove(0).run();
+    sent = server.calls.get(server.calls.size() - 3).body;
+    check(sent.contains("\"StatusHeat\":null") && sent.contains("\"StatusCool\":null"), "and is sent without touching the hold");
+    same("permanent", shown(sync, 0).get("hold"), "permanent after the read");
+
+    double before = (Double) shown(sync, 0).get("setpoint");
+    sync.step("t1", 1, false);
+    timers.remove(0).run();
+    server.rejects = true;
+    interrupt[0] = true;
+    queue.remove(0).run();
+    server.rejects = false;
+    same(before + 2, shown(sync, 0).get("setpoint"), "a tap during a failing write is still pending");
+    same(true, shown(sync, 0).get("changing"), "and still changing");
+    timers.remove(0).run();
+    queue.remove(0).run();
+    same(before + 2, shown(sync, 0).get("setpoint"), "the later tap is written");
+    same(false, shown(sync, 0).get("changing"), "and settles");
+    same(null, shown(sync, 0).get("error"), "without the earlier write's error left on the tile");
+  }
+
   static byte[] drain(InputStream in) throws IOException {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     byte[] buffer = new byte[8192];
@@ -970,6 +1095,7 @@ public final class TccTest {
     writing();
     failures();
     syncing();
+    keeping();
     http();
     System.out.println("Tcc: " + checks + " checks passed");
   }

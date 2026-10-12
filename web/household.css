@@ -3,7 +3,7 @@
 .chore-group{padding:22px;min-width:0}
 .chore-group-head{display:flex;align-items:center;gap:14px}
 .chore-group-head>div{min-width:0}
-.chore-group-head h2{font-size:calc(28px * var(--ui-scale));overflow-wrap:anywhere}
+.chore-group-head h2{font-size:calc(28px * var(--ui-scale));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chore-count{margin:4px 0 0;color:var(--muted);font-size:calc(15px * var(--ui-scale))}
 .chore-avatar{flex:0 0 auto;width:48px;height:48px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--soft);color:var(--ink);font:600 20px/1 Georgia,serif}
 .chore-meter{display:block;height:8px;border-radius:8px;background:var(--line);overflow:hidden}
@@ -13,6 +13,7 @@
 .chore-row:last-child{border-bottom:0}
 .chore-mark{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:2px solid var(--accent);display:inline-flex;align-items:center;justify-content:center;color:var(--accent-ink);font-weight:700}
 .chore-row[aria-pressed=true] .chore-mark{background:var(--accent)}
+.chore-mark svg{width:20px;height:20px;stroke-width:3}
 .chore-row[aria-pressed=true] .chore-title{color:var(--muted);text-decoration:line-through}
 .chore-title{flex:1;min-width:0;overflow-wrap:anywhere}
 .chore-emoji{flex:0 0 auto;min-width:32px;font-size:26px;text-align:center}
@@ -21,13 +22,14 @@
 .chores-editor{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:var(--space);align-items:start}
 .chores-edit-card{padding:22px;min-width:0}
 .chores-edit-card h2{font-size:calc(28px * var(--ui-scale));margin-bottom:8px}
-.chores-edit-card form{margin-top:18px}
+.chores-edit-card form{margin:18px 0 22px;padding-bottom:22px;border-bottom:1px solid var(--line)}
 .chores-edit-card h3{margin:14px 0 0;font-size:calc(18px * var(--ui-scale))}
 .chores-edit-card label,.chores-edit-card legend{display:block;padding:0;margin:16px 0 8px;color:var(--muted);font-size:calc(14px * var(--ui-scale))}
 .chores-edit-card fieldset{border:0;padding:0;margin:0;min-width:0}
 .chores-edit-card fieldset p{margin:8px 0 0}
 .chore-edit-row{display:flex;align-items:center;gap:12px;min-height:56px;padding:6px 0;border-bottom:1px solid var(--line)}
 .chore-edit-row .chore-emoji:empty{visibility:hidden}
+.chore-edit-row.is-editing{margin:0 -8px;padding:6px 8px;border-radius:10px;background:var(--soft)}
 .chore-edit-row .chore-avatar{width:36px;height:36px;font-size:16px}
 .chore-edit-name{flex:1;min-width:0;display:flex;flex-direction:column;overflow-wrap:anywhere}
 .chore-edit-actions{display:flex;flex:0 0 auto}
@@ -41,6 +43,13 @@
 .chore-day[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
 .chores-form-actions{margin-top:18px}
 .shopping-copy{display:flex;flex-direction:column;min-width:0}
+.shopping-mark{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:28px;min-width:28px;height:28px;border:2px solid var(--accent);border-radius:50%;color:var(--accent-ink)}
+.shopping-item[aria-pressed=true] .shopping-mark{background:var(--accent)}
+.shopping-mark svg{width:16px;height:16px;stroke-width:3}
+#shopping-completed-block[hidden]{display:none}
+.household-note[hidden]{display:none}
+.household-timers .input-row{align-items:center}
+.household-timers .input-row label{flex:0 0 auto}
 #phone-devices .preference-row>span{display:flex;flex-direction:column}
 #phone-revoke-all{margin-top:12px}
 #phone-address{font-variant-numeric:lining-nums tabular-nums}
@@ -52,6 +61,10 @@
 #icloud-form .secondary{margin-top:12px}
 .icloud-block{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
 .icloud-block>p{max-width:760px}
+.icloud-block h3{font:600 20px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin-top:0}
+.photo-also{margin:26px 0 0}
+.photo-also+.icloud-block{margin-top:10px}
+#phone-note:empty{display:none}
 .pairing-overlay{position:fixed;inset:0;z-index:250;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(24,21,18,.62)}
 .pairing-card{width:100%;max-width:720px;max-height:100%;overflow:auto;padding:clamp(24px,4vw,52px);border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:var(--ink);text-align:center}
 .pairing-card h2{font-size:calc(30px * var(--ui-scale))}
@@ -61,4 +74,6 @@
 .pairing-picks{display:flex;justify-content:center;gap:clamp(12px,3vw,28px);margin:22px 0 14px}
 .pairing-pick{flex:0 1 170px;min-height:110px;font:clamp(40px,6vw,64px)/1 Georgia,serif;font-variant-numeric:lining-nums tabular-nums}
 .pairing-card .secondary{margin-top:14px;min-width:200px}
+.pairing-hint{margin:10px 0 0}
+.pairing-hint[hidden]{display:none}
 @media(max-width:799px){.chores-editor{grid-template-columns:1fr}.chore-days{gap:4px}}

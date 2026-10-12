@@ -19,7 +19,7 @@
   const text = (value, limit) => typeof value === 'string' ? value.trim().slice(0, limit) : '';
   const number = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
   const modeWords = {heat: 'Heat', cool: 'Cool', off: 'Off', auto: 'Auto', emheat: 'Emergency heat'};
-  const statusWords = {loading: 'Loading', stale: 'Not current', unavailable: 'Unreachable', locked_out: 'Paused', signed_out: 'Signed out'};
+  const stepModes = ['heat', 'cool', 'emheat'];
 
   function normalize(raw) {
     const row = parse(raw) || {}, signIn = parse(row.signIn), status = typeof row.status === 'string' ? row.status : 'unconfigured';
@@ -38,6 +38,7 @@
           id: item.id,
           name: text(item.name, 40) || 'Thermostat',
           online: item.online === true,
+          units: item.units === 'C' || item.units === 'F' ? item.units : '',
           indoor: number(item.indoor),
           mode: typeof item.mode === 'string' && Object.prototype.hasOwnProperty.call(modeWords, item.mode) ? item.mode : '',
           heatAllowed: item.heatAllowed === true,
@@ -54,31 +55,41 @@
       })
     };
   }
-  const degrees = value => value === null ? '—' : (Number.isInteger(value) ? String(value) : value.toFixed(1)) + '°';
-  const clock = stamp => {
-    const prefs = app.calendarPreferences();
-    return new Intl.DateTimeFormat('en-CA', {timeZone: prefs.timezone, hour: 'numeric', minute: '2-digit', hour12: prefs.clock === '12'}).format(new Date(stamp));
+  const degrees = (value, unit) => value === null ? '—' : (Number.isInteger(value) ? String(value) : value.toFixed(1)) + '°' + (unit || '');
+  const foreign = thermostat => {
+    const shown = app.displayPreferences().units === 'fahrenheit' ? 'F' : 'C';
+    return thermostat.units && thermostat.units !== shown ? thermostat.units : '';
   };
-  function holdLine(thermostat) {
+  const clock = (stamp, brief) => {
+    const prefs = app.calendarPreferences();
+    const format = new Intl.DateTimeFormat('en-CA', {timeZone: prefs.timezone, hour: 'numeric', minute: '2-digit', hour12: prefs.clock === '12'});
+    if (!brief) return format.format(new Date(stamp));
+    return format.formatToParts(new Date(stamp)).filter(part => part.type === 'hour' || part.type === 'minute' || part.value === ':').map(part => part.value).join('');
+  };
+  function holdWord(thermostat) {
     if (thermostat.hold === 'permanent') return 'Permanent hold';
-    if (thermostat.hold === 'schedule') return 'Following schedule';
     if (thermostat.hold !== 'temporary') return '';
     if (!thermostat.holdUntil) return 'Temporary hold';
     const hour = Number(thermostat.holdUntil.slice(0, 2)), minute = thermostat.holdUntil.slice(3);
-    return 'Hold until ' + (app.calendarPreferences().clock === '12' ? (hour % 12 || 12) + ':' + minute + (hour < 12 ? ' AM' : ' PM') : thermostat.holdUntil);
+    return 'Hold until ' + (app.calendarPreferences().clock === '12' ? (hour % 12 || 12) + (minute === '00' ? '' : ':' + minute) + (hour < 12 ? ' AM' : ' PM') : thermostat.holdUntil);
   }
   function word(thermostat) {
-    if (statusWords[state.status]) return statusWords[state.status];
+    if (state.status === 'stale') return state.polledAt ? 'Last update ' + clock(state.polledAt, true) : 'Not updated';
+    if (state.status === 'locked_out') return state.retryAt ? 'Try again at ' + clock(state.retryAt, true) : 'Try again later';
+    if (state.status === 'unavailable') return 'Offline';
+    if (state.status === 'signed_out') return 'Signed out';
     if (!thermostat.online) return 'Offline';
     if (thermostat.changing) return 'Updating…';
-    return thermostat.failed ? 'Not saved' : '';
+    return thermostat.failed ? 'Not changed' : '';
   }
+  const dimmed = thermostat => !thermostat.online || ['unavailable', 'locked_out', 'signed_out'].includes(state.status);
+  const locked = stamp => 'Too many sign-in attempts. Try again ' + (stamp ? 'at ' + clock(stamp) : 'later.');
   function describe() {
     const pending = state.signIn && state.signIn.pending, failed = state.signIn && !state.signIn.pending ? state.signIn : null;
-    if (pending) return 'Signing in…';
-    if (failed) return failed.retryAt ? 'Too many attempts — try again at ' + clock(failed.retryAt) : failed.error || 'Could not sign in. Try again.';
+    if (pending) return '';
+    if (failed) return failed.retryAt ? locked(failed.retryAt) : failed.error || 'Could not sign in. Try again.';
     if (state.status === 'signed_out') return 'Honeywell signed this frame out. Sign in again.';
-    if (state.status === 'locked_out') return state.retryAt ? 'Too many attempts — try again at ' + clock(state.retryAt) : 'Too many attempts. Try again later.';
+    if (state.status === 'locked_out') return locked(state.retryAt);
     if (!state.configured) return '';
     if (state.status === 'ok') return 'Connected' + (state.polledAt ? ' · Updated ' + clock(state.polledAt) : '');
     if (state.status === 'loading') return 'Connected · Loading thermostats…';
@@ -87,11 +98,13 @@
   }
 
   let state = normalize(null), menuFor = '', armed = false, armTimer = 0, notice = '';
+  const complain = thermostat => { if (thermostat.message) app.notify(thermostat.message); };
+  const draw = (node, name) => { node.dataset.icon = name; node.innerHTML = app.icon(name); };
   const controls = new Map();
 
   function act(thermostat, method, ...args) {
     menuFor = '';
-    if (call(method, thermostat.id, ...args) !== true) { thermostat.failed = true; thermostat.message = 'Could not reach the frame. Try again.'; }
+    if (call(method, thermostat.id, ...args) !== true) { thermostat.failed = true; thermostat.message = 'Could not reach the frame. Try again.'; complain(thermostat); }
     else thermostat.changing = true;
     renderTiles(thermostat.id + ':more');
   }
@@ -105,24 +118,24 @@
     } else {
       thermostat.failed = true;
       thermostat.message = result && text(result.error, 200) || 'Could not change the temperature. Try again.';
+      complain(thermostat);
     }
     renderTiles(thermostat.id + (delta < 0 ? ':down' : ':up'));
   }
   function button(key, cls, label, glyph) {
-    const control = element('button', cls), face = element('span', '', glyph);
+    const control = element('button', cls), face = element('span');
     control.type = 'button';
     control.setAttribute('aria-label', label);
     face.setAttribute('aria-hidden', 'true');
+    draw(face, glyph);
     control.append(face);
     controls.set(key, control);
     return control;
   }
   function menu(thermostat, usable) {
-    const list = element('div', 'thermostat-menu'), hold = holdLine(thermostat);
+    const list = element('div', 'thermostat-menu');
     list.setAttribute('role', 'menu');
     list.setAttribute('aria-label', thermostat.name + ' options');
-    if (hold) list.append(element('p', '', hold));
-    if (thermostat.message) list.append(element('p', '', thermostat.message));
     if (usable && (thermostat.hold === 'temporary' || thermostat.hold === 'permanent')) {
       const resume = element('button', '', 'Resume schedule');
       resume.type = 'button';
@@ -130,14 +143,17 @@
       resume.onclick = () => act(thermostat, 'thermostatResume');
       list.append(resume);
     }
+    if (thermostat.heatAllowed || thermostat.coolAllowed) list.append(element('p', 'thermostat-menu-caption', 'Mode'));
     for (const mode of ['heat', 'cool']) {
       if (!thermostat[mode + 'Allowed']) continue;
-      const current = thermostat.mode === mode, choice = element('button');
+      const current = thermostat.mode === mode, choice = element('button'), tick = element('span', 'thermostat-menu-tick');
       choice.type = 'button';
       choice.setAttribute('role', 'menuitemradio');
       choice.setAttribute('aria-checked', String(current));
       choice.disabled = !usable;
-      choice.append(element('span', '', 'Mode: ' + modeWords[mode]), element('span', '', current ? '✓' : ''));
+      tick.setAttribute('aria-hidden', 'true');
+      if (current) draw(tick, 'tick');
+      choice.append(element('span', '', modeWords[mode]), tick);
       choice.onclick = () => { if (current) { menuFor = ''; renderTiles(thermostat.id + ':more'); } else act(thermostat, 'thermostatMode', mode); };
       list.append(choice);
     }
@@ -145,26 +161,28 @@
     return list;
   }
   function renderTiles(focus) {
-    const host = $('thermostat-tiles'), waiting = !state.thermostats.length && state.status !== 'unconfigured' && (state.configured || state.status === 'signed_out');
+    const host = $('thermostat-tiles'), quiet = !state.thermostats.length && ['signed_out', 'unavailable', 'locked_out'].includes(state.status) && (state.configured || state.status === 'signed_out');
     controls.clear();
     host.replaceChildren();
-    host.hidden = !state.thermostats.length && !waiting;
+    host.hidden = !state.thermostats.length && !quiet;
+    host.className = 'thermostat-tiles' + (state.thermostats.length + (quiet ? 1 : 0) === 1 ? ' is-single' : '');
     if (!state.thermostats.some(thermostat => thermostat.id === menuFor)) menuFor = '';
-    if (waiting) {
-      const tile = element('div', 'thermostat-tile is-quiet'), open = element('button', 'quiet', 'Settings');
+    if (quiet) {
+      const tile = element('div', 'thermostat-tile thermostat-notice'), open = element('button', 'secondary', state.status === 'signed_out' ? 'Sign in' : 'Settings');
       open.type = 'button';
       open.onclick = () => app.openSettings && app.openSettings('thermostats', 'overview');
-      tile.append(element('span', 'thermostat-note', 'Thermostats · ' + (statusWords[state.status] || 'Loading')), open);
+      tile.append(element('span', 'thermostat-note', state.status === 'signed_out' ? 'Thermostats signed out' : state.status === 'unavailable' ? 'Thermostats offline' : 'Thermostats · ' + word({online: true})), open);
       host.append(tile);
     }
     for (const thermostat of state.thermostats) {
-      const usable = state.controllable && thermostat.online, steppable = usable && thermostat.setpoint !== null && thermostat.min !== null && thermostat.max !== null;
-      const status = word(thermostat), tile = element('div', 'thermostat-tile' + (status ? ' is-quiet' : '')), name = element('div', 'thermostat-name'), line = element('span', 'thermostat-state'), dot = element('span', 'thermostat-dot');
-      const down = button(thermostat.id + ':down', 'thermostat-step', 'Lower ' + thermostat.name, '−'), up = button(thermostat.id + ':up', 'thermostat-step', 'Raise ' + thermostat.name, '+'), more = button(thermostat.id + ':more', 'thermostat-more', thermostat.name + ' options', '⌄');
+      const usable = state.controllable && thermostat.online, steppable = usable && stepModes.includes(thermostat.mode) && thermostat.setpoint !== null && thermostat.min !== null && thermostat.max !== null;
+      const unit = foreign(thermostat), tile = element('div', 'thermostat-tile' + (dimmed(thermostat) ? ' is-quiet' : '')), name = element('div', 'thermostat-name'), line = element('span', 'thermostat-state'), dot = element('span', 'thermostat-dot'), title = element('strong', '', thermostat.name);
+      const down = button(thermostat.id + ':down', 'thermostat-step', 'Lower ' + thermostat.name, 'minus'), up = button(thermostat.id + ':up', 'thermostat-step', 'Raise ' + thermostat.name, 'plus'), more = button(thermostat.id + ':more', 'thermostat-more', thermostat.name + ' options', 'chevron');
       dot.dataset.mode = thermostat.mode;
       dot.setAttribute('aria-hidden', 'true');
-      line.append(dot, element('span', '', [modeWords[thermostat.mode] || 'Mode unknown', status].filter(Boolean).join(' · ')));
-      name.append(element('strong', '', thermostat.name), line);
+      line.append(dot, element('span', '', [modeWords[thermostat.mode] || 'Mode unknown', word(thermostat) || holdWord(thermostat)].filter(Boolean).join(' · ')));
+      title.title = thermostat.name;
+      name.append(title, line);
       down.disabled = !steppable || thermostat.setpoint <= thermostat.min;
       up.disabled = !steppable || thermostat.setpoint >= thermostat.max;
       down.onclick = () => step(thermostat, -1);
@@ -172,9 +190,10 @@
       more.setAttribute('aria-haspopup', 'menu');
       more.setAttribute('aria-expanded', String(menuFor === thermostat.id));
       more.onclick = () => { menuFor = menuFor === thermostat.id ? '' : thermostat.id; renderTiles(thermostat.id + ':more'); };
-      const indoor = element('span', 'thermostat-indoor', degrees(thermostat.indoor)), setpoint = element('span', 'thermostat-setpoint', degrees(thermostat.setpoint));
-      indoor.setAttribute('aria-label', 'Indoor temperature ' + degrees(thermostat.indoor));
-      setpoint.setAttribute('aria-label', 'Set to ' + degrees(thermostat.setpoint));
+      const indoor = element('span', 'thermostat-indoor', degrees(thermostat.indoor)), setpoint = element('span', 'thermostat-setpoint' + (thermostat.changing ? ' is-pending' : ''), degrees(thermostat.setpoint));
+      if (unit) indoor.append(element('span', 'thermostat-unit', unit));
+      indoor.setAttribute('aria-label', 'Indoor temperature ' + degrees(thermostat.indoor, unit));
+      setpoint.setAttribute('aria-label', 'Set to ' + degrees(thermostat.setpoint, unit));
       tile.append(name, indoor, down, setpoint, up, more);
       if (menuFor === thermostat.id) tile.append(menu(thermostat, usable));
       host.append(tile);
@@ -201,11 +220,18 @@
       list.append(row);
     }
     if (state.configured && !state.thermostats.length) list.append(element('p', 'subtle small', state.status === 'ok' ? 'No thermostats were found on this account.' : 'Thermostats will appear here.'));
-    $('thermostat-status').textContent = !supported ? (native ? 'Update the Skylit app on this frame to use thermostats.' : 'Sign in on the frame. This browser preview does not contact Honeywell.') : notice || describe();
+    const line = !supported ? (native ? 'Update the Skylit app on this frame to use thermostats.' : 'Sign in on the frame. This browser preview does not contact Honeywell.') : notice || describe();
+    $('thermostat-status').textContent = state.configured ? '' : line;
+    $('thermostat-account-status').textContent = state.configured ? line : '';
   }
   function receive(raw) {
-    const focused = [...controls].find(([, control]) => control === document.activeElement);
+    const focused = [...controls].find(([, control]) => control === document.activeElement), before = state;
     state = normalize(raw);
+    if (state.configured && !before.configured) $('thermostat-email').value = '';
+    for (const thermostat of state.thermostats) {
+      const earlier = before.thermostats.find(old => old.id === thermostat.id);
+      if (thermostat.failed && earlier && !earlier.failed) complain(thermostat);
+    }
     if (!state.signIn || !state.signIn.pending) notice = '';
     if (!state.configured) disarm();
     renderTiles(focused && focused[0]);
@@ -218,8 +244,8 @@
     $('thermostat-password').value = '';
     if (!supported || !email || !password) return;
     const result = parse(call('thermostatSignIn', email, password));
-    notice = result && result.ok === true ? 'Signing in…' : result && text(result.error, 200) || 'Could not start signing in. Try again.';
-    if (result && result.ok === true) $('thermostat-email').value = '';
+    notice = result && result.ok === true ? '' : result && text(result.error, 200) || 'Could not start signing in. Try again.';
+    if (result && result.ok === true) { state.signIn = {pending: true, error: '', retryAt: 0}; }
     renderSettings();
   };
   $('thermostat-sign-out').onclick = () => {
@@ -246,6 +272,8 @@
   window.addEventListener('skylit-tab', event => { if (supported) call('thermostatWatch', event.detail === 'overview'); });
   window.addEventListener('skylit-settings', () => { renderTiles(); renderSettings(); });
 
-  window.SkylitThermostat = {receive, status: () => state, supported};
+  const health = () => ({configured: state.configured, count: state.thermostats.length, text: describe()});
+  window.SkylitThermostat = {receive, status: () => state, supported, health};
   receive(supported ? call('thermostatSnapshot') : null);
+  if (supported && app.status().tab === 'overview') call('thermostatWatch', true);
 })();

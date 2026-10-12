@@ -1,6 +1,6 @@
 # Local phone API
 
-The frame runs a small HTTP server on the home network so a paired phone can manage
+The frame runs a small HTTPS server on the home network so a paired phone can manage
 chores, the shopping list, photos and frame setup. No cloud service is involved.
 This file is the contract between the Android viewer, the dashboard and the iOS app.
 
@@ -8,17 +8,22 @@ This file is the contract between the Android viewer, the dashboard and the iOS 
 
 - Bonjour/NSD service type `_skylit._tcp`, service name = frame name.
 - Port `8765`; if taken, any free port. Clients must use the advertised port.
-- TXT: `v=1`, `id=<frameId>`.
+- TXT: `v=2`, `id=<frameId>`. Both are hints; identity is the certificate pin (see Transport security).
 - The frame's IP changes on every reboot, so clients store `frameId`, never an address.
 
 ## Transport and errors
 
-- HTTP/1.1, JSON bodies, UTF-8. `Connection: close` on every response.
-- Request body limit 64 KiB, except photo upload (15 MiB).
+- HTTP/1.1 inside TLS 1.2 (never plain HTTP), JSON bodies, UTF-8. `Connection: close` on every
+  response; one request per connection. Bodies need `Content-Length`; chunked bodies and requests
+  carrying an `Origin` header are `400`. `Host` must be an IP address or a `.local` name.
+- Request body limit 64 KiB, except `/v2/pair/*` (4 KiB) and photo upload (15 MiB).
 - Errors: `{"error":{"code":"<slug>","message":"<text>"}}` with status
-  400 `bad_request`, 401 `unauthorized`, 404 `not_found`, 409 `conflict`,
-  413 `too_large`, 429 `rate_limited`.
-- Every authenticated request carries `Authorization: Bearer <token>`.
+  400 `bad_request`, 401 `unauthorized`, 403 `forbidden`, 404 `not_found`, 409 `conflict` or
+  `pairing_busy`, 410 `gone`, 413 `too_large`, 429 `rate_limited`, 500 `internal`.
+  Clients branch on `code`, never on `message`.
+- Every authenticated request carries `Authorization: Bearer <token>`, where `<token>` is the 64
+  lowercase hex characters of the phone's 32 raw token bytes. Anything else, including uppercase
+  hex, is `401`. A route that does not exist is `401` without a valid token and `404` with one.
 
 ## Transport security (v2)
 
@@ -60,13 +65,18 @@ All hex on the wire is lowercase; receivers reject anything but `[0-9a-f]` of th
 2. The phone generates fresh random `nP` and a fresh random 32-byte `token`, and sends
    `POST /v2/pair/start`
    `{"commit":"<SHA-256 of nP>","tokenHash":"<SHA-256 of token>","deviceName":"Karan's iPhone"}` →
-   `{"session","nF"}`. `nF` is fresh per call. The first `start` after the window opens consumes
-   the window whether or not it goes further; every later `start` is `409` with code `pairing_busy`
-   until the person opens a new window. The phone records `fp` from this call's TLS handshake and
-   every later pairing call must be on a connection with the same `fp`, checked before any bytes
-   are sent.
+   `{"session","nF"}`. `tokenHash` is SHA-256 over the 32 raw token bytes (not over their hex
+   text). `nF` is fresh per call. The first well-formed `start` after the window opens consumes
+   the window whether or not it goes further; a malformed one (`400`) does not. While that session
+   is still under way (waiting for `reveal`, or showing its code), every other `start` is `409`
+   with code `pairing_busy`. With no window open — never opened, timed out, or its session
+   already ended — `start` is `409` with code `conflict`. The phone records `fp` from this call's
+   TLS handshake and every later pairing call must be on a connection with the same `fp`, checked
+   before any bytes are sent.
 3. `POST /v2/pair/reveal` `{"session","nP"}` → `204`, sent at most once. The frame checks
-   `SHA-256(nP) == commit` (`400` and the session ends otherwise).
+   `SHA-256(nP) == commit` (`400` and the session ends otherwise). A second `reveal`, a `reveal`
+   for a session that has ended, or one for a session the frame does not know is `409`; after the
+   window ran out it is `410`.
 4. Both sides compute
    `D = HMAC-SHA256(key = nP ‖ nF (64 raw bytes), message = ASCII "skylit-pair-v2" (14 bytes) ‖ 0x00 ‖ fpRaw)`
    (47 message bytes), `code = u32be(D[0..3]) mod 1000000` printed as six digits with leading zeros,
@@ -74,18 +84,25 @@ All hex on the wire is lowercase; receivers reject anything but `[0-9a-f]` of th
    own `fpRaw`; the phone uses the one from its handshake.
    Test vector: `nP` = `000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f`, `nF` = `202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f`, `fpRaw` = `404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f` gives `commit` = `630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd`, `D` = `526438df18ab2fc054b103a87964836abe6e20d4118d11b6a6e50ebbca57d7af`, `code` = `299871`, `pick` = `64`.
 5. The frame shows the six-digit code, three two-digit buttons (`pick` and two different random
-   decoys, shuffled) and Cancel, with: "Type this code into your phone. Your phone will then show a
-   number. Tap that number here. If your phone shows no number, tap Cancel."
+   decoys, shuffled) and Cancel, with: "Enter this code on your phone, then tap the number your
+   phone shows." and, under Cancel, "No number on your phone? Tap Cancel."
 6. The person types the code into the phone. The phone never displays its own value and allows three
    entries. On a match the pin becomes permanent and the phone shows "Tap NN on the frame". On three
-   misses, or a `409` at `start`, it shows "This phone did not pair. Another device may be trying.
-   Tap Cancel on the frame; do not tap a number." and calls `POST /v2/pair/cancel` `{"session"}`.
+   misses, or `409` `pairing_busy` at `start`, it shows "This phone did not pair. Another device
+   may be trying. Tap Cancel on the frame; do not tap a number." and calls
+   `POST /v2/pair/cancel` `{"session"}` (`204`, also when repeated; `409` for a session the frame
+   does not know). A plain timeout is not that case: `409` `conflict` at `start` means no window is
+   open ("On the frame, tap Pair a phone, then try again"), and `410` from `reveal` or `result`
+   means the two minutes ran out; neither should be presented as another device interfering.
 7. Tapping `pick` on the frame approves the session and stores `tokenHash` as a paired device. A
    decoy, Cancel, `cancel` or expiry ends it.
 8. The phone polls `GET /v2/pair/result?session=<hex>`: `202` while waiting, `200`
-   `{"deviceId","frameId","name"}` after approval, `403` after a decoy or Cancel, `410` after
-   expiry. The token never travels: the phone already holds it. The phone rejects a result whose
-   `frameId` is not the first 32 hex characters of its pinned `fp`.
+   `{"deviceId","frameId","name"}` after approval, `403` after a decoy, Cancel on either side or a
+   wrong `nP`, `410` after expiry, `404` for a session the frame does not know (never started,
+   replaced by a newer window, or lost when the frame restarted) and `400` for a `session` that is
+   not 32 lowercase hex characters. An outcome stays readable until the next window opens. The
+   token never travels: the phone already holds it. The phone rejects a result whose `frameId` is
+   not the first 32 hex characters of its pinned `fp`.
 
 The phone never restarts pairing by itself; a new attempt needs the person to ask and the frame to
 open a new window. There is no lock-out: each attempt already needs someone at the frame.
@@ -110,7 +127,9 @@ It does not protect against someone who can read the frame's screen and touch it
   per device so the owner can spot and remove stale ones.
 - The frame's Settings list shows each device with its paired and last-seen dates and can remove any
   device or all of them.
-- Up to 20 devices can be paired, each with its own token.
+- Up to 20 devices can be paired, each with its own token; with 20 paired the frame will not open
+  a window. Pairing again with a `tokenHash` that is already paired replaces the earlier entry, so
+  a token is never listed twice and removing the device always revokes it.
 
 ## State
 
@@ -131,11 +150,14 @@ It does not protect against someone who can read the frame's screen and touch it
 }
 ```
 
-- `rev` increases by one on every change, from any source. `GET /v1/state?since=42`
-  returns `304` when `rev` is still 42.
+- `rev` increases by one on every change, from any source, and survives a restart. A request
+  that changes nothing (a `PATCH` with the same values, `clear-done` with nothing ticked) returns
+  the current `rev` unchanged. `GET /v1/state?since=42` returns `304` when `rev` is still 42 and
+  the full state otherwise; `since` must be digits (`400` if not).
 - `personId` is `null` for a chore anyone can do. `days` uses 0 = Sunday … 6 = Saturday;
   an empty list means every day. `done` holds local dates (`YYYY-MM-DD`, frame timezone);
-  the frame keeps the last 14 days.
+  the frame keeps the last 14 days. `PUT …/done` accepts dates from 13 days ago to tomorrow in the
+  frame's timezone (the chosen city's zone, else the device's) and `400`s anything else.
 - `settings.location` is `null` until a city is chosen. Calendar feed URLs are never returned.
 
 ## Mutations
@@ -162,7 +184,12 @@ own key (`person`, `chore`, `item`, `calendar`, `photo`) where one exists.
 | `DELETE /v1/calendars/{id}` | |
 
 Limits: 12 people, 100 chores, 200 shopping items, 6 calendars; names and titles
-1–80 characters after trimming; `qty` 1–99; colours `#RRGGBB`. Violations are `400`.
+1–80 characters after trimming; `emoji` 0–16; `note` 0–200; `qty` a whole number 1–99; colours
+`#RRGGBB`; `days` whole numbers 0–6. Lengths count Unicode code points, and trimming removes
+every kind of leading and trailing white space (including no-break and ideographic spaces), as
+JavaScript's `trim()` does. Control characters and direction overrides are refused. Violations
+are `400`; an unknown `id` is `404`; a calendar feed that is already on the frame is `409`.
+Unknown fields are ignored, and a body `id` never overrides the one in the path.
 
 ## Photos
 
@@ -216,6 +243,11 @@ Native → dashboard (via `evaluateJavascript`, each guarded with `window.X&&`):
   `{"phase":"code","remaining":<ms>,"code":"299871","numbers":["07","64","91"]}`,
   `{"phase":"paired","name":"<device name>"}` or
   `{"phase":"cancelled","reason":"decoy"|"frame"|"phone"|"refused"|"expired"}`.
+  The dashboard titles `expired` "Pairing timed out" ("No phone was paired. Open Pair a phone to
+  try again.") and every other reason "Pairing cancelled"; only `refused` (a wrong `nP`) mentions
+  that another device may be interfering. The paired, timed-out and cancelled screens close
+  themselves after about six seconds by calling `pairingCancel()`, and the outcome stays as one
+  line in Settings → Phone app.
   `remaining` is milliseconds left on the frame's monotonic clock; the dashboard only draws the
   countdown. `numbers` never says which entry is `pick`.
 - `SkylitRemote.apply({location?,appearance?})`: a phone changed a setting that lives in
@@ -257,14 +289,20 @@ native code signs in and polls; there are no thermostat routes in the phone API.
 - `thermostatSnapshot()` → the snapshot above as a JSON string.
 - `thermostatSignIn(email, password)` → `{"ok":true,"pending":true}` at once, or
   `{"ok":false,"error":"…"}` when the fields are unusable or a sign-in is already running. The
-  network work runs on a worker thread; the outcome arrives through `receive` in `signIn`.
+  network work runs on a worker thread; the outcome arrives through `receive` in `signIn`. A
+  sign-in that fails while an account is already working leaves that account, its saved
+  credential and its session untouched.
 - `thermostatSignOut()` → boolean; erases the stored account and its key.
 - `thermostatStep(id, delta)` → `{"ok":true,"setpoint":N}` or `{"ok":false,"error":"…"}`. One
   step per call in the direction of `delta`, kept inside the thermostat's own range; taps within a
-  second are sent to Honeywell as one change, as a temporary hold.
+  second are sent to Honeywell as one change. A thermostat following its schedule gets a temporary
+  hold until its next schedule period; one already on a temporary or permanent hold keeps that
+  hold and its end time. While such a change is pending the snapshot already reports
+  `hold:"temporary"` and `holdUntil`, so the tile does not claim to follow the schedule.
 - `thermostatMode(id, "heat"|"cool")` and `thermostatResume(id)` → `true` when started; the result
   arrives through `receive` (`changing`, then the new state or `error` and `message`).
 - `thermostatWatch(visible)`: poll every 60 s while the Overview is showing, every 5 min otherwise.
+  The dashboard calls it on every tab change and once at load when it starts on the Overview.
 
 Chores and shopping have one source of truth: the native household store. The dashboard's
 old `skylit.household` shopping list is migrated into it once, then no longer written.
