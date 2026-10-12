@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-import argparse, json, os, signal, socket, subprocess, sys, threading, time, urllib.request
+import argparse, json, os, signal, socket, struct, subprocess, sys, threading, time, urllib.request, zlib
 
 IOS = Path(__file__).resolve().parents[1]
 ROOT = IOS.parent
@@ -38,9 +38,13 @@ class Frame:
         threading.Thread(target=self.drain, daemon=True).start()
 
     def drain(self):
-        for line in self.process.stdout:
-            sys.stdout.write('[frame] ' + line)
-            sys.stdout.flush()
+        with open(IOS / 'build/live-frame.log', 'a') as log:
+            for line in self.process.stdout:
+                stamped = time.strftime('%H:%M:%S ') + line
+                sys.stdout.write('[frame] ' + stamped)
+                sys.stdout.flush()
+                log.write(stamped)
+                log.flush()
 
     def child_java(self):
         for _ in range(50):
@@ -111,6 +115,26 @@ def serve_supervisor(frame, port):
     return server
 
 
+def png(path, width, height):
+    rows = b''.join(b'\x00' + b''.join(bytes([(x * 255) // width, (y * 255) // height, 120]) for x in range(width)) for y in range(height))
+    def chunk(kind, body):
+        return struct.pack('>I', len(body)) + kind + body + struct.pack('>I', zlib.crc32(kind + body) & 0xffffffff)
+    header = struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0)
+    path.write_bytes(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', header) + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b''))
+
+
+def heic_sample():
+    folder = IOS / 'build/live-uploads'
+    folder.mkdir(parents=True, exist_ok=True)
+    source, target = folder / 'sample.png', folder / 'sample.heic'
+    png(source, 640, 480)
+    made = subprocess.run(['sips', '-s', 'format', 'heic', str(source), '--out', str(target)], capture_output=True, text=True)
+    if made.returncode != 0 or not target.exists():
+        print('HEIC sample not available on this Mac: ' + made.stderr.strip(), flush=True)
+        return None
+    return target
+
+
 def main():
     parser = argparse.ArgumentParser(description='Start a throwaway dev frame and run LiveFrameUITests against it.')
     parser.add_argument('--destination', required=True, help='xcodebuild destination id of a simulator')
@@ -122,6 +146,7 @@ def main():
     args = parser.parse_args()
     api_port, control_port, supervisor_port = free_port(), free_port(), free_port()
     frame = Frame(api_port, control_port)
+    heic = heic_sample()
     green = 0
     try:
         supervisor = serve_supervisor(frame, supervisor_port)
@@ -131,6 +156,8 @@ def main():
                        TEST_RUNNER_SKYLIT_LIVE_SUPERVISOR=str(supervisor_port))
             if args.shots:
                 env['TEST_RUNNER_SKYLIT_SHOTS'] = args.shots
+            if heic:
+                env['TEST_RUNNER_SKYLIT_LIVE_HEIC'] = str(heic)
             action = 'test' if args.build and run == 1 else 'test-without-building'
             command = ['xcodebuild', action, '-project', str(IOS / 'Skylit.xcodeproj'), '-scheme', 'Skylit', '-destination', f'id={args.destination}',
                        '-derivedDataPath', args.derived_data] + ([] if args.all_tests else ['-only-testing:SkylitUITests/LiveFrameUITests'])

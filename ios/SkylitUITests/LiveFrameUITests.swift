@@ -1,4 +1,6 @@
 import XCTest
+import ImageIO
+import UniformTypeIdentifiers
 import SkylitCore
 
 final class LiveFrameUITests: XCTestCase {
@@ -54,10 +56,19 @@ final class LiveFrameUITests: XCTestCase {
 
     private func shownCode() throws -> String {
         XCTAssertTrue(waitForPhase("code"), "The frame never showed a code; phase is \(pairingPhase())")
-        return try XCTUnwrap((frameState()["pairing"] as? [String: Any])?["code"] as? String)
+        let state = frameState()
+        return try XCTUnwrap((state["pairing"] as? [String: Any])?["code"] as? String, "frame=\(state)")
     }
 
-    private func pick() throws -> String { try XCTUnwrap(frameState()["pick"] as? String) }
+    private func pick() throws -> String {
+        let state = frameState()
+        if state["pick"] as? String == nil { snap("live-no-pick") }
+        return try XCTUnwrap(state["pick"] as? String, "frame has no pick to tap; frame=\(state) sheet=\(sheetLabels())")
+    }
+
+    private func sheetLabels() -> String {
+        app.staticTexts.allElementsBoundByIndex.map(\.label).joined(separator: " | ")
+    }
 
     private func decoy() throws -> String {
         let numbers = try XCTUnwrap((frameState()["pairing"] as? [String: Any])?["numbers"] as? [String])
@@ -124,6 +135,69 @@ final class LiveFrameUITests: XCTestCase {
         XCTAssertTrue(addressField.waitForExistence(timeout: 5))
     }
 
+    private func bitmap(width: Int, height: Int, orientation: Int) -> Data {
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+        context.setFillColor(CGColor(red: 0.85, green: 0.55, blue: 0.3, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.setFillColor(CGColor(red: 0.2, green: 0.3, blue: 0.5, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width / 3, height: height / 3))
+        let output = NSMutableData()
+        let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(destination, context.makeImage()!, [kCGImagePropertyOrientation: orientation] as CFDictionary)
+        CGImageDestinationFinalize(destination)
+        return output as Data
+    }
+
+    private func stageUploads() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("skylit-uploads-\(Int(Date().timeIntervalSince1970))")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try bitmap(width: 800, height: 600, orientation: 6).write(to: directory.appendingPathComponent("1-rotated-portrait.jpg"))
+        try Data("not a picture".utf8).write(to: directory.appendingPathComponent("2-broken.jpg"))
+        try bitmap(width: 1024, height: 768, orientation: 1).write(to: directory.appendingPathComponent("3-landscape.jpg"))
+        if let heic = ProcessInfo.processInfo.environment["SKYLIT_LIVE_HEIC"], let data = FileManager.default.contents(atPath: heic) {
+            try data.write(to: directory.appendingPathComponent("4-apple.heic"))
+        }
+        return directory
+    }
+
+    @MainActor
+    private func uploadStagedPhotos(verifyWith helper: FrameAPI) async throws {
+        let before = try await helper.photos().count
+        let staged = try stageUploads()
+        let expectsHeic = ProcessInfo.processInfo.environment["SKYLIT_LIVE_HEIC"] != nil
+        app.terminate()
+        app.launchArguments = ["-debugUploadDir", staged.path]
+        app.launch()
+        XCTAssertTrue(shoppingTab.waitForExistence(timeout: 30), "the phone must reconnect on its own after a relaunch")
+        switchTab("Photos")
+        let expected = before + (expectsHeic ? 3 : 2)
+        var photos = try await helper.photos()
+        let deadline = Date().addingTimeInterval(90)
+        while photos.count < expected, Date() < deadline {
+            try await Task.sleep(for: .seconds(1))
+            photos = try await helper.photos()
+        }
+        snap("live-upload-done")
+        XCTAssertEqual(photos.count, expected, "the readable files must go through and the broken one must be skipped")
+        var sizes: [String] = []
+        for photo in photos.prefix(expectsHeic ? 3 : 2) {
+            let data = try await helper.photoData(id: photo.id)
+            let size = try XCTUnwrap(ImagePreparation.pixelSize(of: data))
+            let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+            XCTAssertEqual((properties?[kCGImagePropertyOrientation] as? Int) ?? 1, 1, "stored photos carry no rotation tag")
+            XCTAssertEqual(CGImageSourceGetType(source) as String?, UTType.jpeg.identifier)
+            sizes.append("\(size.width)x\(size.height)")
+        }
+        XCTAssertTrue(sizes.contains("600x800"), "the EXIF-rotated portrait must arrive upright; got \(sizes)")
+        XCTAssertTrue(sizes.contains("1024x768"), "the landscape photo keeps its size; got \(sizes)")
+        if expectsHeic { XCTAssertTrue(sizes.contains("640x480"), "the HEIC must arrive as a 640x480 JPEG; got \(sizes)") }
+        let grid = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Photo added"))
+        XCTAssertTrue(grid.element(boundBy: photos.count - 1).waitForExistence(timeout: 15), "the grid shows every photo on the frame")
+        XCTAssertTrue(text(containing: "\(photos.count) photos on the frame").waitForExistence(timeout: 15))
+    }
+
     private func unpair() {
         switchTab("Frame")
         let unpair = app.buttons["Unpair this phone"]
@@ -169,7 +243,7 @@ final class LiveFrameUITests: XCTestCase {
         let confirming = app.staticTexts["Tap \(pick) on the frame"]
         if !confirming.waitForExistence(timeout: 8) {
             snap("live-no-confirming")
-            XCTFail("no confirmation step; frame=\(frameState()) sheet=\(app.staticTexts.allElementsBoundByIndex.map(\.label).joined(separator: " | "))")
+            XCTFail("no confirmation step; field=\(String(describing: app.textFields["Pairing code"].value)) frame=\(frameState()) sheet=\(sheetLabels())")
         }
         return pick
     }
@@ -201,6 +275,7 @@ final class LiveFrameUITests: XCTestCase {
     @MainActor
     func testPairingEndingsDataFlowOutagesAndRestartAgainstTheDevFrame() async throws {
         app = XCUIApplication()
+        app.launchEnvironment["OS_ACTIVITY_MODE"] = "disable"
         app.launch()
         leaveAnyFrame()
         openPairingSheet()
@@ -274,6 +349,8 @@ final class LiveFrameUITests: XCTestCase {
         let fromTablet = try XCTUnwrap(listed?.shopping.first { $0.name == "From the tablet" })
         _ = try await helper.deleteItem(id: fromTablet.id)
         XCTAssertTrue(app.buttons["From the tablet"].waitForNonExistence(timeout: 15))
+
+        try await uploadStagedPhotos(verifyWith: helper)
 
         switchTab("Chores")
         let addChore = app.textFields["Add a chore"]
@@ -358,5 +435,25 @@ final class LiveFrameUITests: XCTestCase {
         expectPaired()
         unpair()
         snap("live-unpaired")
+
+        openPairingSheet()
+        code = try beginPairing()
+        typeCode(code)
+        control("tap/\(try expectConfirming())")
+        expectPaired()
+        let watcher = try await pairHelperDevice(named: "Hallway tablet")
+        let pairedNow = try await watcher.devices()
+        let phone = try XCTUnwrap(pairedNow.first { !$0.isSelf })
+        do {
+            try await watcher.removeDevice(id: phone.id)
+            XCTFail("another paired device must not be able to remove this phone")
+        } catch {
+            XCTAssertEqual(error as? FrameError, .api(status: 403, code: "forbidden"))
+        }
+        try await Task.sleep(for: .seconds(6))
+        XCTAssertTrue(shoppingTab.exists, "the phone stays paired after a refused removal")
+        XCTAssertFalse(text(containing: "This phone was removed from").exists)
+        unpair()
+        snap("live-unpaired-again")
     }
 }

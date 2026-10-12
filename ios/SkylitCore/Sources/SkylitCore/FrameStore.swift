@@ -36,6 +36,7 @@ public final class FrameStore {
     private let now: () -> Date
     private var inFlight = 0
     private var needsFullState = false
+    private var confirmed: FrameState?
 
     public init(frame: PairedFrame, api: FrameAPI, now: @escaping () -> Date = Date.init) {
         self.frame = frame
@@ -74,6 +75,7 @@ public final class FrameStore {
         do {
             if let fresh = try await api.state(since: needsFullState ? nil : rev) {
                 state = fresh
+                confirmed = fresh
             }
             needsFullState = false
             link = .online
@@ -114,9 +116,10 @@ public final class FrameStore {
             let (expected, overflowed) = current.rev.addingReportingOverflow(1)
             if tempId == nil { optimistic(&current) }
             let settled = Self.settle(&current, result, tempId: tempId)
-            if settled, !overflowed, result.rev == expected, !needsFullState {
+            if settled, !overflowed, result.rev == expected, !needsFullState, inFlight == 1 {
                 current.rev = expected
                 state = current
+                confirmed = current
             } else {
                 state = current
                 await refresh()
@@ -124,7 +127,7 @@ public final class FrameStore {
             return true
         } catch {
             needsFullState = true
-            if inFlight == 1 { state = before }
+            if inFlight == 1 { state = confirmed ?? before }
             if case .api = handle(error) { await refresh() }
             return false
         }
@@ -244,7 +247,9 @@ public final class FrameStore {
     @discardableResult
     public func deleteItem(id: String) async -> Bool {
         removedItem = state?.shopping.first { $0.id == id }
-        return await perform(optimistic: { $0.shopping.removeAll { $0.id == id } }) { try await $0.deleteItem(id: id) }
+        let removed = await perform(optimistic: { $0.shopping.removeAll { $0.id == id } }) { try await $0.deleteItem(id: id) }
+        if !removed, removedItem?.id == id { removedItem = nil }
+        return removed
     }
 
     @discardableResult

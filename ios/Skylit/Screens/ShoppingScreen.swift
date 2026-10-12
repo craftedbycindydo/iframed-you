@@ -49,7 +49,7 @@ struct ShoppingScreen: View {
                     } header: {
                         SectionHeader("In the basket") {
                             Button("Clear completed") { confirmsClear = true }
-                                .touchTarget(footprint: Size.line)
+                                .touchTarget(footprint: Size.touch)
                         }
                     }
                 }

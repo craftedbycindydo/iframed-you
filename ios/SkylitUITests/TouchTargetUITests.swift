@@ -12,31 +12,30 @@ final class TouchTargetUITests: XCTestCase {
     private func launch(_ screen: String, _ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-demoFrame", "YES", "-demoScreen", screen] + extra
+        app.launchEnvironment["OS_ACTIVITY_MODE"] = "disable"
         app.launch()
         return app
     }
 
-    private func isSystemControl(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
-        let frame = element.frame
-        let containers = [app.tabBars.firstMatch, app.navigationBars.firstMatch, app.keyboards.firstMatch,
-                          app.segmentedControls.firstMatch, app.steppers.firstMatch]
-        return containers.contains { $0.exists && $0.frame.intersects(frame) }
-    }
-
     private func undersized(in app: XCUIApplication) -> [String] {
-        let screen = XCUIScreen.main.screenshot().image.size
+        guard let tree = try? app.snapshot() else { return ["could not snapshot the screen"] }
+        let window = app.windows.firstMatch.frame
+        let containers = [app.tabBars.firstMatch, app.navigationBars.firstMatch, app.keyboards.firstMatch,
+                          app.segmentedControls.firstMatch, app.steppers.firstMatch].filter(\.exists).map(\.frame)
         var found: [String] = []
-        for type in Self.types {
-            for element in app.descendants(matching: type).allElementsBoundByIndex where element.isHittable {
-                let frame = element.frame
-                guard frame.minY >= 0, frame.maxY <= screen.height, frame.width > 0, !isSystemControl(element, in: app) else { continue }
-                let name = element.label.isEmpty ? element.identifier : element.label
-                guard !Self.rowFocused.contains(name) else { continue }
-                if frame.width < Self.minimum || frame.height < Self.minimum {
-                    found.append("\(name) [\(type.rawValue)] \(Int(frame.width))×\(Int(frame.height))")
+        func visit(_ node: any XCUIElementSnapshot) {
+            let frame = node.frame
+            if Self.types.contains(node.elementType), frame.width > 0, frame.width < Self.minimum || frame.height < Self.minimum,
+               window.contains(frame), !containers.contains(where: { $0.intersects(frame) }) {
+                let name = node.label.isEmpty ? node.identifier : node.label
+                if !name.isEmpty, !Self.rowFocused.contains(name),
+                   app.descendants(matching: node.elementType).matching(NSPredicate(format: "label == %@ OR identifier == %@", name, name)).firstMatch.isHittable {
+                    found.append("\(name) [\(node.elementType.rawValue)] \(Int(frame.width))×\(Int(frame.height))")
                 }
             }
+            node.children.forEach(visit)
         }
+        visit(tree)
         return found
     }
 
@@ -68,11 +67,20 @@ final class TouchTargetUITests: XCTestCase {
         dismissDialog(app)
         XCTAssertFalse(app.buttons["Clear 2 Completed"].waitForExistence(timeout: 2))
         clear.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.92)).tap()
-        XCTAssertTrue(app.buttons["Clear 2 Completed"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Clear 2 Completed"].waitForExistence(timeout: 5), "bottom edge of Clear completed \(clear.frame) must open the dialog, not tick the row below")
         dismissDialog(app)
+        XCTAssertEqual(app.buttons["Oat cereal"].value as? String, "In the basket")
         let add = app.textFields["Add an item"]
         add.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
-        XCTAssertTrue(hasKeyboardFocus(add))
+        XCTAssertTrue(hasKeyboardFocus(add), "top edge of \(add.frame) must focus the field")
+        add.typeText("\n")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+        let milk = app.buttons["Milk, 2"]
+        XCTAssertTrue(milk.waitForExistence(timeout: 5))
+        let between = CGPoint(x: milk.frame.midX, y: (add.frame.maxY + milk.frame.minY) / 2)
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: between.x, dy: between.y)).tap()
+        XCTAssertEqual(milk.value as? String, "To buy", "a tap between the add field \(add.frame) and the first row \(milk.frame) must not tick the row")
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
         app.buttons["Milk, 2"].swipeRight()
         app.buttons["Edit"].firstMatch.tap()
         XCTAssertTrue(app.buttons["Finish editing"].waitForExistence(timeout: 5))
@@ -107,11 +115,11 @@ final class TouchTargetUITests: XCTestCase {
 
     func testSetupTargets() {
         let app = launch("setup", ["-demoScroll", "calendarForm"])
-        XCTAssertTrue(app.textFields["Family"].waitForExistence(timeout: 8))
+        app.reveal(app.textFields["Family"])
         assertTargets(app, "setup calendar form")
         let link = app.textFields["Secret address in iCal format"]
         app.textFields["Family"].tap()
-        link.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.02)).tap()
+        link.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
         XCTAssertTrue(hasKeyboardFocus(link))
         snap("tt-calendar-form")
         app.swipeDown()

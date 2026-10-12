@@ -6,13 +6,17 @@ final class GatedTransport: HTTPTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var held: [CheckedContinuation<Void, Never>] = []
     private var isHolding = false
+    private var holds: (URLRequest) -> Bool = { _ in true }
 
     init(_ inner: HTTPTransport) {
         self.inner = inner
     }
 
-    func hold() {
-        lock.withLock { isHolding = true }
+    func hold(matching: @escaping (URLRequest) -> Bool = { _ in true }) {
+        lock.withLock {
+            isHolding = true
+            holds = matching
+        }
     }
 
     var heldCount: Int { lock.withLock { held.count } }
@@ -29,11 +33,13 @@ final class GatedTransport: HTTPTransport, @unchecked Sendable {
     func send(_ request: URLRequest, body: Data?, onProgress: (@Sendable (Double) -> Void)?) async throws -> (Data, HTTPURLResponse) {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let wait = lock.withLock {
-                if isHolding { held.append(continuation) }
-                return isHolding
+                let holding = isHolding && holds(request)
+                if holding { held.append(continuation) }
+                return holding
             }
             if !wait { continuation.resume() }
         }
+        try Task.checkCancellation()
         return try await inner.send(request, body: body, onProgress: onProgress)
     }
 }
@@ -233,6 +239,63 @@ final class FrameStoreTests: XCTestCase {
         server.setUnreachable(false)
         await store.poll()
         XCTAssertEqual(store.state?.shopping.filter { $0.id == "s1" || $0.id == "s2" }.map(\.done), [false, false])
+    }
+
+    func testTwoFailingTicksAreBothRevertedWhileStillOffline() async {
+        let store = await loaded()
+        let before = store.state
+        server.setUnreachable(true)
+        async let first = store.setItem(id: "s1", done: true)
+        async let second = store.setItem(id: "s2", done: true)
+        _ = await (first, second)
+        XCTAssertEqual(store.state, before)
+        XCTAssertEqual(store.link, .offline)
+    }
+
+    func testFailureWhileAnotherChangeSucceededKeepsTheFrameTruth() async {
+        let gate = GatedTransport(server)
+        let store = await loaded(gate)
+        gate.hold { $0.url?.path.hasSuffix("/s1") == true }
+        let ticking = Task { await store.setItem(id: "s1", done: true) }
+        await waitUntil { gate.heldCount == 1 }
+        let renamed = await store.updateItem(id: "s2", ShoppingDraft(name: "Pears", qty: 1, note: ""))
+        XCTAssertTrue(renamed)
+        server.setUnreachable(true)
+        gate.release()
+        let ticked = await ticking.value
+        XCTAssertFalse(ticked)
+        XCTAssertEqual(store.state?.shopping.first { $0.id == "s1" }?.done, false)
+        XCTAssertEqual(store.state?.shopping.first { $0.id == "s2" }?.name, "Pears")
+    }
+
+    func testCancelledChangeIsRevertedAndPollingStillWorks() async {
+        let gate = GatedTransport(server)
+        let store = await loaded(gate)
+        gate.hold()
+        let ticking = Task { await store.setItem(id: "s1", done: true) }
+        await waitUntil { gate.heldCount == 1 }
+        ticking.cancel()
+        gate.release()
+        _ = await ticking.value
+        XCTAssertEqual(store.state?.shopping.first { $0.id == "s1" }?.done, false)
+        XCTAssertNil(store.notice)
+        server.changeFromFrame { $0.append(["id": "s9", "name": "Figs", "qty": 1, "note": "", "done": false]) }
+        await store.poll()
+        XCTAssertTrue(store.state?.shopping.contains { $0.id == "s9" } ?? false)
+        XCTAssertEqual(store.state?.rev, server.revision)
+        let tickedLater = await store.setItem(id: "s1", done: true)
+        XCTAssertTrue(tickedLater)
+        XCTAssertEqual(store.state?.rev, server.revision)
+    }
+
+    func testDeleteThatFailsOfflineOffersNoUndo() async {
+        let store = await loaded()
+        server.setUnreachable(true)
+        let removed = await store.deleteItem(id: "s1")
+        XCTAssertFalse(removed)
+        XCTAssertNotNil(store.state?.shopping.first { $0.id == "s1" })
+        XCTAssertNil(store.removedItem)
+        XCTAssertNil(store.undoRemove())
     }
 
     func testDeletingAnItemRemembersItForUndoAndUndoPutsItBack() async {

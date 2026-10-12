@@ -570,3 +570,14 @@ final class TokenStoreTests: XCTestCase {
         XCTAssertEqual(DeviceNameStore(defaults: isolatedDefaults(), fallback: "").name, "")
     }
 }
+
+extension PairingFlowTests {
+    func testTypedDigitsFromAnyNumeralSystemBecomeTheAsciiCode() {
+        XCTAssertEqual(PairingFlow.asciiDigits("٠١٢٣٤٥"), "012345")
+        XCTAssertEqual(PairingFlow.asciiDigits("४७१६०१"), "471601")
+        XCTAssertEqual(PairingFlow.asciiDigits("47-16 01x"), "471601")
+        XCTAssertEqual(PairingFlow.asciiDigits("1234567"), "123456")
+        XCTAssertEqual(PairingFlow.asciiDigits("Ⅻ½"), "")
+        XCTAssertTrue(PairingFlow.isValid(code: PairingFlow.asciiDigits("٤٧١٦٠١")))
+    }
+}

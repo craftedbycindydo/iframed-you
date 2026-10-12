@@ -221,12 +221,15 @@ enum Demo {
             server.openPairingWindow()
             server.setBystander(stage == "failed" ? .tapsDecoy : stage == "expired" ? .letsItExpire : .waits)
             Task {
-                try? await Task.sleep(for: .milliseconds(900))
+                for _ in 0..<100 where session.frames.isEmpty { try? await Task.sleep(for: .milliseconds(100)) }
                 await session.select(frame)
                 guard stage != "name" else { return }
                 await session.startPairing(name: "Maya's iPhone")
                 guard stage != "code", let code = server.shownCode else { return }
                 await session.submit(code: code)
+                guard stage == "expired" else { return }
+                server.openPairingWindow()
+                server.setBystander(.waits)
             }
         }
         return session

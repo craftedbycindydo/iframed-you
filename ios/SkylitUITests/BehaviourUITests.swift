@@ -8,6 +8,7 @@ final class BehaviourUITests: XCTestCase {
     private func launch(_ screen: String, _ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-demoFrame", "YES", "-demoScreen", screen] + extra
+        app.launchEnvironment["OS_ACTIVITY_MODE"] = "disable"
         app.launch()
         return app
     }
@@ -30,9 +31,12 @@ final class BehaviourUITests: XCTestCase {
     private func paste(_ text: String, into field: XCUIElement, in app: XCUIApplication) {
         UIPasteboard.general.string = text
         field.tap()
-        field.press(forDuration: 1.2)
         let paste = app.menuItems["Paste"]
-        XCTAssertTrue(paste.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !paste.exists {
+            field.press(forDuration: 1.2)
+            _ = paste.waitForExistence(timeout: 3)
+        }
+        XCTAssertTrue(paste.exists, "the edit menu never offered Paste")
         paste.tap()
     }
 
@@ -82,6 +86,7 @@ final class BehaviourUITests: XCTestCase {
         let app = launch("shopping", ["-demoRevoke", "YES"])
         XCTAssertTrue(app.tabBars.buttons["Shopping"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["This phone was removed from Kitchen frame. Pair again to continue."].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.tabBars.buttons["Shopping"].waitForNonExistence(timeout: 5))
         XCTAssertEqual(app.tabBars.buttons.allElementsBoundByIndex.map(\.label), ["Frame", "Climate"])
         XCTAssertTrue(app.buttons["Kitchen frame, Tap to pair"].waitForExistence(timeout: 5))
         snap("revoked")
@@ -107,6 +112,21 @@ final class BehaviourUITests: XCTestCase {
         frame.tap()
         XCTAssertTrue(app.textFields["Maya's iPhone"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Cancel"].exists)
+    }
+
+    func testCodeTypedAfterATimedOutAttemptIsStillChecked() {
+        let app = launch("pairing", ["-demoPairing", "expired"])
+        XCTAssertTrue(app.staticTexts["Pairing timed out. Nothing was paired. Open Pair a phone on the frame and try again."].waitForExistence(timeout: 15))
+        app.buttons["Try again"].tap()
+        XCTAssertTrue(app.buttons["Pair"].waitForExistence(timeout: 5))
+        app.buttons["Pair"].tap()
+        let entry = app.textFields["Pairing code"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        entry.typeText("000000")
+        let checked = app.staticTexts["That code didn't match. 2 tries left."].waitForExistence(timeout: 5)
+        if !checked { snap("code-after-timeout-ignored") }
+        XCTAssertTrue(checked, "six digits typed after a timed-out attempt must be checked; field value \(String(describing: entry.value))")
     }
 
     func testCancellingMidCodeAndBackgroundingKeepTheSheetConsistent() {
@@ -141,7 +161,7 @@ final class BehaviourUITests: XCTestCase {
     func testCalendarNameOverTheFrameLimitIsNotOffered() {
         let setup = launch("setup", ["-demoScroll", "calendarForm"])
         let name = setup.textFields["Family"]
-        XCTAssertTrue(name.waitForExistence(timeout: 8))
+        setup.reveal(name)
         paste(String(repeating: "📅", count: 40), into: name, in: setup)
         XCTAssertLessThanOrEqual((name.value as? String)?.unicodeScalars.count ?? 0, 60)
         let link = setup.descendants(matching: .any).matching(NSPredicate(format: "label == %@ OR placeholderValue == %@", "Secret address in iCal format", "Paste the secret address")).firstMatch
@@ -152,8 +172,11 @@ final class BehaviourUITests: XCTestCase {
         setup.bringAboveKeyboard(addCalendar)
         XCTAssertFalse(addCalendar.isEnabled, "31+ emoji exceed the frame's UTF-16 limit and must not be offered")
         setup.bringAboveKeyboard(name)
-        name.tap()
-        name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 45) + "Work")
+        name.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
+        name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 40))
+        XCTAssertEqual(name.value as? String, "Family", "forty deletes must clear the forty pasted emoji")
+        name.typeText("Work")
+        XCTAssertEqual(name.value as? String, "Work")
         setup.bringAboveKeyboard(addCalendar)
         XCTAssertTrue(addCalendar.isEnabled)
     }

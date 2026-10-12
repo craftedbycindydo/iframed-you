@@ -12,6 +12,7 @@ final class SkylitUITests: XCTestCase {
     private func launch(_ screen: String, _ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-demoFrame", "YES", "-demoScreen", screen] + extra
+        app.launchEnvironment["OS_ACTIVITY_MODE"] = "disable"
         app.launch()
         return app
     }
@@ -68,16 +69,26 @@ final class SkylitUITests: XCTestCase {
         let app = launch("shopping", ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         let field = app.textFields["Add an item"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
-        let scaledGlyphEnd: CGFloat = 90
-        XCTAssertGreaterThan(field.frame.minX, scaledGlyphEnd)
+        let milk = app.buttons["Oranges, 6"]
+        XCTAssertTrue(milk.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(field.frame.height, Size.touch)
+        XCTAssertFalse(field.frame.intersects(milk.frame))
         snap("ax5-shopping")
-        field.tap()
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5)).tap()
+        if !app.keyboards.firstMatch.waitForExistence(timeout: 5) { snap("ax5-no-keyboard") }
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "tapping the add field \(field.frame) at the largest type size must bring up the keyboard; milk row \(milk.frame)")
         field.typeText("Eggs")
+        XCTAssertEqual(field.value as? String, "Eggs")
         let tick = app.buttons["Add an item"]
         XCTAssertTrue(tick.waitForExistence(timeout: 5))
         XCTAssertGreaterThanOrEqual(tick.frame.width, Size.touch)
+        XCTAssertGreaterThanOrEqual(tick.frame.height, Size.touch)
         XCTAssertLessThanOrEqual(field.frame.maxX, tick.frame.minX)
+        XCTAssertFalse(field.frame.intersects(tick.frame))
+        XCTAssertTrue(tick.isHittable)
         snap("ax5-shopping-typing")
+        tick.tap()
+        XCTAssertTrue(app.buttons["Eggs"].waitForExistence(timeout: 5))
     }
 
     func testOnlyOneShoppingEditorIsOpenAtATime() {
@@ -108,7 +119,7 @@ final class SkylitUITests: XCTestCase {
     func testCalendarFormKeepsWhatYouTypedWhenTheFrameRefusesIt() {
         let app = launch("setup", ["-demoScroll", "calendarForm"])
         let name = app.textFields["Family"]
-        XCTAssertTrue(name.waitForExistence(timeout: 8))
+        app.reveal(name)
         name.tap()
         name.typeText("Work")
         let link = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ OR placeholderValue == %@", "Secret address in iCal format", "Paste the secret address")).firstMatch

@@ -307,7 +307,15 @@ struct PairingSheet: View {
     private var codeEntry: some View {
         Section {
             CodeEntry(code: $code) { entered in
-                Task { await session.submit(code: entered) }
+                Task {
+                    #if DEBUG
+                    CodeEntry.trace += "S\(flow.step == .enteringCode ? "e" : "x")\(session.pairing === flow ? "=" : "#") "
+                    #endif
+                    await session.submit(code: entered)
+                    #if DEBUG
+                    CodeEntry.trace += "R\(flow.message ?? "-")|\(flow.step) "
+                    #endif
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, Space.s)

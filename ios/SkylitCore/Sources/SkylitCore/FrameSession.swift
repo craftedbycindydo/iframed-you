@@ -46,7 +46,7 @@ public final class FrameSession {
     private var adverts: [Advert] = []
     private var manual: [String: URL] = [:]
     private var pairingURL: URL?
-    private var isReconnecting = false
+    private var reconnecting: Task<Void, Never>?
 
     public init(browser: FrameBrowsing, connector: FrameConnecting, tokens: TokenStoring,
                 pairedStore: PairedFrameStore, deviceNames: DeviceNameStore, pollInterval: Duration = .seconds(1)) {
@@ -93,7 +93,7 @@ public final class FrameSession {
             frames = DiscoveredFrame.unique(found.filter(\.isConsistent).map { DiscoveredFrame(frameId: $0.info.frameId, name: $0.info.name) })
             if store == nil {
                 await connectPaired()
-            } else if store?.link == .offline {
+            } else if store?.state == nil || store?.link == .offline {
                 await store?.refresh()
             }
         }
@@ -127,9 +127,13 @@ public final class FrameSession {
                 continue
             }
         }
-        if match == nil, !mismatch, let stored = frame.address, !advertised.contains(stored),
-           (try? await FrameAPI(baseURL: stored, transport: transport).info()) != nil {
-            match = stored
+        if match == nil, !mismatch, let stored = frame.address, !advertised.contains(stored) {
+            do {
+                _ = try await FrameAPI(baseURL: stored, transport: transport).info()
+                match = stored
+            } catch FrameError.pinMismatch {
+                mismatch = true
+            } catch {}
         }
         if mismatch {
             let text = Self.impostorText(frame.name)
@@ -142,11 +146,18 @@ public final class FrameSession {
     }
 
     private func connectPaired() async {
-        guard let paired, store == nil, !isReconnecting, let credential = tokens.credential(for: paired.frameId) else { return }
-        isReconnecting = true
-        defer { isReconnecting = false }
-        guard let url = await locate(paired, pin: credential.fp), store == nil else { return }
-        await open(paired, url: url, credential: credential)
+        if let running = reconnecting {
+            await running.value
+            return
+        }
+        guard let paired, store == nil, let credential = tokens.credential(for: paired.frameId) else { return }
+        let attempt = Task {
+            guard let url = await self.locate(paired, pin: credential.fp), self.store == nil else { return }
+            await self.open(paired, url: url, credential: credential)
+        }
+        reconnecting = attempt
+        await attempt.value
+        reconnecting = nil
     }
 
     public func reconnect() async {

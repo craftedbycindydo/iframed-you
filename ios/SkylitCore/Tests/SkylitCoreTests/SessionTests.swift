@@ -31,6 +31,20 @@ final class DiscoveryTests: XCTestCase {
     }
 }
 
+final class GatedNetwork: FrameConnecting {
+    let inner: DemoNetwork
+    let gate: GatedTransport
+
+    init(_ inner: DemoNetwork, _ gate: GatedTransport) {
+        self.inner = inner
+        self.gate = gate
+    }
+
+    func probe() -> FrameTransport { inner.probe() }
+    func pairing() -> FrameTransport { inner.pairing() }
+    func pinned(_ fp: String) -> HTTPTransport { gate }
+}
+
 @MainActor
 final class FrameSessionTests: XCTestCase {
     private var server: DemoFrameServer!
@@ -386,6 +400,19 @@ final class FrameSessionTests: XCTestCase {
         XCTAssertEqual(relaunched.store?.state?.rev, server.revision)
     }
 
+    func testNewCertificateAtTheStoredAddressIsReportedNotHiddenBehindCannotReach() async {
+        rememberPairing()
+        PairedFrameStore(defaults: defaults).current = savedFrame
+        let restarted = DemoFrameServer(identity: "restarted", name: "Kitchen frame")
+        network.place(restarted, at: "demo-frame.local")
+        let session = makeSession()
+        await session.receive(.services([]))
+        XCTAssertNil(session.store)
+        XCTAssertEqual(session.warning, FrameSession.impostorText("Kitchen frame"))
+        XCTAssertTrue(restarted.requests.isEmpty)
+        XCTAssertEqual(tokens.credential(for: server.frameId), server.credential)
+    }
+
     func testStoredAddressIsOnlyTriedWhenNoAdvertisedServiceMatches() async {
         rememberPairing()
         PairedFrameStore(defaults: defaults).current = PairedFrame(frameId: server.frameId, name: "Kitchen frame", address: evil)
@@ -453,6 +480,99 @@ final class FrameSessionTests: XCTestCase {
         XCTAssertNil(tokens.credential(for: server.frameId))
         XCTAssertEqual(session.notice, FrameSession.unpairOfflineText("Kitchen frame"))
         XCTAssertTrue(session.notice?.contains("Phone app") ?? false)
+    }
+
+    func testFrameRestartedWithANewCertificateCanBePairedAgainAfterUseADifferentFrame() async throws {
+        rememberPairing()
+        let session = makeSession()
+        await session.receive(.services(["Skylit"]))
+        XCTAssertEqual(session.store?.link, .online)
+        let restarted = DemoFrameServer(identity: "restarted", name: "Kitchen frame")
+        network.place(restarted, at: "demo-frame.local")
+        await session.store?.poll()
+        XCTAssertEqual(session.store?.link, .offline)
+        await session.store?.poll()
+        XCTAssertEqual(session.warning, FrameSession.impostorText("Kitchen frame"))
+        session.leave()
+        XCTAssertNil(session.store)
+        XCTAssertNil(session.paired)
+
+        await session.connect(manualAddress: "demo-frame.local:8765")
+        XCTAssertEqual(session.pairing?.step, .naming, session.notice ?? "")
+        restarted.openPairingWindow()
+        await session.startPairing(name: "Test phone")
+        XCTAssertEqual(session.pairing?.step, .enteringCode, session.pairing?.message ?? "")
+        let code = try XCTUnwrap(restarted.shownCode)
+        await session.submit(code: code)
+        XCTAssertNil(session.pairing)
+        XCTAssertEqual(session.store?.link, .online)
+        XCTAssertEqual(session.paired?.frameId, restarted.frameId)
+        XCTAssertNil(session.warning)
+        XCTAssertEqual(tokens.credential(for: restarted.frameId)?.fp, restarted.fingerprint)
+        XCTAssertTrue(restarted.requests.filter { $0.headers["Authorization"] != nil }.allSatisfy { $0.headers["Authorization"] == "Bearer \(tokens.credential(for: restarted.frameId)!.token)" })
+    }
+
+    func testAbandonedPairingAttemptDoesNotSwallowTheNextOne() async throws {
+        server.openPairingWindow()
+        let session = makeSession()
+        await session.receive(.services(["Skylit"]))
+        await session.select(kitchen)
+        await session.startPairing(name: "Test phone")
+        let first = try XCTUnwrap(session.pairing)
+        XCTAssertEqual(first.step, .enteringCode)
+        let staleCode = try XCTUnwrap(server.shownCode)
+        await session.cancelPairing()
+        XCTAssertEqual(first.step, .failed)
+
+        server.openPairingWindow()
+        await session.select(kitchen)
+        let second = try XCTUnwrap(session.pairing)
+        XCTAssertTrue(second !== first)
+        await session.startPairing(name: "Test phone")
+        XCTAssertEqual(second.step, .enteringCode)
+        let code = try XCTUnwrap(server.shownCode)
+        XCTAssertNotEqual(code, staleCode)
+        await session.submit(code: code)
+        XCTAssertEqual(second.step, .paired)
+        XCTAssertEqual(session.store?.link, .online)
+    }
+
+    func testAConnectAttemptFinishesEvenWhenTheBrowseTaskIsCancelled() async {
+        rememberPairing()
+        let gate = GatedTransport(network.pinned(server.fingerprint))
+        let session = FrameSession(browser: browser, connector: GatedNetwork(network, gate), tokens: tokens, pairedStore: PairedFrameStore(defaults: defaults),
+                                   deviceNames: DeviceNameStore(defaults: defaults, fallback: "Test phone"), pollInterval: .milliseconds(1))
+        gate.hold { $0.url?.path == "/v2/info" }
+        let launching = Task { await session.receive(.services(["Skylit"])) }
+        for _ in 0..<2000 where gate.heldCount == 0 { try? await Task.sleep(for: .milliseconds(1)) }
+        XCTAssertEqual(gate.heldCount, 1)
+        launching.cancel()
+        let again = Task { await session.receive(.services(["Skylit"])) }
+        gate.release()
+        await launching.value
+        await again.value
+        XCTAssertEqual(session.store?.state?.rev, 42)
+        XCTAssertEqual(session.store?.link, .online)
+        XCTAssertEqual(server.requests.filter { $0.path == "/v2/info" && $0.headers["Authorization"] != nil }.count, 0)
+    }
+
+    func testFirstStateInterruptedAtLaunchIsFetchedOnTheNextBrowseEvent() async {
+        rememberPairing()
+        let gate = GatedTransport(network.pinned(server.fingerprint))
+        let session = FrameSession(browser: browser, connector: GatedNetwork(network, gate), tokens: tokens, pairedStore: PairedFrameStore(defaults: defaults),
+                                   deviceNames: DeviceNameStore(defaults: defaults, fallback: "Test phone"), pollInterval: .milliseconds(1))
+        gate.hold { $0.url?.path == "/v1/state" }
+        let launching = Task { await session.receive(.services(["Skylit"])) }
+        for _ in 0..<2000 where gate.heldCount == 0 { try? await Task.sleep(for: .milliseconds(1)) }
+        XCTAssertEqual(gate.heldCount, 1)
+        server.setUnreachable(true)
+        gate.release()
+        await launching.value
+        XCTAssertNotNil(session.store)
+        XCTAssertNil(session.store?.state)
+        server.setUnreachable(false)
+        await session.receive(.services(["Skylit"]))
+        XCTAssertEqual(session.store?.state?.rev, 42)
     }
 
     func testRunConsumesBrowserEvents() async {

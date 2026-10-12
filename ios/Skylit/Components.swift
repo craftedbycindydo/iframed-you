@@ -39,6 +39,7 @@ struct ScreenHeader<Actions: View>: View {
                     }
                     .font(.status)
                     .foregroundStyle(Theme.secondaryLabel)
+                    .lineLimit(2)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -468,6 +469,9 @@ struct CodeEntry: View {
 
     @FocusState private var focused: Bool
     private let count = PairingFlow.codeLength
+    #if DEBUG
+    @MainActor static var trace = ""
+    #endif
 
     var body: some View {
         ZStack {
@@ -477,11 +481,16 @@ struct CodeEntry: View {
                 .focused($focused)
                 .opacity(0.02)
                 .onChange(of: code) { old, new in
-                    let clean = String(new.filter { $0.isASCII && $0.isNumber }.prefix(count))
+                    let clean = PairingFlow.asciiDigits(new)
                     if clean != new { code = clean }
-                    if clean.count == count, old.count < count { onComplete(clean) }
+                    let fires = clean.count == count && old.count < count
+                    #if DEBUG
+                    Self.trace += "\(old.count)>\(new.count)\(fires ? "!" : "") "
+                    #endif
+                    if fires { onComplete(clean) }
                 }
                 .accessibilityLabel("Pairing code")
+                .accessibilityValue(traceValue)
             HStack(spacing: Space.s) {
                 ForEach(0..<count, id: \.self) { index in
                     let isCurrent = index == code.count
@@ -506,6 +515,14 @@ struct CodeEntry: View {
             try? await Task.sleep(for: .milliseconds(450))
             focused = true
         }
+    }
+
+    private var traceValue: String {
+        #if DEBUG
+        return "\(code) [\(Self.trace)]"
+        #else
+        return code
+        #endif
     }
 
     private func digit(_ index: Int) -> String {

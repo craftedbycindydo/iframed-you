@@ -9,6 +9,7 @@ struct ChoresScreen: View {
     @State private var draft: ChoreEditDraft?
     @State private var showsPeople = false
     @State private var deleting: Chore?
+    @State private var day = Date()
     @FocusState private var addFocused: Bool
     @FocusState private var editField: ChoreEditDraft.Field?
 
@@ -57,6 +58,7 @@ struct ChoresScreen: View {
             .refreshable { await store.refresh() }
             .sensoryFeedback(.selection, trigger: showsEverything)
             .onChange(of: showsEverything) { _, _ in closeEditor() }
+            .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged).receive(on: RunLoop.main)) { _ in day = Date() }
             .screenHeader("Chores", status: store.connectionStatus, statusSymbol: store.connectionSymbol) {
                 Button("People", systemImage: "person.2") { showsPeople = true }
                     .headerAction()
@@ -118,7 +120,7 @@ struct ChoresScreen: View {
     @ViewBuilder private func todaySections(_ today: TodayChores) -> some View {
         Section {
             ProgressSummary(done: today.doneCount, total: today.total,
-                            caption: Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()),
+                            caption: day.formatted(.dateTime.weekday(.wide).month(.wide).day()),
                             headline: summary(today))
         }
         ForEach(today.groups) { group in

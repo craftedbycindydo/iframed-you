@@ -29,6 +29,13 @@ public final class PairingFlow {
         code.utf8.count == codeLength && code.utf8.allSatisfy { (48...57).contains($0) }
     }
 
+    public nonisolated static func asciiDigits(_ text: String, limit: Int = codeLength) -> String {
+        String(text.compactMap { character -> Character? in
+            guard let value = character.wholeNumberValue, (0...9).contains(value) else { return nil }
+            return Character(String(value))
+        }.prefix(limit))
+    }
+
     public private(set) var step: Step = .naming
     public private(set) var message: String?
     public private(set) var triesLeft = PairingFlow.attempts

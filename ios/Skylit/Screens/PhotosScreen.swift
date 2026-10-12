@@ -156,6 +156,14 @@ struct PhotosScreen: View {
         }
         .stateAnimation(store.upload == nil)
         .task(id: store.state?.photos.count) { await store.loadPhotos() }
+        .onAppear {
+            #if DEBUG
+            guard let directory = UserDefaults.standard.string(forKey: "debugUploadDir"), !DebugUploads.consumed else { return }
+            DebugUploads.consumed = true
+            let files = ((try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? []).sorted().map { directory + "/" + $0 }
+            Task { await store.uploadPhotos(count: files.count) { FileManager.default.contents(atPath: files[$0]) } }
+            #endif
+        }
         .onChange(of: picks) { _, selected in
             guard !selected.isEmpty else { return }
             picks = []
@@ -197,6 +205,12 @@ struct PhotosScreen: View {
         ISO8601.date(photo.addedAt)?.formatted(date: .abbreviated, time: .omitted) ?? ""
     }
 }
+
+#if DEBUG
+enum DebugUploads {
+    @MainActor static var consumed = false
+}
+#endif
 
 struct PhotoViewer: View {
     @Environment(\.theme) private var theme
