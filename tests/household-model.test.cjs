@@ -18,7 +18,7 @@ test('due-today follows weekdays, with empty days meaning every day',()=>{
 });
 test('local date keys use the chosen zone and survive an invalid one',()=>{
  const now=new Date('2026-10-12T03:30:00Z');
- assert.equal(model.dateKey(now,'America/Edmonton'),'2026-10-11');assert.equal(model.dateKey(now,'Europe/London'),'2026-10-12');
+ assert.equal(model.dateKey(now,'America/Denver'),'2026-10-11');assert.equal(model.dateKey(now,'Europe/London'),'2026-10-12');
  assert.match(model.dateKey(now,'Not/AZone'),/^\d{4}-\d{2}-\d{2}$/);
 });
 test('today view groups by person with Anyone last and reports progress',()=>{
@@ -100,4 +100,10 @@ test('a name with no visible character is refused, joined emoji and joiners insi
  assert.equal(model.check(s,{op:'chore.update',id:'c1',title:'‍'}),'Use 1 to 80 characters.');
  for(const fine of ['👨‍👩‍👧','می‌خواهم','a​','🛏️'])assert.equal(bad(fine),'',fine);
  assert.equal(model.check(s,{op:'item.add',name:'Tea',note:'​'}),'');
+});
+test('names in every script, with combining marks, and emoji-only names are accepted',()=>{
+ const s=base();
+ for(const name of ['\u{645}\u{62D}\u{645}\u{62F}','\u{641}\u{627}\u{637}\u{645}\u{629} \u{627}\u{644}\u{632}\u{647}\u{631}\u{627}\u{621}','\u{5D3}\u{5B8}\u{5BC}\u{5D5}\u{5B4}\u{5D3}','\u{936}\u{93F}\u{935}','\u{92A}\u{94D}\u{930}\u{93F}\u{92F}\u{93E}','\u{E2A}\u{E21}\u{E0A}\u{E32}\u{E22}','\u{E19}\u{E49}\u{E33}','\u{AE40}\u{BBFC}\u{C900}','\u{1100}','\u{5C71}\u{7530}\u{592A}\u{90CE}','\u{738B}\u{82B3}','Zo\u{EB}','Zoe\u{308}','Nguy\u{1EC5}n','e\u{301}','\u{301}','\u{1F600}','\u{1F44D}\u{1F3FD}','\u{1F9D1}\u{1F3FF}\u{200D}\u{1F9B1}','\u{1F1E8}\u{1F1E6}','\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}','1\u{FE0F}\u{20E3}','\u{2665}','\u{200F}\u{5E2}\u{5D1}\u{5E8}\u{5D9}\u{5EA}\u{200F}','O\u{2019}Brien','\u{3A9}mega','\u{2D30}\u{2D4E}\u{2D30}\u{2D63}\u{2D49}\u{2D56}','\u{1403}\u{14C4}\u{1483}\u{144E}\u{1450}\u{1466}','\u{1D49C}','.','-']){
+  assert.equal(model.check(s,{op:'person.add',name,color:'#123456'}),'',JSON.stringify(name));assert.equal(model.check(s,{op:'chore.add',title:name}),'',JSON.stringify(name));assert.equal(model.check(s,{op:'item.add',name}),'',JSON.stringify(name));
+ }
 });

@@ -113,6 +113,10 @@ final class LocalApi {
     }
   }
 
+  int householdDropped() {
+    return household.dropped;
+  }
+
   String householdSnapshot() {
     return Json.write(household.snapshot(today()));
   }
@@ -238,12 +242,12 @@ final class LocalApi {
     return result;
   }
 
-  private synchronized long merge(Map<String, Object> changed) {
+  private synchronized long merge(Map<String, Object> changed) throws ApiException {
     Map<String, Object> next = new LinkedHashMap<>(settings);
     next.putAll(changed);
     if (Json.write(next).equals(Json.write(settings))) return household.rev();
+    if (!storage.put("settings", Json.write(next))) throw ApiException.unsaved();
     settings = next;
-    storage.put("settings", Json.write(settings));
     return household.touch();
   }
 
@@ -332,7 +336,7 @@ final class LocalApi {
     switch (request.method + " " + parts[2]) {
       case "DELETE devices":
         if (!id.equals(caller)) throw ApiException.forbidden("A phone can only remove itself. Remove others on the frame.");
-        pairing.revoke(id);
+        if (!pairing.revoke(id)) throw ApiException.unsaved();
         return LocalHttp.Response.empty(204);
       case "PATCH people":
         return mutation("person.update", id, body);
@@ -405,7 +409,7 @@ final class LocalApi {
     return LocalHttp.Response.json(200, state);
   }
 
-  private LocalHttp.Response setting(String key, Map<String, Object> value) {
+  private LocalHttp.Response setting(String key, Map<String, Object> value) throws ApiException {
     observe();
     long rev = merge(Json.object(key, value));
     events.settingsRequested(Json.write(Json.object(key, value)));

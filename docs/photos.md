@@ -1,8 +1,25 @@
-# Photos by email
+# Photos
 
-Skylit can play either a Google Photos shared album or a private slideshow made from
-pictures mailed to a dedicated Gmail account. Choose the source in **Settings → Photos → Photo source**. The
+Skylit can play either a Google Photos shared album or a private slideshow from its
+own local library. Choose the source in **Settings → Photos → Photo source**. The
 shared-album route remains the default and requires no extra account setup.
+
+The local library has three ways in, which can be used together:
+
+- pictures mailed to a dedicated Gmail account (the rest of this page);
+- pictures sent from a paired iPhone (`POST /v1/photos` in [local-api.md](local-api.md));
+- one public iCloud Shared Album mirrored by the frame: **Settings → Photos → iCloud
+  shared album**, or from the phone. Only `https://www.icloud.com/sharedalbum/#…`
+  links work; the link is stored privately and never shown again. The frame syncs
+  at start and every 30 minutes (and, after a failed sync, as soon as Wi-Fi returns), skips videos, and removes the
+  album's pictures when the album is disconnected.
+
+All three share the same limit (30 pictures by default, 50 at most, newest kept),
+the same slideshow and the same trash/Undo. Only emailed pictures expire by age.
+A phone can list and delete pictures; deleting a phone picture removes it, while
+deleting an email or album picture also excludes it so the next check does not
+bring it back. If the frame's clock reads earlier than 2026 (not yet set after a
+power cut, with no network), nothing is expired and no mail check starts.
 
 ## Set up email delivery on the frame
 
@@ -26,7 +43,7 @@ shared-album route remains the default and requires no extra account setup.
 
 Slideshow controls use the current palette and fade after four seconds without
 interaction. Touch, pointer movement or a key brings them back. The three styles
-apply to emailed pictures; a Google Photos shared album uses Google's own player.
+apply to the local library; a Google Photos shared album uses Google's own player.
 
 Google says personal Gmail accounts have IMAP access enabled. Its ordinary account
 password is not accepted by this route; the app password requires 2-Step
@@ -64,7 +81,7 @@ the same signing key retains settings; uninstalling removes the private cache.
 **Photo settings** opens the shared Photos category in the Settings lightbox.
 Its left-side navigation stays available while the editor scrolls. Presentation
 contains style, speed, shuffle, repeat, favourites-only playback and an Overview
-favourite preference. These apply to cached emailed pictures; a shared album uses
+favourite preference. These apply to the local library; a Google Photos shared album uses
 Google's player. Open **Settings → Photos → Local picture choices**, select a
 picture, and favourite/exclude it, choose **Fit** (the default, whole image) or **Fill**,
 or add a local caption. Received dates appear there; Skylit does not infer capture

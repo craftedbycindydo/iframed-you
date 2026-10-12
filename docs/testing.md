@@ -8,6 +8,11 @@ python3 -m unittest discover -s tests
 python3 scripts/check_public.py --history
 ```
 
+The Python run also compiles the pure-Java frame code (local server, pairing, household
+store, iCloud sync, thermostat client and bridge) with the JDK and runs it against
+fakes under `tests/android/jvm/`; allow about a minute and a half. `python3
+tests/test_tcc.py` runs the thermostat part alone.
+
 The suite uses Node/Python standard test runners. No runtime framework or network
 service is needed. Test observable behavior and failure boundaries; avoid snapshots
 of household data, tests that only repeat constants, and broad mocks of unrelated
@@ -38,6 +43,17 @@ regression test ensures script/resource fetches pass through unchanged.
   device selection; packaging/privacy sentinels keep personal data outside APKs.
 - Momo: canvas geometry, rendering pause/resume, reduced motion, persistence,
   gallery, daily clothing and local-time/DST routines.
+- Phone link (JVM): HTTP parsing and limits, TLS-only listener and suites, the v2
+  pairing exchange and its test vector, tokens, every route and limit, names in
+  many scripts and invisible-only names, damaged stored rows, a store that refuses
+  to save, a clock that is not set, restart persistence, twenty devices.
+- iCloud album (JVM): link forms, listing, planning, sync, back-off on the elapsed
+  clock, clock jumps, damaged saved state and its pictures.
+- Thermostats (JVM): sign-in, redirects, lock-out and its persistence, reading,
+  set-point/mode/resume, polling pace, staleness and clock jumps; the bridge's
+  snapshots and messages.
+- Household and pairing UI: chores, shopping, the pairing overlay and its endings,
+  the device list, remote settings.
 
 `python3 scripts/test_calendar_device.py` runs isolated storage/failure tests on an
 explicitly selected paired frame using in-memory test data. It does not populate
@@ -82,9 +98,16 @@ Playwright installation. `SKYLIT_PLAYWRIGHT` may specify its module path and
 manifest. It exercises Settings dialog context, focus trapping, Close/backdrop/Escape/Back,
 fixed headers with internal scroll, category/return routes, Settings curation/reload, icon controls and slideshow styles,
 month agenda/search/Settings visibility/metadata, local shopping undo/persistence, privacy
-pause, optional navigation and display-transfer exclusion. Its viewport matrix
+pause, optional navigation and display-transfer exclusion. It also checks that the
+Overview never clips an event or shows an empty Upcoming card for 0–8 thermostat
+tiles, that Settings closes itself (later while typing or while something is in
+progress), and that every Settings text field clears an on-screen keyboard. Its viewport matrix
 covers 960×540, 1024×640, 1280×720/800, 1440×900, 1600×900, 1920×1080/1200 and
 390×844, both text profiles, with six feeds/long titles/50 thumbnails.
+
+`scripts/dev_server.py` runs the frame's real server on this computer with throwaway
+data (`--pair-window`, `--auto-approve`, `--fake-icloud`, `--control-port`) for
+socket-level and iPhone-app testing without a frame.
 
 Record any first-load retry separately. The previously observed desktop module
 omission is not proof of a native asset failure. Chrome browser geometry coverage

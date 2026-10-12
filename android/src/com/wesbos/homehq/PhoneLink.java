@@ -143,8 +143,10 @@ final class PhoneLink implements LocalApi.Events {
         return saved.getString(key, null);
       }
 
-      @Override public void put(String key, String value) {
-        if (!saved.edit().putString(key, value).commit()) Log.e(TAG, "Could not save phone link data: " + key);
+      @Override public boolean put(String key, String value) {
+        boolean kept = saved.edit().putString(key, value).commit();
+        if (!kept) Log.e(TAG, "Could not save phone link data: " + key);
+        return kept;
       }
     };
     FrameTime.Clock clock = new FrameTime.Clock() {
@@ -288,6 +290,7 @@ final class PhoneLink implements LocalApi.Events {
       }
     });
     api = new LocalApi(storage, clock, uptime, feeds, library, icloud, this);
+    if (api.householdDropped() > 0) Log.w(TAG, "Household entries that could not be read were set aside: " + api.householdDropped());
     server = new LocalServer(api);
   }
 

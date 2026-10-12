@@ -373,7 +373,7 @@
   const overlay = element('div', 'pairing-overlay'), pairingCard = element('div', 'pairing-card'), pairingTitle = element('h2'), pairingCode = element('div', 'pairing-code'), pairingText = element('p', 'pairing-text'), pairingPicks = element('div', 'pairing-picks'), pairingCountdown = element('p', 'pairing-countdown'), pairingClose = element('button', 'secondary'), pairingHint = element('p', 'pairing-hint small subtle', 'No number on your phone? Tap Cancel.');
   const pairingTitles = {waiting: 'Waiting for your phone…', code: 'Pairing code', paired: 'Phone paired', cancelled: 'Pairing cancelled'};
   const pairingInstruction = 'Enter this code on your phone, then tap the number your phone shows.';
-  const pairingEndings = {decoy: 'That was not the number on the phone. Nothing was paired.', expired: 'No phone was paired. Open Pair a phone to try again.', phone: 'The phone stopped pairing. Nothing was paired.', refused: 'The phone did not answer correctly. Nothing was paired. If this keeps happening, another device may be interfering.'};
+  const pairingEndings = {decoy: 'That was not the number on the phone. Nothing was paired.', expired: 'No phone was paired. Open Pair a phone to try again.', phone: 'The phone stopped pairing. Nothing was paired.', storage: 'The frame could not save this phone. Its storage may be full. Nothing was paired.', refused: 'The phone did not answer correctly. Nothing was paired. If this keeps happening, another device may be interfering.'};
   let pairingTimer = null, pairingExpires = 0, pairingFocus = null, pairingLeave = 0, pairingEnding = 0;
   overlay.hidden = true;
   overlay.setAttribute('role', 'dialog');

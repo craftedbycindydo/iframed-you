@@ -13,7 +13,7 @@ function launch({bridge='real',initial=snapshot(),storage={},fail=null,pairing={
  const now={value:Date.parse('2026-10-12T09:00:00Z'),jumped:0},elements=new Map(),listeners={},keys=[],timers=[],waits=[],events=[],toasts=[],calls=[],reports=[],values=new Map(Object.entries(storage));
  class FixedDate extends Date{constructor(...a){super(...(a.length?a:[now.value+now.jumped]))}static now(){return now.value+now.jumped}}
  const document={activeElement:null,body:new Element('body'),createElement:tag=>{const e=new Element(tag);e.doc=document;return e},getElementById:id=>{if(!elements.has(id)){const e=document.createElement('div');e.id=id;elements.set(id,e)}return elements.get(id)},addEventListener:(name,fn)=>{if(name==='keydown')keys.push(fn)}};
- let store=model.normalize(initial),n=0,devices=[{id:'d1',name:'Karan phone',pairedAt:'2026-10-08T17:30:00Z',lastSeen:'2026-10-11T08:00:00Z'},{id:'d2',name:'Tablet',pairedAt:'2026-10-09T10:00:00Z',lastSeen:'2026-10-09T10:00:00Z'}];
+ let store=model.normalize(initial),n=0,devices=[{id:'d1',name:'Maya phone',pairedAt:'2026-10-08T17:30:00Z',lastSeen:'2026-10-11T08:00:00Z'},{id:'d2',name:'Tablet',pairedAt:'2026-10-09T10:00:00Z',lastSeen:'2026-10-09T10:00:00Z'}];
  const frame={pairing,pick:'64',address:'192.168.0.12',openError:null},busy=()=>['waiting','code'].includes(frame.pairing.phase);
  const settings={location:null,appearance:{palette:'linen',mode:'auto'}},applied=[];
  const app={notify:m=>toasts.push(m),icon:name=>'<svg data-name="'+name+'"></svg>',calendarPreferences:()=>({timezone:'UTC',clock:'24'}),sharedSettings:()=>JSON.parse(JSON.stringify(settings)),
@@ -131,7 +131,7 @@ test('legacy shopping migrates exactly once and is then no longer written',()=>{
 });
 const instruction='Enter this code on your phone, then tap the number your phone shows.';
 const tags=node=>[node.tag,...node.children.flatMap(tags)];
-const reveal=(h,name="Karan's iPhone")=>{h.frame.name=name;h.frame.pairing={phase:'code',remaining:90000,code:'299871',numbers:['07','64','91']};h.window.SkylitPairing.update(h.frame.pairing)};
+const reveal=(h,name="Maya's iPhone")=>{h.frame.name=name;h.frame.pairing={phase:'code',remaining:90000,code:'299871',numbers:['07','64','91']};h.window.SkylitPairing.update(h.frame.pairing)};
 test('Pair a phone opens the window and waits with the time left',()=>{
  const h=launch(),o=h.overlay(),pairing=h.window.SkylitPairing;
  assert.equal(o.hidden,true);assert.equal(pairing.isOpen(),false);assert.equal(h.$('phone-pair').onclick===undefined,false);
@@ -151,8 +151,8 @@ test('the code screen shows six digits, three numbers, Cancel and the exact inst
  assert.equal(o.all('pairing-text')[0].textContent,instruction);assert.equal(o.all('pairing-hint')[0].hidden,false);assert.equal(o.all('pairing-hint')[0].textContent,'No number on your phone? Tap Cancel.');assert.deepEqual(o.all('pairing-pick').map(b=>b.textContent),['07','64','91']);assert.equal(o.all('secondary')[0].textContent,'Cancel');assert.match(o.textContent,/Time left 1:30/);
  h.key('Tab');assert.equal(h.document.activeElement.textContent,'07');h.key('Tab');h.key('Tab');h.key('Tab');assert.equal(h.document.activeElement.textContent,'Cancel');
  o.all('pairing-pick')[1].onclick();assert.deepEqual(h.calls.at(-1),{tap:'64'});
- assert.match(o.textContent,/Phone paired/);assert.equal(o.all('pairing-text')[0].textContent,"Karan's iPhone can now use this frame.");assert.equal(o.all('pairing-pick').length,0);assert.equal(o.all('pairing-code')[0].textContent,'');assert.equal(o.all('pairing-countdown')[0].hidden,true);
- assert.match(h.$('phone-devices').textContent,/Karan's iPhone/);assert.equal(h.$('phone-note').textContent,"Karan's iPhone paired just now.");assert.equal(o.all('pairing-hint')[0].hidden,true);
+ assert.match(o.textContent,/Phone paired/);assert.equal(o.all('pairing-text')[0].textContent,"Maya's iPhone can now use this frame.");assert.equal(o.all('pairing-pick').length,0);assert.equal(o.all('pairing-code')[0].textContent,'');assert.equal(o.all('pairing-countdown')[0].hidden,true);
+ assert.match(h.$('phone-devices').textContent,/Maya's iPhone/);assert.equal(h.$('phone-note').textContent,"Maya's iPhone paired just now.");assert.equal(o.all('pairing-hint')[0].hidden,true);
  assert.equal(o.all('secondary')[0].textContent,'Done');o.all('secondary')[0].onclick();assert.equal(h.window.SkylitPairing.isOpen(),false);
 });
 test('each ending has its own calm wording, and a window that just ran out is a timeout, not a cancellation',()=>{
@@ -194,7 +194,7 @@ test('a pairing already under way is shown when the dashboard loads',()=>{
 });
 test('Phone app settings show the address and list devices with paired and last-seen dates',()=>{
  const h=launch();assert.match(h.$('phone-status').textContent,/Ready to pair/);assert.equal(h.$('phone-address').textContent,'Address for manual entry: 192.168.0.12:8765');assert.equal(h.$('phone-address').hidden,false);
- const rows=()=>h.$('phone-devices').all('preference-row');assert.equal(rows().length,2);assert.match(rows()[0].textContent,/Karan phone.*Paired Oct 8, 2026 · Last seen Oct 11, 2026/);assert.match(rows()[1].textContent,/Tablet.*Paired Oct 9, 2026 · Last seen Oct 9, 2026/);
+ const rows=()=>h.$('phone-devices').all('preference-row');assert.equal(rows().length,2);assert.match(rows()[0].textContent,/Maya phone.*Paired Oct 8, 2026 · Last seen Oct 11, 2026/);assert.match(rows()[1].textContent,/Tablet.*Paired Oct 9, 2026 · Last seen Oct 9, 2026/);
  const remove=rows()[0].all('quiet')[0];assert.equal(remove.textContent,'Remove');remove.onclick();assert.equal(h.calls.length,0);assert.match(remove.textContent,/again/);remove.onclick();assert.deepEqual(h.calls[0],{revoke:'d1'});assert.equal(rows().length,1);assert.equal(h.$('phone-revoke-all').hidden,false);
  assert.equal(h.$('phone-revoke-all').textContent,'Remove all phones');h.$('phone-revoke-all').onclick();assert.equal(h.calls.length,1);h.$('phone-revoke-all').onclick();assert.deepEqual(h.calls[1],{revokeAll:true});assert.equal(rows().length,0);assert.match(h.$('phone-devices').textContent,/No phones are paired/);assert.equal(h.$('phone-revoke-all').hidden,true);
  h.frame.address='';h.window.SkylitPairing.refresh();assert.equal(h.$('phone-address').hidden,true);assert.equal(h.$('phone-address').textContent,'');
@@ -204,9 +204,9 @@ test('Phone app settings show the address and list devices with paired and last-
 });
 test('remote settings reuse the frame setters, validate input and report back',()=>{
  const h=launch();assert.deepEqual(h.reports,[{location:null,appearance:{palette:'linen',mode:'auto'}}]);
- h.window.SkylitRemote.apply({location:{name:' Calgary ',latitude:51.05,longitude:-114.07,timezone:'America/Edmonton'},appearance:{palette:'ocean',mode:'dark'}});
- assert.deepEqual(JSON.parse(JSON.stringify(h.applied)),[['city',{name:'Calgary',admin1:'',country:'',latitude:51.05,longitude:-114.07,timezone:'America/Edmonton'}],['display',{theme:'ocean',mode:'dark'}]]);
- assert.deepEqual(h.reports.at(-1),{location:{name:'Calgary',latitude:51.05,longitude:-114.07,timezone:'America/Edmonton'},appearance:{palette:'ocean',mode:'dark'}});
+ h.window.SkylitRemote.apply({location:{name:' Denver ',latitude:39.74,longitude:-104.99,timezone:'America/Denver'},appearance:{palette:'ocean',mode:'dark'}});
+ assert.deepEqual(JSON.parse(JSON.stringify(h.applied)),[['city',{name:'Denver',admin1:'',country:'',latitude:39.74,longitude:-104.99,timezone:'America/Denver'}],['display',{theme:'ocean',mode:'dark'}]]);
+ assert.deepEqual(h.reports.at(-1),{location:{name:'Denver',latitude:39.74,longitude:-104.99,timezone:'America/Denver'},appearance:{palette:'ocean',mode:'dark'}});
  const before=h.reports.length;h.window.SkylitRemote.apply({});assert.equal(h.applied.length,2);assert.equal(h.reports.length,before+1);
  h.window.SkylitRemote.apply(JSON.stringify({location:{name:'Oslo',latitude:59.9,longitude:10.7,timezone:'Mars/Olympus'}}));assert.equal(h.applied[2][1].timezone,Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC');
  for(const bad of [{location:{name:'',latitude:1,longitude:1}},{location:{name:'X',latitude:91,longitude:0}},{location:{name:'X',latitude:'1',longitude:0}},{location:{name:'n'.repeat(81),latitude:1,longitude:1}},{appearance:{palette:'neon',mode:'disco'}},{appearance:{palette:'constructor'}},null,'{{'])h.window.SkylitRemote.apply(bad);
@@ -246,4 +246,14 @@ test('the "paired just now" line does not outlive the visit to Phone app',()=>{
  h.overlay().all('pairing-pick')[1].onclick();assert.equal(h.$('phone-note').textContent,'Maya phone paired just now.');
  h.window.SkylitPairing.update({phase:'idle'});assert.equal(h.$('phone-note').textContent,'Maya phone paired just now.');
  h.window.SkylitPairing.refresh();assert.equal(h.$('phone-note').textContent,'');
+});
+test('a phone the frame could not save is explained, not shown as a wrong tap',()=>{
+ const h=launch(),pairing=h.window.SkylitPairing;h.$('phone-pair').onclick();pairing.update({phase:'cancelled',reason:'storage'});
+ assert.match(h.overlay().textContent,/could not save this phone.*Nothing was paired/);assert.doesNotMatch(h.overlay().textContent,/another device|not the number/i);
+});
+test('a paired phone with no recorded date is listed without an invented one',()=>{
+ const h=launch();h.window.SkylitPairing.update({phase:'idle'});
+ const before=h.$('phone-devices').textContent;assert.match(before,/Paired/);
+ const status=h.window.Skylit.pairingStatus;h.window.Skylit.pairingStatus=()=>{const s=JSON.parse(status());s.devices=[{id:'d7',name:'Early phone',pairedAt:null,lastSeen:null}];return JSON.stringify(s)};
+ h.window.SkylitPairing.refresh();assert.equal(h.$('phone-devices').textContent.replace('Remove',''),'Early phone');
 });

@@ -45,4 +45,8 @@ final class ApiException extends Exception {
   static ApiException rateLimited(String message) {
     return new ApiException(429, "rate_limited", message);
   }
+
+  static ApiException unsaved() {
+    return new ApiException(500, "internal", "The frame could not save this change. Its storage may be full.");
+  }
 }

@@ -282,7 +282,7 @@ public final class LocalServerTest {
 
     Fakes.Phone phone = new Fakes.Phone();
     check(api.pairingOpen().contains("\"ok\":true"), "the person opens a window");
-    Fakes.Reply started = phone.start(throughMallory, "Karan's iPhone");
+    Fakes.Reply started = phone.start(throughMallory, "Maya's iPhone");
     same(200, started.status, "the relay carries start to the frame");
     check(Arrays.equals(mallory.fpRaw, started.fpRaw) && !Arrays.equals(api.identity().fpRaw, started.fpRaw), "the phone's leg ends at the relay's certificate, not the frame's");
     same(204, phone.reveal(throughMallory, started.fpRaw).status, "the relay carries reveal to the frame");
@@ -296,8 +296,8 @@ public final class LocalServerTest {
     Fakes.Phone attacker = new Fakes.Phone();
     Fakes.Phone honest = new Fakes.Phone();
     check(api.pairingOpen().contains("\"ok\":true"), "the person opens another window");
-    same(200, attacker.start(direct, "Karan's iPhone").status, "another device gets in first");
-    Fakes.Reply late = honest.start(direct, "Karan's iPhone");
+    same(200, attacker.start(direct, "Maya's iPhone").status, "another device gets in first");
+    Fakes.Reply late = honest.start(direct, "Maya's iPhone");
     same(409, late.status, "the real phone is told the window is taken");
     same("pairing_busy", late.error(), "with the pairing_busy slug");
     same(204, attacker.reveal(direct, api.identity().fpRaw).status, "the other device makes the frame show a code");
@@ -442,8 +442,8 @@ public final class LocalServerTest {
     check(Arrays.asList(LocalServer.SUITES).contains(info.suite), "info travels over one of the two suites");
     same(api.identity().fp, Digests.hex(info.fpRaw), "the handshake certificate's fingerprint is the frame's fp");
     transport();
-    token = pair(loopback, "Karan's iPhone");
-    same("Karan's iPhone", Json.map(call("GET", "/v1/devices", null).list().get(0)).get("name"), "device listed");
+    token = pair(loopback, "Maya's iPhone");
+    same("Maya's iPhone", Json.map(call("GET", "/v1/devices", null).list().get(0)).get("name"), "device listed");
 
     same(0L, call("GET", "/v1/state", null).object().get("rev"), "empty state");
     Map<String, Object> person = Json.map(call("POST", "/v1/people", "{\"name\":\"Maya\",\"color\":\"#00A36C\"}").object().get("person"));

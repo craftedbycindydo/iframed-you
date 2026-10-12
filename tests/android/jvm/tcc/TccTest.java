@@ -44,8 +44,9 @@ public final class TccTest {
       return values.get(key);
     }
 
-    @Override public void put(String key, String value) {
+    @Override public boolean put(String key, String value) {
       values.put(key, value);
+      return true;
     }
   }
 

@@ -23,11 +23,13 @@ final class HouseholdStore {
   private List<Object> shopping = new ArrayList<>();
   private long rev;
   private long sequence;
+  int dropped;
 
   HouseholdStore(KeyValue storage) {
     this.storage = storage;
+    String raw = storage.get(KEY);
     try {
-      Map<String, Object> saved = Json.map(Json.parse(storage.get(KEY)));
+      Map<String, Object> saved = Json.map(Json.parse(raw));
       long savedRev = ((Number) saved.get("rev")).longValue();
       long savedSequence = ((Number) saved.get("sequence")).longValue();
       List<Object> savedPeople = rows(saved.get("people"), "person");
@@ -43,9 +45,16 @@ final class HouseholdStore {
       people = savedPeople;
       chores = savedChores;
       shopping = savedShopping;
+      dropped = size(saved.get("people")) + size(saved.get("chores")) + size(saved.get("shopping")) - people.size() - chores.size() - shopping.size();
     } catch (Json.Malformed | RuntimeException absentOrUnreadable) {
       rev = 0;
+      dropped = raw == null || raw.isEmpty() ? 0 : 1;
     }
+    if (dropped > 0) storage.put(KEY + "-damaged", raw);
+  }
+
+  private static int size(Object value) {
+    return Json.list(value) == null ? 0 : Json.list(value).size();
   }
 
   private static List<Object> rows(Object value, String kind) {
@@ -92,6 +101,22 @@ final class HouseholdStore {
   synchronized Map<String, Object> mutate(Map<String, Object> op, String today) throws ApiException {
     prune(today);
     String before = content();
+    List<Object> oldPeople = Json.list(Json.copy(people));
+    List<Object> oldChores = Json.list(Json.copy(chores));
+    List<Object> oldShopping = Json.list(Json.copy(shopping));
+    long oldSequence = sequence;
+    try {
+      return attempt(op, today, before);
+    } catch (ApiException refused) {
+      people = oldPeople;
+      chores = oldChores;
+      shopping = oldShopping;
+      sequence = oldSequence;
+      throw refused;
+    }
+  }
+
+  private Map<String, Object> attempt(Map<String, Object> op, String today, String before) throws ApiException {
     String key = null;
     Map<String, Object> changed = null;
     Object name = op.get("op");
@@ -148,7 +173,10 @@ final class HouseholdStore {
     }
     if (!content().equals(before)) {
       rev++;
-      save();
+      if (!save()) {
+        rev--;
+        throw ApiException.unsaved();
+      }
     }
     Map<String, Object> result = Json.object("rev", rev);
     if (changed != null) result.put(key, Json.copy(changed));
@@ -159,12 +187,12 @@ final class HouseholdStore {
     return Json.write(Json.object("people", people, "chores", chores, "shopping", shopping));
   }
 
-  private void save() {
+  private boolean save() {
     Map<String, Object> saved = Json.object("rev", rev, "sequence", sequence);
     saved.put("people", people);
     saved.put("chores", chores);
     saved.put("shopping", shopping);
-    storage.put(KEY, Json.write(saved));
+    return storage.put(KEY, Json.write(saved));
   }
 
   private void prune(String today) {

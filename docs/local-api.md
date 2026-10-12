@@ -30,6 +30,10 @@ This file is the contract between the Android viewer, the dashboard and the iOS 
   400 `bad_request`, 401 `unauthorized`, 403 `forbidden`, 404 `not_found`, 409 `conflict` or
   `pairing_busy`, 410 `gone`, 413 `too_large`, 429 `rate_limited`, 500 `internal`.
   Clients branch on `code`, never on `message`.
+- A change the frame cannot write to its storage (a full disk) is `500` `internal` and is not
+  applied: the frame keeps showing, and serving, what it last saved. This covers people, chores,
+  shopping, both settings, connecting an album and a phone removing itself. The request can be
+  repeated later.
 - Every authenticated request carries `Authorization: Bearer <token>`, where `<token>` is the 64
   lowercase hex characters of the phone's 32 raw token bytes. Anything else, including uppercase
   hex, is `401`. A route that does not exist is `401` without a valid token and `404` with one.
@@ -74,7 +78,7 @@ All hex on the wire is lowercase; receivers reject anything but `[0-9a-f]` of th
    a monotonic clock. Pairing calls are `409` at any other time.
 2. The phone generates fresh random `nP` and a fresh random 32-byte `token`, and sends
    `POST /v2/pair/start`
-   `{"commit":"<SHA-256 of nP>","tokenHash":"<SHA-256 of token>","deviceName":"Karan's iPhone"}` →
+   `{"commit":"<SHA-256 of nP>","tokenHash":"<SHA-256 of token>","deviceName":"Maya's iPhone"}` →
    `{"session","nF"}`. `tokenHash` is SHA-256 over the 32 raw token bytes (not over their hex
    text). `nF` is fresh per call. The first well-formed `start` after the window opens consumes
    the window whether or not it goes further; a malformed one (`400`) does not. While that session
@@ -130,11 +134,15 @@ It does not protect against someone who can read the frame's screen and touch it
 
 | Call | Auth | Result |
 | --- | --- | --- |
-| `GET /v1/devices` | token | `[{"id","name","pairedAt","lastSeen","self":true|false}]` |
+| `GET /v1/devices` | token | `[{"id","name","pairedAt":"ISO-8601"|null,"lastSeen":"ISO-8601"|null,"self":true|false}]` |
 | `DELETE /v1/devices/{id}` | token | `204` only for the caller's own device; `403` otherwise |
 
 - The frame stores only `tokenHash`. Tokens do not expire; `lastSeen` is recorded at most once a day
   per device so the owner can spot and remove stale ones.
+- A phone paired while the frame's clock is not set (before 2026) has `pairedAt` and `lastSeen`
+  `null`; both are filled in at its first request after the clock is right. The frame's list
+  shows no date until then.
+- A stored device row that cannot be read is dropped by itself; the other phones stay paired.
 - The frame's Settings list shows each device with its paired and last-seen dates and can remove any
   device or all of them.
 - Up to 20 devices can be paired, each with its own token; with 20 paired the frame will not open
@@ -152,7 +160,7 @@ It does not protect against someone who can read the frame's screen and touch it
   "chores": [{"id":"c1","title":"Make bed","emoji":"🛏️","personId":"p1","days":[1,2,3,4,5],"done":["2026-10-11"]}],
   "shopping": [{"id":"s1","name":"Milk","qty":2,"note":"","done":false}],
   "settings": {
-    "location": {"name":"Calgary","latitude":51.05,"longitude":-114.07,"timezone":"America/Edmonton"},
+    "location": {"name":"Denver","latitude":39.74,"longitude":-104.99,"timezone":"America/Denver"},
     "appearance": {"palette":"linen","mode":"auto"},
     "icloudAlbum": null
   },
@@ -243,6 +251,8 @@ This relies on the unofficial `sharedstreams` web endpoints Apple's own album pa
 - The frame syncs on connect, on start, and every 30 minutes; after a failed sync it waits longer
   each time, up to six hours, and tries at once when Wi-Fi returns. It keeps the newest pictures up
   to the library limit, removes pictures deleted from the album, and skips videos.
+- If the saved album record cannot be read at start, the frame has no album and removes the
+  album's pictures, as `DELETE` would; phone and email pictures stay.
 - A sync, a status change or an error each bump `rev` once. `PUT` returns before the first
   sync finishes; `name` is `""` until it has. `DELETE` with no album is `200`; `sync` with no
   album is `409`.
@@ -263,10 +273,11 @@ Native → dashboard (via `evaluateJavascript`, each guarded with `window.X&&`):
   `{"phase":"idle"}`, `{"phase":"waiting","remaining":<ms>}`,
   `{"phase":"code","remaining":<ms>,"code":"299871","numbers":["07","64","91"]}`,
   `{"phase":"paired","name":"<device name>"}` or
-  `{"phase":"cancelled","reason":"decoy"|"frame"|"phone"|"refused"|"expired"}`.
+  `{"phase":"cancelled","reason":"decoy"|"frame"|"phone"|"refused"|"expired"|"storage"}`.
   The dashboard titles `expired` "Pairing timed out" ("No phone was paired. Open Pair a phone to
   try again.") and every other reason "Pairing cancelled"; only `refused` (a wrong `nP`) mentions
-  that another device may be interfering. The paired, timed-out and cancelled screens close
+  that another device may be interfering. `storage` means the right number was tapped but the
+  frame could not save the phone; the phone's `result` is `403` and its token does not work. The paired, timed-out and cancelled screens close
   themselves after about six seconds by calling `pairingCancel()`, and the outcome stays as one
   line in Settings → Phone app.
   `remaining` is milliseconds left on the frame's monotonic clock; the dashboard only draws the
@@ -280,7 +291,8 @@ Native → dashboard (via `evaluateJavascript`, each guarded with `window.X&&`):
 Dashboard → native (`window.Skylit.*`, all return a JSON string or boolean):
 
 - `householdSnapshot()` → the snapshot above.
-- `householdMutate(json)` → `{"ok":true,"snapshot":{…}}` or `{"ok":false,"error":"…"}`.
+- `householdMutate(json)` → `{"ok":true,"snapshot":{…}}` or `{"ok":false,"error":"…"}`. A change
+  that cannot be saved is `ok:false` and is not applied; the dashboard shows `error` as a notice.
   `json` is `{"op":"<name>", …fields}` with ops `person.add`, `person.update`,
   `person.remove`, `chore.add`, `chore.update`, `chore.remove`, `chore.done`,
   `item.add`, `item.update`, `item.remove`, `items.clearDone`. Fields match the HTTP bodies,
@@ -296,7 +308,8 @@ Dashboard → native (`window.Skylit.*`, all return a JSON string or boolean):
   while a code is shown ends the session and returns `false`.
 - `pairingCancel()` → boolean. Cancels an open window or session; on the success or cancelled
   screen it returns pairing to `idle`.
-- `pairingRevoke(id)` and `pairingRevokeAll()` → boolean.
+- `pairingRevoke(id)` and `pairingRevokeAll()` → boolean. `false` also when the removal could not be
+  saved: the phone is refused until the frame restarts, and the dashboard says it could not remove it.
 
 Thermostats (Honeywell Total Connect Comfort) are reached only through the bridge. The frame's
 native code signs in and polls; there are no thermostat routes in the phone API.

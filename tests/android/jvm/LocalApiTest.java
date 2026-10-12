@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.EOFException;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
@@ -106,7 +107,7 @@ public final class LocalApiTest {
     same("x\n\u00e9\"\ud83d\ude00", parsed.get("b"), "escapes decode");
     same(parsed, Json.parse(Json.write(parsed)), "write then parse round trips");
     same("\"\\u2028\\u0001\"", Json.write("\u2028\u0001"), "script-breaking characters are escaped");
-    same("{\"n\":2,\"d\":51.05}", Json.write(Json.object("n", 2L, "d", 51.05)), "numbers keep their shape");
+    same("{\"n\":2,\"d\":39.74}", Json.write(Json.object("n", 2L, "d", 39.74)), "numbers keep their shape");
     String[] malformed = {"", "{", "{\"a\":1,}", "[1 2]", "{\"a\":01}", "\"\t\"", "{\"a\":1} x", "nul", "{a:1}", "\"\\x\"",
         "1e999", "-", repeat("[", 40) + repeat("]", 40)};
     for (String text : malformed) {
@@ -403,10 +404,10 @@ public final class LocalApiTest {
     uptime.now += Pairing.WINDOW;
     same(410, unrevealed.reveal(wire, api.identity().fpRaw).status, "reveal after expiry");
 
-    Fakes.Phone welcome = revealed("Karan's iPhone");
+    Fakes.Phone welcome = revealed("Maya's iPhone");
     check(api.pairingTap(welcome.pick), "tapping the phone's number approves");
     same("paired", events.pairing.get("phase"), "the frame shows success");
-    same("Karan's iPhone", events.pairing.get("name"), "with the device name");
+    same("Maya's iPhone", events.pairing.get("name"), "with the device name");
     Fakes.Reply approved = welcome.result(wire);
     same(200, approved.status, "result after approval");
     same(api.frameId(), approved.object().get("frameId"), "result frame id");
@@ -685,6 +686,12 @@ public final class LocalApiTest {
     same("a\u200b", row(call("POST", "/v1/shopping", Json.write(Json.object("name", "a\u200b"))), "item").get("name"), "one visible character is enough");
     same(200, call("POST", "/v1/chores", Json.write(Json.object("title", "Bins", "emoji", ""))).status, "an empty emoji is still allowed");
     same(200, call("POST", "/v1/shopping", Json.write(Json.object("name", "Tea", "note", "\u200b"))).status, "an optional note is not held to this");
+    for (String name : new String[] {"\u0645\u062d\u0645\u062f", "\u0641\u0627\u0637\u0645\u0629 \u0627\u0644\u0632\u0647\u0631\u0627\u0621", "\u05d3\u05b8\u05bc\u05d5\u05b4\u05d3", "\u0936\u093f\u0935", "\u092a\u094d\u0930\u093f\u092f\u093e", "\u0e2a\u0e21\u0e0a\u0e32\u0e22", "\u0e19\u0e49\u0e33", "\uae40\ubbfc\uc900", "\u1100", "\u5c71\u7530\u592a\u90ce", "\u738b\u82b3", "Zo\u00eb", "Zoe\u0308", "Nguy\u1ec5n", "e\u0301", "\u0301", "\ud83d\ude00", "\ud83d\udc4d\ud83c\udffd", "\ud83e\uddd1\ud83c\udfff\u200d\ud83e\uddb1", "\ud83c\udde8\ud83c\udde6", "\ud83c\udff4\udb40\udc67\udb40\udc62\udb40\udc65\udb40\udc6e\udb40\udc67\udb40\udc7f", "1\ufe0f\u20e3", "\u2665", "\u200f\u05e2\u05d1\u05e8\u05d9\u05ea\u200f", "O\u2019Brien", "\u03a9mega", "\u2d30\u2d4e\u2d30\u2d63\u2d49\u2d56", "\u1403\u14c4\u1483\u144e\u1450\u1466", "\ud835\udc9c", ".", "-"}) {
+      same(name, row(call("POST", "/v1/shopping", Json.write(Json.object("name", name))), "item").get("name"), "a real name is kept as typed " + Json.write(name));
+      same(200, call("POST", "/v1/chores", Json.write(Json.object("title", name))).status, "and is a title " + Json.write(name));
+      api.pairingOpen();
+      same(200, new Fakes.Phone().start(wire, name).status, "and a device name " + Json.write(name));
+    }
     api.pairingOpen();
     same(400, new Fakes.Phone().start(wire, "\u200b\u2060").status, "a device name nobody can see is refused");
     same(true, Json.map(Json.parse(call("GET", "/v2/info", null).text())).get("pairing"), "and does not use up the window");
@@ -709,7 +716,12 @@ public final class LocalApiTest {
     same(200, call("GET", "/v1/devices", null).status, "paired phones are untouched");
     same("p13", row(call("POST", "/v1/people", "{\"name\":\"Noor\",\"color\":\"#123456\"}"), "person").get("id"), "new ids continue after the damage");
     same(200, call("PUT", "/v1/chores/c3/done", "{\"date\":\"2026-10-10\",\"done\":true}").status, "the surviving chore still works");
+    same(9, api.householdDropped(), "the dropped rows are counted for the log");
+    check(storage.values.get("household-damaged").contains("\"Nobody\"") && storage.values.get("household-damaged").contains("\"lots\""), "and the unreadable original is set aside, not lost");
     check(Json.map(Json.parse(api.householdMutate("{\"op\":\"chore.remove\",\"id\":\"c7\"}"))).get("ok").equals(true), "the dashboard can still change the list");
+    check(storage.values.get("household-damaged").contains("\"Nobody\""), "a later save leaves the copy alone");
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    same(0, api.householdDropped(), "a sound store drops nothing");
 
     storage.values.put("household", "{\"rev\":3,\"sequence\":4,\"people\":{},\"chores\":[[]],\"shopping\":null}");
     api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
@@ -736,6 +748,74 @@ public final class LocalApiTest {
     check(millis < 1500, "the fullest household loads, lists and saves quickly, took " + millis + " ms");
     check(storage.values.get("household").getBytes(StandardCharsets.UTF_8).length < 400 * 1024, "and stays far below what private storage holds comfortably: " + storage.values.get("household").length());
     check(full.length() > 100000, "with everything in it");
+  }
+
+  static void unsaved() throws Exception {
+    fresh();
+    same(200, call("POST", "/v1/people", "{\"name\":\"Maya\",\"color\":\"#00A36C\"}").status, "a person while storage works");
+    same(200, call("POST", "/v1/shopping", "{\"name\":\"Milk\"}").status, "an item while storage works");
+    String before = call("GET", "/v1/state", null).text();
+    String disk = storage.values.get("household");
+    int announced = events.count("household");
+    storage.full = true;
+    String[][] changes = {{"POST", "/v1/people", "{\"name\":\"Noor\",\"color\":\"#123456\"}"}, {"PATCH", "/v1/people/p1", "{\"name\":\"May\"}"}, {"DELETE", "/v1/people/p1", null},
+        {"POST", "/v1/chores", "{\"title\":\"Bins\"}"}, {"POST", "/v1/shopping", "{\"name\":\"Tea\"}"}, {"PATCH", "/v1/shopping/s2", "{\"done\":true}"},
+        {"DELETE", "/v1/shopping/s2", null}, {"PUT", "/v1/settings/appearance", "{\"palette\":\"sage\",\"mode\":\"dark\"}"},
+        {"PUT", "/v1/settings/location", "{\"name\":\"Denver\",\"latitude\":39.74,\"longitude\":-104.99}"},
+        {"PUT", "/v1/settings/icloud-album", "{\"url\":\"https://www.icloud.com/sharedalbum/#B0aGWZuqDGWZuqD\"}"}};
+    for (String[] change : changes) {
+      Fakes.Reply refused = call(change[0], change[1], change[2]);
+      same(500, refused.status, "a change that cannot be saved is not acknowledged: " + change[0] + " " + change[1]);
+      same("internal", refused.error(), "with the internal slug: " + change[1]);
+    }
+    same(before, call("GET", "/v1/state", null).text(), "and the frame keeps showing what is really saved");
+    same(announced, events.count("household"), "the dashboard is not told of a change that did not happen");
+    same(0, events.count("settings"), "nor asked to apply a setting that was not kept");
+    Map<String, Object> bridged = mutate("{\"op\":\"item.add\",\"name\":\"Jam\"}");
+    same(Boolean.FALSE, bridged.get("ok"), "the dashboard is told its own change was not saved");
+    check(((String) bridged.get("error")).contains("could not save"), "in words it can show: " + bridged.get("error"));
+    check(!api.reportSettings("{\"appearance\":{\"palette\":\"plum\",\"mode\":\"dark\"}}"), "a reported setting that cannot be kept says so");
+    same(disk, storage.values.get("household"), "nothing half-written reaches storage");
+    same(200, call("PATCH", "/v1/people/p1", "{\"name\":\"Maya\"}").status, "a request that changes nothing still succeeds");
+    same(200, call("GET", "/v1/photos", null).status, "reading still works");
+
+    api.pairingOpen();
+    Fakes.Phone late = new Fakes.Phone();
+    same(200, late.start(wire, "Late phone").status, "pairing can start");
+    same(204, late.reveal(wire, api.identity().fpRaw).status, "and reveal");
+    check(!api.pairingTap(late.pick), "the right number does not pair a phone that cannot be saved");
+    same("cancelled", events.pairing.get("phase"), "the frame shows it ended");
+    same("storage", events.pairing.get("reason"), "and why");
+    same(403, late.result(wire).status, "the phone is told it is not paired");
+    same(401, send("GET", "/v1/state", late.bearer(), null).status, "and its token does not work");
+    same(1, Json.list(Json.map(Json.parse(api.pairingStatus(0, false, ""))).get("devices")).size(), "only the first phone is listed");
+    check(!api.pairingRevoke((String) Json.map(Json.list(Json.map(Json.parse(api.pairingStatus(0, false, ""))).get("devices")).get(0)).get("id")), "a removal that cannot be saved is reported");
+    same(401, call("GET", "/v1/state", null).status, "though the phone is refused from now on");
+
+    storage.full = false;
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    same(before, call("GET", "/v1/state", null).text(), "after a restart the frame holds exactly what it acknowledged");
+    same("p3", row(call("POST", "/v1/people", "{\"name\":\"Noor\",\"color\":\"#123456\"}"), "person").get("id"), "ids refused during the failure are not skipped");
+  }
+
+  static void clockless() throws Exception {
+    fresh();
+    clock.jumped = -START + 86400000L * 400;
+    String early = pair("Early phone");
+    Map<String, Object> listed = Json.map(send("GET", "/v1/devices", early, null).list().get(1));
+    check(listed.get("pairedAt") == null && listed.get("lastSeen") == null, "a phone paired before the clock is set has no dates yet: " + Json.write(listed));
+    check(!storage.values.get(Identity.KEY).contains("1971"), "no date from an unset clock is stored");
+    clock.jumped = 0;
+    same(200, send("GET", "/v1/state", early, null).status, "its token works");
+    listed = Json.map(send("GET", "/v1/devices", early, null).list().get(1));
+    same("2026-10-11T00:00:00Z", listed.get("pairedAt"), "the date is recorded once the clock is right");
+    same("2026-10-11T00:00:00Z", listed.get("lastSeen"), "with when it was last seen");
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    same("2026-10-11T00:00:00Z", Json.map(send("GET", "/v1/devices", early, null).list().get(1)).get("pairedAt"), "and kept over a restart");
+    clock.jumped = -START + 86400000L * 400;
+    clock.now += 3 * 86400000L;
+    same(200, call("GET", "/v1/state", null).status, "a request while the clock is unset");
+    same("2026-10-11T00:00:00Z", Json.map(call("GET", "/v1/devices", null).list().get(0)).get("lastSeen"), "does not replace a real date with one from 1971");
   }
 
   static void limits() throws Exception {
@@ -797,10 +877,10 @@ public final class LocalApiTest {
 
   static void settings() throws Exception {
     fresh();
-    Fakes.Reply located = call("PUT", "/v1/settings/location", "{\"name\":\"Calgary\",\"latitude\":51.05,\"longitude\":-114.07,\"timezone\":\"America/Edmonton\"}");
+    Fakes.Reply located = call("PUT", "/v1/settings/location", "{\"name\":\"Denver\",\"latitude\":39.74,\"longitude\":-104.99,\"timezone\":\"America/Denver\"}");
     same("{\"rev\":1}", located.text(), "location saved");
-    same("{\"location\":{\"name\":\"Calgary\",\"latitude\":51.05,\"longitude\":-114.07,\"timezone\":\"America/Edmonton\"}}", events.settings, "dashboard asked to apply the location");
-    same("{\"name\":\"Calgary\",\"latitude\":51.05,\"longitude\":-114.07,\"timezone\":\"America/Edmonton\"}",
+    same("{\"location\":{\"name\":\"Denver\",\"latitude\":39.74,\"longitude\":-104.99,\"timezone\":\"America/Denver\"}}", events.settings, "dashboard asked to apply the location");
+    same("{\"name\":\"Denver\",\"latitude\":39.74,\"longitude\":-104.99,\"timezone\":\"America/Denver\"}",
         Json.write(Json.map(state().get("settings")).get("location")), "state serves the location");
     same(200, call("PUT", "/v1/settings/location", "{\"name\":\"Tokyo\",\"latitude\":35,\"longitude\":139}").status, "timezone is optional");
     check(Json.map(Json.map(state().get("settings")).get("location")).get("timezone") == null, "missing timezone is null");
@@ -1047,7 +1127,15 @@ public final class LocalApiTest {
     storage.values.put(Identity.KEY, Json.write(Json.object("key", key, "certificate", cert, "devices",
         java.util.Arrays.asList(Json.object("id", "d1", "name", "Old", "hash", "not a hash")))));
     api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
-    same("[]", Json.write(Json.map(Json.parse(api.pairingStatus(0, false, ""))).get("devices")), "a device row without a hash is dropped with the rest");
+    same("[]", Json.write(Json.map(Json.parse(api.pairingStatus(0, false, ""))).get("devices")), "a device row without a hash is dropped");
+    List<Object> mixed = new ArrayList<>(Json.list(unit.get("devices")));
+    mixed.add(0, Json.object("id", "d1", "name", "Old", "hash", "not a hash"));
+    mixed.add("nonsense");
+    mixed.add(Json.object("name", "No id", "hash", repeat("ab", 32)));
+    storage.values.put(Identity.KEY, Json.write(Json.object("key", key, "certificate", cert, "devices", mixed)));
+    api = new LocalApi(storage, clock, uptime, calendars, photos, sync(events), new Fakes.Recorder());
+    same(200, call("GET", "/v1/state", null).status, "a damaged device row does not unpair the sound ones");
+    same(1, Json.list(Json.map(Json.parse(api.pairingStatus(0, false, ""))).get("devices")).size(), "only the sound device is listed");
 
     Fakes.Storage upgraded = new Fakes.Storage();
     String oldToken = repeat("ab", 32);
@@ -1069,7 +1157,7 @@ public final class LocalApiTest {
     call("POST", "/v1/chores", "{\"title\":\"Make bed\",\"emoji\":\"\ud83d\udecf\ufe0f\",\"personId\":\"p1\",\"days\":[1,2]}");
     call("PUT", "/v1/chores/c2/done", "{\"date\":\"2026-10-11\",\"done\":true}");
     call("POST", "/v1/shopping", "{\"name\":\"Milk \\\"2%\\\"\",\"qty\":2,\"note\":\"caf\u00e9\"}");
-    call("PUT", "/v1/settings/location", "{\"name\":\"Calgary\",\"latitude\":51.05,\"longitude\":-114.07,\"timezone\":\"America/Edmonton\"}");
+    call("PUT", "/v1/settings/location", "{\"name\":\"Denver\",\"latitude\":39.74,\"longitude\":-104.99,\"timezone\":\"America/Denver\"}");
     call("PUT", "/v1/settings/appearance", "{\"palette\":\"sage\",\"mode\":\"dark\"}");
     String before = call("GET", "/v1/state", null).text();
     String frameId = api.frameId();
@@ -1100,7 +1188,7 @@ public final class LocalApiTest {
     HouseholdStore store = new HouseholdStore(new Fakes.Storage());
     same(1L, store.touch(), "touch is one revision");
     same("2026-10-11", FrameTime.day(START, TimeZone.getTimeZone("UTC")), "day in UTC");
-    same("2026-10-10", FrameTime.day(START, TimeZone.getTimeZone("America/Edmonton")), "day in the frame zone");
+    same("2026-10-10", FrameTime.day(START, TimeZone.getTimeZone("America/Denver")), "day in the frame zone");
     same("2026-03-01", FrameTime.shift("2026-02-28", 1), "shift over a month end");
     same("2025-12-31", FrameTime.shift("2026-01-13", -13), "shift over a year end");
     check(FrameTime.validDay("2028-02-29") && !FrameTime.validDay("2026-02-29") && !FrameTime.validDay("2026-13-01") && !FrameTime.validDay(null), "calendar days are validated");
@@ -1273,6 +1361,8 @@ public final class LocalApiTest {
     tokens();
     household();
     limits();
+    unsaved();
+    clockless();
     blanks();
     invisible();
     damaged();

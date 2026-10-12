@@ -16,14 +16,17 @@ themes, Momo, calendar, weather and photo viewer are Skylit's work. See
 
 | Area | Addition |
 | --- | --- |
-| Frame | A paired local HTTP server inside the Android viewer, advertised over Bonjour as `_skylit._tcp` |
+| Frame | A local HTTPS server (TLS 1.2, self-signed certificate pinned by the phone) inside the Android viewer, advertised over Bonjour as `_skylit._tcp` |
 | Dashboard | A Chores page (people, daily and weekly chores, tap to complete) and a shared shopping list |
 | Photos | Pictures sent straight from a phone, and a mirrored public iCloud Shared Album |
+| Thermostats | Honeywell Total Connect Comfort tiles on the Overview: temperature, set point, heat/cool and resume schedule. The frame signs in itself; thermostats are not part of the phone API |
 | iPhone | `ios/`: a SwiftUI app for chores, shopping, photos and frame setup, including setting the weather city from the phone's location |
 | Contract | [docs/local-api.md](docs/local-api.md): every endpoint, the pairing flow and the dashboard bridge |
 
-Everything stays on the home network. The phone finds the frame by name, pairs once with a
-six-digit code shown on the frame, and is trusted from then on.
+Phone and frame talk only on the home network. The phone finds the frame by name and pairs once:
+the frame shows a six-digit code, the person types it into the phone, and then taps on the frame
+the two-digit number the phone shows. The thermostat tiles are the exception to "home network":
+the frame talks to Honeywell's website for them.
 
 ## Status
 
@@ -42,6 +45,9 @@ Known limits:
 - iCloud album sync uses the unofficial endpoints behind Apple's public album web page. Only
   `https://www.icloud.com/sharedalbum/#…` links are accepted.
 - Traffic between phone and frame is TLS 1.2 on the local network. The phone pins the frame's self-signed certificate while pairing.
+- Settings closes itself after three minutes without a touch, or fifteen while a text field has focus or pairing, a sign-in or a sync is under way. Typed text is still there when it is reopened.
+- Thermostat tiles use Honeywell's website, not an official API. Readings refresh every minute while the Overview shows and every five minutes otherwise; three wrong passwords pause sign-in for ten minutes or longer.
+- The pairing changes, thermostat tiles and the later fixes have been exercised with the desktop JVM, Node and browser suites; what still needs the real frame and real accounts is listed at the top of [docs/verification.md](docs/verification.md).
 - Emoji newer than Android 6's font show as an empty box on the frame.
 - The frame froze once with its render thread stuck in the Mali GPU driver. The cause is not known.
 
@@ -49,7 +55,7 @@ Known limits:
 
 ```
 web/        Dashboard (plain HTML, CSS, JavaScript; no build step)
-android/    Android viewer, local server, household store, iCloud sync (no Gradle)
+android/    Android viewer, local TLS server, household store, iCloud sync, thermostat client (no Gradle)
 ios/        iPhone app (XcodeGen project + SkylitCore Swift package)
 docs/       Contract, architecture, setup guides
 tests/      JavaScript, Python and desktop-JVM tests
@@ -63,6 +69,10 @@ node --test tests/*.test.cjs
 python3 -m unittest discover -s tests
 cd ios/SkylitCore && swift test
 ```
+
+The Python run compiles the frame's server, pairing, household store, iCloud sync and thermostat
+client with a desktop JDK and runs them against fakes; it takes about a minute and a half.
+[docs/testing.md](docs/testing.md) has the rendered browser check and the device checks.
 
 ## Preview the dashboard in a browser
 

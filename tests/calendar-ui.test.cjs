@@ -7,20 +7,20 @@ class Element{
  set textContent(v){this._text=v;this.children=[]}get textContent(){return this._text+this.children.map(c=>c.textContent||'').join('')}
  append(...c){this.children.push(...c)}setAttribute(k,v){this.attrs[k]=v}scrollIntoView(){}
 }
-function setup({multiple=false,organizer='',savedView=null}={}){
- const now=Date.parse('2026-10-10T08:00Z'),elements=new Map(),pending=[],listeners={};
+function setup({multiple=false,organizer='',savedView=null,fetched=0}={}){
+ const now=Date.parse('2026-10-10T08:00Z'),elements=new Map(),pending=[],listeners={},ticks=[],refreshes=[];
  const network={onLine:true},storage=new Map();if(savedView)storage.set('skylit.calendarView',JSON.stringify(savedView));
  const $=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id)};
- let sources=[{id:'demo',name:'Example',color:'#833e2c',body:'synthetic',fetchedAt:now}],lists=0;const accepted=[];
- const window={SkylitApp:{calendarPreferences:()=>({timezone:'UTC',clock:'24'}),go(){}},Skylit:{calendarList:()=>{lists++;return JSON.stringify(sources)},calendarRefresh(){},calendarAccept(id,request,ok){accepted.push([id,request,ok]);if(ok)sources=sources.map(s=>s.id===id?{...s,body:'synthetic',fetchedAt:now}:s);return true},calendarRemove(id){sources=sources.filter(s=>s.id!==id);return true}},addEventListener(name,fn){listeners[name]=fn}};
+ let sources=[{id:'demo',name:'Example',color:'#833e2c',body:'synthetic',fetchedAt:now+fetched}],lists=0;const accepted=[];
+ const window={SkylitApp:{calendarPreferences:()=>({timezone:'UTC',clock:'24'}),go(){}},Skylit:{calendarList:()=>{lists++;return JSON.stringify(sources)},calendarRefresh(id){refreshes.push(id)},calendarAccept(id,request,ok){accepted.push([id,request,ok]);if(ok)sources=sources.map(s=>s.id===id?{...s,body:'synthetic',fetchedAt:now}:s);return true},calendarRemove(id){sources=sources.filter(s=>s.id!==id);return true}},addEventListener(name,fn){listeners[name]=fn}};
  class FixedDate extends Date{constructor(...a){super(...(a.length?a:[now]))}static now(){return now}}
  class Worker{postMessage(bounds){this.bounds=bounds;pending.push(this)}terminate(){}}
- vm.runInNewContext(fs.readFileSync('web/calendar.js','utf8'),{window,document:{getElementById:$,createElement:tag=>new Element(tag),createTextNode:t=>({textContent:t})},Date:FixedDate,Intl,Worker,SkylitOverview:Overview,SkylitCalendarPolicy:CalendarPolicy,navigator:network,localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},setTimeout,clearTimeout,setInterval(){}});
+ vm.runInNewContext(fs.readFileSync('web/calendar.js','utf8'),{window,document:{getElementById:$,createElement:tag=>new Element(tag),createTextNode:t=>({textContent:t})},Date:FixedDate,Intl,Worker,SkylitOverview:Overview,SkylitCalendarPolicy:CalendarPolicy,navigator:network,localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},setTimeout,clearTimeout,setInterval(fn){ticks.push(fn)}});
  const event={title:'Upcoming example',organizer,allDay:false,startDay:'2026-10-10',endDay:'2026-10-10',start:now+3600000,end:now+7200000};
  const eventList=multiple?[event,{...event,title:'Later today',start:now+10800000,end:now+14400000},{...event,title:'Next day',startDay:'2026-10-11',endDay:'2026-10-11',start:now+86400000,end:now+90000000}]:[event];
  const complete=(worker,fail=false)=>fail?worker.onmessage({data:{error:'bad'}}):worker.onmessage({data:{events:eventList.filter(e=>worker.bounds.from<=e.startDay&&worker.bounds.to>e.startDay)}});
  const flush=()=>new Promise(resolve=>setImmediate(resolve));
- return {$,pending,complete,flush,network,listeners,storage,window,accepted,lists:()=>lists,native:{add:s=>sources.push(s),remove:id=>{sources=sources.filter(s=>s.id!==id)}}};
+ return {$,pending,complete,flush,network,listeners,storage,window,accepted,ticks,refreshes,lists:()=>lists,native:{add:s=>sources.push(s),remove:id=>{sources=sources.filter(s=>s.id!==id)}}};
 }
 test('calendar ignores stale render results and overview stays on today while browsing other months',async()=>{
  const h=setup();h.complete(h.pending.shift());await h.flush();assert.match(h.$('overview-events').textContent,/Upcoming example/);assert.equal(h.$('overview-plans').dataset.unset,'false');
@@ -110,4 +110,9 @@ test('a calendar removed from a phone drops its row and events immediately',asyn
  h.native.remove('demo');await h.window.SkylitCalendar.receive({id:'demo',removed:true,error:'This calendar was removed from a paired phone.'});
  assert.match(h.$('overview-events').textContent,/Add a calendar/);assert.equal(h.$('calendar-content').hidden,true);assert.doesNotMatch(h.$('calendar-sources').textContent,/Example/);assert.match(h.$('calendar-form-status').textContent,/removed from a paired phone/);
  assert.equal(h.window.SkylitCalendar.health().count,0);assert.equal(h.window.SkylitCalendar.health().error,false);
+});
+test('a feed fetched "in the future" because the clock was set back is refreshed, not left to go stale',async()=>{
+ const after=async fetched=>{const h=setup({fetched});await h.window.SkylitCalendar.receive({id:'demo',error:'offline'});const before=h.refreshes.length;h.ticks.forEach(f=>f());return h.refreshes.length-before;};
+ assert.equal(await after(-5*60000),0,'a feed five minutes old waits');assert.equal(await after(-16*60000),1,'a feed sixteen minutes old is fetched again');
+ assert.equal(await after(5*60000),0,'a few minutes of clock correction change nothing');assert.equal(await after(3*86400000),1,'a feed stamped three days ahead is fetched again');
 });

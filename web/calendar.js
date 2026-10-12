@@ -116,6 +116,6 @@ const searchInput=$('calendar-search');if(searchInput)searchInput.oninput=()=>{s
 window.addEventListener('online',refresh);window.addEventListener('offline',status);
 window.addEventListener('skylit-preferences',()=>{activeZone=prefs().timezone;selected=today();month=selected.slice(0,7);render()});
 window.addEventListener('skylit-tab',e=>{if(e.detail==='calendar'||e.detail==='overview'){if(activeZone!==prefs().timezone){activeZone=prefs().timezone;selected=today();month=selected.slice(0,7);}render();}});
-setInterval(()=>{const now=today();if(lastToday!==now){if(selected===lastToday){selected=now;month=now.slice(0,7);}lastToday=now;render();}status();paintOverview();if(available&&sources.some(s=>Date.now()-s.fetchedAt>15*60000))refresh();},60000);
+setInterval(()=>{const now=today();if(lastToday!==now){if(selected===lastToday){selected=now;month=now.slice(0,7);}lastToday=now;render();}status();paintOverview();if(available&&sources.some(s=>Math.abs(Date.now()-s.fetchedAt)>15*60000))refresh();},60000);
 if(available)read();paint();render();if(available)refresh();
 })();

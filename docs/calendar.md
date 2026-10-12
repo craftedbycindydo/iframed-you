@@ -13,6 +13,13 @@ There must be no maintained hosted service, Google Cloud project, API key, or Go
 Play services requirement. The household continues creating and editing events in
 Google Calendar on its phones or computers. Refresh is periodic, not instant push.
 
+A paired iPhone can also add a feed (the same secret iCal address, with a name of
+up to 60 characters and a colour) or remove one; see `POST /v1/calendars` in
+[local-api.md](local-api.md). The address is sent once over the pinned TLS
+connection, stored only on the frame and never returned. Settings closes itself
+after fifteen minutes without typing while the link field has focus; what was
+typed is still there when it is reopened.
+
 ## Review inviters on the frame
 
 **Calendar → Calendar options → Review who appears on this frame** controls which event organizers appear in Skylit.

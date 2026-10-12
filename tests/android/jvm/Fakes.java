@@ -31,13 +31,16 @@ final class Fakes {
 
   static final class Storage implements KeyValue {
     final Map<String, String> values = new HashMap<>();
+    volatile boolean full;
 
     @Override public synchronized String get(String key) {
       return values.get(key);
     }
 
-    @Override public synchronized void put(String key, String value) {
+    @Override public synchronized boolean put(String key, String value) {
+      if (full) return false;
       values.put(key, value);
+      return true;
     }
   }
 

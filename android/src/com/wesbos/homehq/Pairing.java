@@ -164,13 +164,19 @@ final class Pairing {
       end(REFUSED, "decoy");
       return false;
     }
-    String now = FrameTime.iso(clock.now());
+    String now = PhotoPolicy.clockSet(clock.now()) ? FrameTime.iso(clock.now()) : null;
+    List<Object> before = new ArrayList<>(devices);
     deviceId = secret(8);
     for (Iterator<Object> rows = devices.iterator(); rows.hasNext();) {
       if (Digests.same((String) Json.map(rows.next()).get("hash"), tokenHash)) rows.remove();
     }
     devices.add(Json.object("id", deviceId, "name", name, "pairedAt", now, "lastSeen", now, "hash", tokenHash));
-    identity.save();
+    if (!identity.save()) {
+      devices.clear();
+      devices.addAll(before);
+      end(REFUSED, "storage");
+      return false;
+    }
     outcome = APPROVED;
     show("paired", null);
     return true;
@@ -212,7 +218,8 @@ final class Pairing {
     for (Object device : devices) if (Digests.same((String) Json.map(device).get("hash"), hash)) matched = Json.map(device);
     if (matched == null) return null;
     long now = clock.now();
-    if (now - FrameTime.instant(matched.get("lastSeen")) >= SEEN_INTERVAL) {
+    if (PhotoPolicy.clockSet(now) && (matched.get("pairedAt") == null || now - FrameTime.instant(matched.get("lastSeen")) >= SEEN_INTERVAL)) {
+      if (matched.get("pairedAt") == null) matched.put("pairedAt", FrameTime.iso(now));
       matched.put("lastSeen", FrameTime.iso(now));
       identity.save();
     }
@@ -234,8 +241,7 @@ final class Pairing {
     for (Iterator<Object> rows = devices.iterator(); rows.hasNext();) {
       if (Json.map(rows.next()).get("id").equals(id)) {
         rows.remove();
-        identity.save();
-        return true;
+        return identity.save();
       }
     }
     return false;
@@ -243,8 +249,7 @@ final class Pairing {
 
   synchronized boolean revokeAll() {
     devices.clear();
-    identity.save();
-    return true;
+    return identity.save();
   }
 
   private boolean active() {

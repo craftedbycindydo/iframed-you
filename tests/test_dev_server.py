@@ -39,7 +39,7 @@ class DevServerTest(unittest.TestCase):
         return response.status,json.loads(text) if text else None
     def pair(self):
         n_p,token=os.urandom(32),os.urandom(32)
-        status,started=self.call('POST','/v2/pair/start',{'commit':hashlib.sha256(n_p).hexdigest(),'tokenHash':hashlib.sha256(token).hexdigest(),'deviceName':"Karan's iPhone"})
+        status,started=self.call('POST','/v2/pair/start',{'commit':hashlib.sha256(n_p).hexdigest(),'tokenHash':hashlib.sha256(token).hexdigest(),'deviceName':"Maya's iPhone"})
         self.assertEqual(status,200,started)
         pinned=self.seen
         self.assertEqual(self.call('POST','/v2/pair/reveal',{'session':started['session'],'nP':n_p.hex()})[0],204)
@@ -74,7 +74,7 @@ class DevServerTest(unittest.TestCase):
         status,result=self.call('GET','/v2/pair/result?session='+session)
         self.assertEqual((status,result['frameId'],result['name']),(200,self.frame_id,'Skylit'))
         status,devices=self.call('GET','/v1/devices',token=token)
-        self.assertEqual((status,[(d['name'],d['self'],d['id']==result['deviceId']) for d in devices]),(200,[("Karan's iPhone",True,True)]))
+        self.assertEqual((status,[(d['name'],d['self'],d['id']==result['deviceId']) for d in devices]),(200,[("Maya's iPhone",True,True)]))
         self.assertEqual(self.call('GET','/v1/state')[0],401)
         self.assertEqual(self.call('POST','/v2/pair/start',{'commit':'0'*64,'tokenHash':'0'*64,'deviceName':'Late'})[0],409)
         self.server.stdin.write('\n')

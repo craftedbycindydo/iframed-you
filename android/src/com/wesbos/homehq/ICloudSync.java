@@ -85,6 +85,7 @@ final class ICloudSync {
       }
     } catch (Json.Malformed | RuntimeException absentOrUnreadable) {
       token = null;
+      library.removeAll();
     }
   }
 
@@ -102,6 +103,7 @@ final class ICloudSync {
     synchronized (this) {
       replaced = token != null && !next.equals(token);
       if (!next.equals(token)) {
+        if (!storage.put(KEY, Json.write(Json.object("token", next)))) throw ApiException.unsaved();
         generation++;
         token = next;
         host = null;
@@ -111,7 +113,6 @@ final class ICloudSync {
         failures = 0;
         known = new HashMap<>();
         rejected = new HashSet<>();
-        save();
       }
     }
     if (replaced) {

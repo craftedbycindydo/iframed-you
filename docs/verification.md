@@ -1,5 +1,40 @@
 # Delivery verification — October 11, 2026
 
+## Phone companion, thermostats and QA fixes — October 12, 2026 (not yet on a frame)
+
+Covers the TLS phone API with v2 pairing, the household store, the iCloud album
+mirror, the Honeywell thermostat tiles, Settings closing itself, and the fixes from
+three QA passes. Nothing in this entry was run on a physical frame, against a real
+Honeywell or iCloud account, or with a real iPhone.
+
+- 135 JavaScript tests and 34 Python tests pass. The Python run includes the
+  desktop-JVM checks of the frame's own Java: 5,642 local API, 206 TLS server,
+  589 iCloud album, 415 thermostat client and 97 thermostat bridge assertions.
+- 35 rendered browser checks pass with no runtime errors or load retries. A
+  separate 396-state sweep (0–8 thermostat tiles × 0–10 events × both text sizes
+  × 1280×800 and 1280×720) found no clipped event, no orphaned day heading and no
+  empty Upcoming card; from five tiles at 1280×720 the Overview scrolls to show
+  its events.
+- The normal signed APK builds and its signature verifies. The public-data check
+  reports no findings in the working tree or history; it still notes a personal
+  email address in commit metadata.
+- The same server run on a Mac (`scripts/dev_server.py`) passed 74 socket-level
+  checks: pairing, limits at and just over each size, slow and flooding clients.
+
+Still to be checked by a person, on the frame:
+
+1. Pair a real iPhone: code, number tap, then a chore, a shopping item and a photo.
+2. Sign in to Honeywell on the frame; confirm both thermostats, a one-degree
+   change, heat/cool and resume, and that the tile recovers after Wi-Fi is off for
+   fifteen minutes. Do not test the lock-out with a real account.
+3. Connect a real public iCloud Shared Album and wait for its first sync.
+4. With the on-screen keyboard: type a calendar link and the thermostat password
+   in Settings and confirm the field stays above the keyboard.
+5. Leave Settings open and untouched; it should close after three minutes and the
+   slideshow should start at its usual idle time afterwards.
+6. Power-cycle the frame with Wi-Fi off, wait, then turn Wi-Fi on: pictures are
+   all still there, thermostats and calendar refresh within a few minutes.
+
 ## Version 2.13.0 — Settings navigation and gallery curation
 
 - Settings uses a left-side category rail inside its lightbox on landscape

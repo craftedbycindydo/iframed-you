@@ -49,7 +49,10 @@ or responses from a previous renderer from restoring obsolete data.
 
 No server or Google OAuth project is involved. The frame refreshes every 15 minutes
 while the dashboard runs, retries failed/stale feeds on its minute timer, and refreshes
-on startup or reconnection. Private setup is performed on the frame. Desktop browser
+on startup or reconnection. A feed whose fetch time is more than 15 minutes away from
+the clock in either direction counts as stale, so setting the clock back does not
+stall refresh. A paired phone can add or remove a feed through the local API; the
+URL goes straight into the same private store. Private setup is performed on the frame. Desktop browser
 previews have no native feed bridge and cannot save calendar credentials.
 
 The optional organizer rule is a local display policy. `calendar-model.js` retains
@@ -120,8 +123,10 @@ quiet schedules and the explicit display-transfer allowlist. These remain plain
 local JavaScript; no framework, hosted service or phone synchronization was added.
 
 `skylit.frame` stores display/playback/quiet preferences; `skylit.household` stores
-notes, shopping items, countdowns and visible timers. Timers survive restart as end
-timestamps but promise no background alarm, sound or phone notification. Photo
+notes, countdowns and visible timers (its shopping list moved to the native household
+store described under Phone link). Timers survive restart as end timestamps on the
+wall clock, so they keep counting through a reload or a sleep, and promise no
+background alarm, sound or phone notification. Photo
 favourite/framing/caption choices are bounded by current hashed IDs and a native
 cache epoch, cleared when an account changes or its cache is erased. Native
 exclusion hashes are separate, survive image pruning and are checked before an
@@ -173,3 +178,61 @@ cached copies for Undo only when space remains, and caps all images together at 
 Its synchronized exclusion/add/prune operations prevent refresh races. Exclusion
 hashes are available only to the local dashboard; stale callbacks reread current
 native rules before rendering. Legacy hidden choices migrate to native exclusions.
+
+## Phone link, household store and thermostats
+
+`PhoneLink` owns everything a paired phone can reach. `LocalServer` listens on port
+8765 with TLS 1.2 only, using the P-256 key and self-signed certificate that
+`Identity` creates once and stores with the paired-device list. `Pairing` runs the
+commit-reveal exchange in [local-api.md](local-api.md): a six-digit code typed into
+the phone, then a tap on the frame of the number only that phone can name. The
+frame stores a hash of each phone's token, never the token. `LocalApi` routes
+requests; `LocalHttp` and `LocalServer` enforce sizes, pacing and per-address limits. Bonjour
+advertises `_skylit._tcp`. These classes use no Android API, so the Python suite
+compiles them with a desktop JDK and `scripts/dev_server.py` runs the same server
+on a Mac.
+
+`HouseholdStore` is the one source of truth for people, chores and the shopping
+list. The dashboard reads and changes it through the bridge (`householdSnapshot`,
+`householdMutate`), phones through `/v1/*`; every change is one `rev`. It is saved
+as one JSON value in private SharedPreferences. A change that cannot be written is
+undone in memory and reported (`500` to a phone, a notice on the dashboard), so the
+frame never shows something a restart would lose. On load, rows that do not have
+the expected fields are left out, counted in the log, and the unread original is
+kept under `household-damaged`; one damaged row does not cost the rest, and a
+damaged paired-device row does not unpair the other phones.
+
+Photos have three local sources sharing one `PhotoStore` library: email
+(`PhotoMail`), uploads from a paired phone, and one mirrored public iCloud Shared
+Album (`ICloudAlbum`, `ICloudSync`). Only email pictures expire by age. While the
+frame's clock reads earlier than 2026 it is treated as not set: nothing is expired
+and no mail check starts. If the saved album record cannot be read, the album's
+pictures are removed with it rather than left with nothing to manage them.
+
+`TccClient`, `TccSync` and `ThermostatBridge` sign in to Honeywell Total Connect
+Comfort from the frame, poll, and apply set-point, mode and resume changes. The
+password is sealed with an Android Keystore key (`TccSecret`). Only the dashboard
+bridge reaches them; the phone API has no thermostat routes.
+
+Polling, staleness, back-off and the sign-in lock-out for thermostats, the iCloud
+sync interval and the pairing window are all counted on the elapsed-time clock,
+which keeps running through sleep and is unaffected by the clock being set. Times
+shown to people (`polledAt`, `retryAt`, `lastSync`, `pairedAt`) are wall-clock;
+the thermostat ones are re-anchored when the two clocks drift apart by more than
+a minute. Across an app restart the thermostat lock-out is kept as a wall-clock
+time; a saved lock more than six hours ahead is treated as a clock error and
+ignored. A phone paired before the clock is set gets its dates at its first
+request afterwards.
+
+The Settings dialog closes itself after three minutes without a touch, key or
+scroll inside it, or fifteen minutes while a text field there has focus, the
+pairing overlay is open, a thermostat sign-in is pending, or a calendar, photo,
+album or weather request is running. Typed text stays in the fields. A focused
+text field in the lower part of the dialog is scrolled to the top and the editor
+gains bottom room so an on-screen keyboard does not cover it; this happens on
+focus only, not while typing or scrolling.
+
+The Overview shows only whole events: with thermostat tiles taking room, later
+events are left out rather than clipped. When not even one event fits, or the Today
+card would leave the screen, the Overview scrolls instead and shows everything.
+

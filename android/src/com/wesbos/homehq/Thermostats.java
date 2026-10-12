@@ -53,8 +53,10 @@ final class Thermostats {
         return saved.getString(key, null);
       }
 
-      @Override public void put(String key, String value) {
-        if (!saved.edit().putString(key, value).commit()) Log.e(TAG, "Could not save thermostat data: " + key);
+      @Override public boolean put(String key, String value) {
+        boolean kept = saved.edit().putString(key, value).commit();
+        if (!kept) Log.e(TAG, "Could not save thermostat data: " + key);
+        return kept;
       }
     };
     FrameTime.Clock clock = new FrameTime.Clock() {

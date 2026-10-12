@@ -70,14 +70,14 @@ final class Identity {
   }
 
   private static List<Object> paired(Object saved) {
-    List<Object> rows = Json.list(saved);
-    if (rows == null) return new ArrayList<>();
-    for (Object row : rows) {
+    List<Object> sound = new ArrayList<>();
+    if (Json.list(saved) == null) return sound;
+    for (Object row : Json.list(saved)) {
       Map<String, Object> device = Json.map(row);
       byte[] hash = device == null ? null : Digests.bytes(device.get("hash"));
-      if (hash == null || hash.length != 32 || !(device.get("id") instanceof String)) return new ArrayList<>();
+      if (hash != null && hash.length == 32 && device.get("id") instanceof String) sound.add(device);
     }
-    return rows;
+    return sound;
   }
 
   private static Identity create(KeyValue storage) {
@@ -134,8 +134,8 @@ final class Identity {
     return devices;
   }
 
-  void save() {
-    storage.put(KEY, Json.write(Json.object("key", keyHex, "certificate", certificateHex, "devices", devices)));
+  boolean save() {
+    return storage.put(KEY, Json.write(Json.object("key", keyHex, "certificate", certificateHex, "devices", devices)));
   }
 
   SSLContext tls() throws GeneralSecurityException {

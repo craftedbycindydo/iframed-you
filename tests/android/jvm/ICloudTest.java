@@ -797,9 +797,14 @@ public final class ICloudTest {
   static void damaged() throws Exception {
     for (String saved : new String[] {"{broken", "[]", "{\"token\":7}", "{\"token\":\"no\"}", "\"" + TOKEN + "\""}) {
       fresh();
+      sync.connect(LINK);
+      photos.add(image(50), START);
+      same(5, photos.list().size(), "four album pictures and one from a phone before the damage " + saved);
       storage.values.put("icloud", saved);
       sync = new ICloudSync(storage, clock, clock.steady, album, photos.library, Fakes.inline(), events.album);
       same(null, status(), "unreadable album state is no album " + saved);
+      same(1, photos.list().size(), "its pictures do not stay behind with no album to remove them through " + saved);
+      same(Digests.sha256(image(50)), photos.list().get(0).id, "and the phone picture is kept " + saved);
       check(!sync.request(true) && !sync.due(), "and nothing is fetched for it " + saved);
       sync.connect(LINK);
       same(4, Json.map(status()).get("count"), "and the album can be connected again " + saved);
