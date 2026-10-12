@@ -430,9 +430,6 @@ final class TccClient {
     if (automatic && lastLogin != 0 && up - lastLogin < RELOGIN_MILLIS) throw new Problem("session_expired", now + lastLogin + RELOGIN_MILLIS - up);
     lastLogin = up;
     cookies.clear();
-    synchronized (steps) {
-      steps.clear();
-    }
     tracing = true;
     try {
       follow("GET", "/portal", "application/json", null);
@@ -532,6 +529,10 @@ final class TccClient {
     try {
       reply = transport.send(method, path, headers, body);
     } catch (IOException offline) {
+      synchronized (steps) {
+        steps.add(method + " " + path.split("\\?", 2)[0] + " failed " + offline.getClass().getSimpleName() + " " + offline.getMessage());
+        if (steps.size() > 12) steps.remove(0);
+      }
       throw new Problem("offline");
     }
     for (String cookie : reply.cookies) {
@@ -548,7 +549,7 @@ final class TccClient {
         cookies.put(name, value);
       }
     }
-    if (tracing) {
+    {
       StringBuilder step = new StringBuilder(method).append(' ').append(path.split("\\?", 2)[0]).append(' ').append(reply.status);
       if (reply.location != null) step.append(" to ").append(reply.location.split("\\?", 2)[0]);
       for (String cookie : reply.cookies) {
@@ -558,8 +559,10 @@ final class TccClient {
       java.util.regex.Matcher title = java.util.regex.Pattern.compile("<title>\\s*([^<]{0,60})").matcher(reply.body == null ? "" : reply.body);
       if (title.find()) step.append(" title ").append(title.group(1).trim());
       if (reply.body != null && reply.body.contains("validation-summary-errors")) step.append(" refused");
+      step.append(" type ").append(reply.contentType);
       synchronized (steps) {
         steps.add(step.toString());
+        if (steps.size() > 12) steps.remove(0);
       }
     }
     return reply;
