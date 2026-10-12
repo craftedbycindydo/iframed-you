@@ -114,6 +114,7 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
     private var claimedFrameId: String?
     private var recorded: [Recorded] = []
     private var unreachable = false
+    private var storageFull = false
     private var icloud: [String: Any]?
     private var supportsICloud = true
 
@@ -145,6 +146,10 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
 
     public var requests: [Recorded] { lock.withLock { recorded } }
     public var revision: Int { lock.withLock { rev } }
+
+    public func setStorageFull(_ value: Bool) {
+        lock.withLock { storageFull = value }
+    }
 
     public func setUnreachable(_ value: Bool) {
         lock.withLock { unreachable = value }
@@ -214,6 +219,10 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
         return (200, extra.merging(["rev": rev]) { _, new in new }, nil)
     }
 
+    private var cannotSave: (Int, Any?, Data?)? {
+        storageFull ? failure(500, "internal", "The frame could not save the change") : nil
+    }
+
     private func route(_ request: URLRequest, _ components: URLComponents, _ body: Data?) -> (Int, Any?, Data?) {
         let method = request.httpMethod ?? "GET"
         let parts = components.path.split(separator: "/").map(String.init)
@@ -231,6 +240,7 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
             json = parsed
         }
 
+        if version == "v1", method != "GET", !(method == "DELETE" && route.first == "devices"), let full = cannotSave { return full }
         if version == "v2" {
             switch (method, route.first, route.count) {
             case ("GET", "info", 1):
@@ -300,7 +310,7 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
             return changed()
         case ("POST", "calendars", 1):
             guard calendars.count < 6 else { return failure(400, "bad_request", "The frame can hold 6 calendars") }
-            guard Self.validName(json["name"]), let color = json["color"] as? String, Limits.isHexColor(color),
+            guard (json["name"] as? String).flatMap(Limits.cleanCalendarName) != nil, let color = json["color"] as? String, Limits.isHexColor(color),
                   let url = json["url"] as? String, url.hasPrefix("https://"), url.contains(".ics") else {
                 return failure(400, "bad_request", "That is not a calendar link the frame can use")
             }
@@ -487,7 +497,7 @@ public final class DemoFrameServer: HTTPTransport, @unchecked Sendable {
     }
 
     private static func validName(_ value: Any?) -> Bool {
-        (value as? String).flatMap(Limits.cleanName) != nil
+        (value as? String).flatMap { Limits.cleanName($0) } != nil
     }
 
     private static func hash(_ token: String) -> String? {
@@ -555,9 +565,9 @@ public extension DemoFrameServer {
 
     static func sample(now: Date = Date()) -> DemoFrameServer {
         let server = DemoFrameServer()
-        let zone = TimeZone(identifier: "America/Edmonton") ?? .current
+        let zone = TimeZone(identifier: "America/Denver") ?? .current
         let today = ChoreLogic.dateString(now, timeZone: zone)
-        server.authorize(token: demoToken, deviceName: "Karan's iPhone")
+        server.authorize(token: demoToken, deviceName: "Maya's iPhone")
         server.authorize(token: otherToken, deviceName: "Hallway tablet")
         server.lock.withLock {
             server.people = [
@@ -585,7 +595,7 @@ public extension DemoFrameServer {
                 ["id": "k1", "name": "Family", "color": "#2D5BFF"],
                 ["id": "k2", "name": "School", "color": "#C98A3C"],
             ]
-            server.location = ["name": "Calgary", "latitude": 51.05, "longitude": -114.07, "timezone": "America/Edmonton"]
+            server.location = ["name": "Denver", "latitude": 39.74, "longitude": -104.99, "timezone": "America/Denver"]
             server.photos = samplePhotos()
             server.nextId = 20
             server.rev = 42

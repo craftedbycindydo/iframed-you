@@ -131,6 +131,7 @@ extension SectionHeader where Trailing == Text {
 
 struct RowLabel<Leading: View, Trailing: View>: View {
     @ScaledMetric(relativeTo: .title2) private var glyph = Size.glyph
+    @Environment(\.dynamicTypeSize) private var typeSize
     let title: String
     var subtitle: String?
     var emoji: String?
@@ -141,35 +142,40 @@ struct RowLabel<Leading: View, Trailing: View>: View {
     @ViewBuilder let trailing: Trailing
 
     var body: some View {
+        let body = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.xs))
+            : AnyLayout(HStackLayout(spacing: Space.m))
         HStack(spacing: Space.m) {
             leading
-            if let emoji {
-                Group {
-                    if emoji.isEmpty {
-                        Image(systemName: "sparkle").foregroundStyle(Theme.tertiaryLabel)
-                    } else {
-                        Text(emoji).font(.control)
+            body {
+                if let emoji {
+                    Group {
+                        if emoji.isEmpty {
+                            Image(systemName: "sparkle").foregroundStyle(Theme.tertiaryLabel)
+                        } else {
+                            Text(emoji).font(.control)
+                        }
                     }
-                }
-                .frame(width: glyph, height: glyph)
-                .accessibilityHidden(true)
-            } else if let symbol {
-                Image(systemName: symbol)
-                    .font(.glyph)
-                    .foregroundStyle(symbolTint ?? Theme.label)
                     .frame(width: glyph, height: glyph)
                     .accessibilityHidden(true)
-            }
-            VStack(alignment: .leading, spacing: Space.xxs) {
-                Text(title)
-                    .font(.rowTitle)
-                    .foregroundStyle(isDimmed ? Theme.secondaryLabel : Theme.label)
-                    .strikethrough(isDimmed)
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle).font(.rowSubtitle).foregroundStyle(Theme.secondaryLabel)
+                } else if let symbol {
+                    Image(systemName: symbol)
+                        .font(.glyph)
+                        .foregroundStyle(symbolTint ?? Theme.label)
+                        .frame(width: glyph, height: glyph)
+                        .accessibilityHidden(true)
                 }
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(title)
+                        .font(.rowTitle)
+                        .foregroundStyle(isDimmed ? Theme.secondaryLabel : Theme.label)
+                        .strikethrough(isDimmed)
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle).font(.rowSubtitle).foregroundStyle(Theme.secondaryLabel)
+                    }
+                }
+                .multilineTextAlignment(.leading)
             }
-            .multilineTextAlignment(.leading)
             Spacer(minLength: 0)
             trailing
         }
@@ -201,7 +207,6 @@ struct RowValue: View {
 
 struct RowDisclosure: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.layoutDirection) private var layoutDirection
     let isExpanded: Bool
     let toggle: () -> Void
 
@@ -210,7 +215,7 @@ struct RowDisclosure: View {
             Image(systemName: "chevron.down")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Theme.tertiaryLabel)
-                .rotationEffect(.degrees(isExpanded ? 0 : (layoutDirection == .rightToLeft ? 90 : -90)))
+                .rotationEffect(.degrees(isExpanded ? 0 : -90))
                 .animation(reduceMotion ? nil : Motion.state, value: isExpanded)
                 .frame(width: Size.touch, height: Size.touch)
                 .contentShape(Rectangle())
@@ -241,7 +246,7 @@ extension View {
 
 struct RowChevron: View {
     var body: some View {
-        Image(systemName: "chevron.right")
+        Image(systemName: "chevron.forward")
             .font(.footnote.weight(.semibold))
             .foregroundStyle(Theme.tertiaryLabel)
             .accessibilityHidden(true)
@@ -343,6 +348,8 @@ struct InlineAddField: View {
             .buttonStyle(RowButtonStyle())
             .accessibilityHidden(true)
             TextField(prompt, text: $text)
+                .touchTarget()
+                .onTapGesture { focus.wrappedValue = true }
                 .focused(focus)
                 .submitLabel(.next)
                 .onSubmit {
@@ -387,7 +394,7 @@ struct SwatchPicker: View {
     @Binding var selection: String
 
     var body: some View {
-        HStack(spacing: 0) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 4), spacing: 0) {
             ForEach(Palettes.swatches, id: \.self) { hex in
                 let isSelected = hex.caseInsensitiveCompare(selection) == .orderedSame
                 Button {
@@ -489,6 +496,7 @@ struct CodeEntry: View {
                         .frame(height: 56)
                 }
             }
+            .environment(\.layoutDirection, .leftToRight)
             .contentShape(Rectangle())
             .onTapGesture { focused = true }
             .accessibilityHidden(true)

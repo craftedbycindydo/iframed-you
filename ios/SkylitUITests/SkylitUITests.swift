@@ -111,14 +111,18 @@ final class SkylitUITests: XCTestCase {
         XCTAssertTrue(name.waitForExistence(timeout: 8))
         name.tap()
         name.typeText("Work")
-        let link = app.textFields["Secret address in iCal format"]
+        let link = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ OR placeholderValue == %@", "Secret address in iCal format", "Paste the secret address")).firstMatch
+        app.bringAboveKeyboard(link)
         link.tap()
         link.typeText("https://example.com/not-a-calendar")
-        app.buttons["Add calendar"].tap()
+        let addCalendar = app.buttons["Add calendar"]
+        app.bringAboveKeyboard(addCalendar)
+        addCalendar.tap()
         XCTAssertTrue(app.staticTexts["The frame didn't accept that. Check what you entered."].waitForExistence(timeout: 8))
         snap("notice-toast-over-tabbar")
-        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        app.bringAboveKeyboard(name)
         XCTAssertEqual(name.value as? String, "Work")
+        app.bringAboveKeyboard(link)
         XCTAssertEqual(link.value as? String, "https://example.com/not-a-calendar")
     }
 

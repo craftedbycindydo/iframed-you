@@ -46,6 +46,7 @@ public final class FrameSession {
     private var adverts: [Advert] = []
     private var manual: [String: URL] = [:]
     private var pairingURL: URL?
+    private var isReconnecting = false
 
     public init(browser: FrameBrowsing, connector: FrameConnecting, tokens: TokenStoring,
                 pairedStore: PairedFrameStore, deviceNames: DeviceNameStore, pollInterval: Duration = .seconds(1)) {
@@ -115,7 +116,8 @@ public final class FrameSession {
         let transport = connector.pinned(pin)
         var match: URL?
         var mismatch = false
-        for url in candidates(frame.frameId) {
+        let advertised = candidates(frame.frameId)
+        for url in advertised {
             do {
                 _ = try await FrameAPI(baseURL: url, transport: transport).info()
                 match = match ?? url
@@ -124,6 +126,10 @@ public final class FrameSession {
             } catch {
                 continue
             }
+        }
+        if match == nil, !mismatch, let stored = frame.address, !advertised.contains(stored),
+           (try? await FrameAPI(baseURL: stored, transport: transport).info()) != nil {
+            match = stored
         }
         if mismatch {
             let text = Self.impostorText(frame.name)
@@ -136,9 +142,15 @@ public final class FrameSession {
     }
 
     private func connectPaired() async {
-        guard let paired, store == nil, let credential = tokens.credential(for: paired.frameId),
-              let url = await locate(paired, pin: credential.fp) else { return }
+        guard let paired, store == nil, !isReconnecting, let credential = tokens.credential(for: paired.frameId) else { return }
+        isReconnecting = true
+        defer { isReconnecting = false }
+        guard let url = await locate(paired, pin: credential.fp), store == nil else { return }
         await open(paired, url: url, credential: credential)
+    }
+
+    public func reconnect() async {
+        await connectPaired()
     }
 
     public func select(_ frame: DiscoveredFrame) async {
@@ -205,7 +217,8 @@ public final class FrameSession {
         await flow?.abandon()
     }
 
-    private func open(_ frame: PairedFrame, url: URL, credential: FrameCredential) async {
+    private func open(_ target: PairedFrame, url: URL, credential: FrameCredential) async {
+        let frame = PairedFrame(frameId: target.frameId, name: target.name, address: url)
         paired = frame
         pairedStore.current = frame
         let opened = FrameStore(frame: frame, api: FrameAPI(baseURL: url, token: credential.token, transport: connector.pinned(credential.fp)))

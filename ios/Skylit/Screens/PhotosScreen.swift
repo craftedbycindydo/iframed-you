@@ -4,14 +4,20 @@ import SkylitCore
 
 final class ThumbnailCache {
     static let shared = ThumbnailCache()
+    static let byteLimit = 48 * 1024 * 1024
     private let cache = NSCache<NSString, CGImage>()
+
+    init() {
+        cache.totalCostLimit = Self.byteLimit
+        cache.countLimit = 120
+    }
 
     func image(_ key: String) -> CGImage? {
         cache.object(forKey: key as NSString)
     }
 
     func store(_ image: CGImage, _ key: String) {
-        cache.setObject(image, forKey: key as NSString)
+        cache.setObject(image, forKey: key as NSString, cost: image.bytesPerRow * image.height)
     }
 }
 

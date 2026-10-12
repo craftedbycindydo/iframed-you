@@ -15,10 +15,22 @@ public struct TccCredentials: Codable, Equatable, Sendable, CustomStringConverti
     public var customMirror: Mirror { Mirror(self, children: [:]) }
 }
 
+public struct TccSession: Codable, Equatable, Sendable {
+    public var cookies: [String: String]
+    public var lastLogin: Date?
+
+    public init(cookies: [String: String], lastLogin: Date?) {
+        self.cookies = cookies
+        self.lastLogin = lastLogin
+    }
+}
+
 public protocol TccCredentialStoring: Sendable {
     func load() -> TccCredentials?
     func save(_ credentials: TccCredentials)
     func clear()
+    func loadSession() -> TccSession?
+    func saveSession(_ session: TccSession?)
 }
 
 public struct TccCredentialStore: TccCredentialStoring {
@@ -28,40 +40,66 @@ public struct TccCredentialStore: TccCredentialStoring {
         self.service = service
     }
 
-    private var query: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: "account",
+    private func query(_ account: String) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account,
          kSecAttrSynchronizable as String: false]
     }
 
-    public func load() -> TccCredentials? {
-        var lookup = query
+    private func read<T: Decodable>(_ account: String, as type: T.Type) -> T? {
+        var lookup = query(account)
         lookup[kSecReturnData as String] = true
         lookup[kSecMatchLimit as String] = kSecMatchLimitOne
         var found: CFTypeRef?
         guard SecItemCopyMatching(lookup as CFDictionary, &found) == errSecSuccess, let data = found as? Data else { return nil }
-        return try? JSONDecoder().decode(TccCredentials.self, from: data)
+        return try? JSONDecoder().decode(type, from: data)
     }
 
-    public func save(_ credentials: TccCredentials) {
-        guard let data = try? JSONEncoder().encode(credentials) else { return }
-        SecItemDelete(query as CFDictionary)
-        var item = query
+    private func write<T: Encodable>(_ account: String, _ value: T?) {
+        SecItemDelete(query(account) as CFDictionary)
+        guard let value, let data = try? JSONEncoder().encode(value) else { return }
+        var item = query(account)
         item[kSecValueData as String] = data
         item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         SecItemAdd(item as CFDictionary, nil)
     }
 
+    public func load() -> TccCredentials? {
+        read("account", as: TccCredentials.self)
+    }
+
+    public func save(_ credentials: TccCredentials) {
+        write("account", credentials)
+    }
+
     public func clear() {
-        SecItemDelete(query as CFDictionary)
+        write("account", Optional<TccCredentials>.none)
+        saveSession(nil)
+    }
+
+    public func loadSession() -> TccSession? {
+        read("session", as: TccSession.self)
+    }
+
+    public func saveSession(_ session: TccSession?) {
+        write("session", session)
     }
 }
 
 public final class InMemoryTccCredentialStore: TccCredentialStoring, @unchecked Sendable {
     private let lock = NSLock()
     private var stored: TccCredentials?
+    private var session: TccSession?
 
     public init(_ stored: TccCredentials? = nil) {
         self.stored = stored
+    }
+
+    public func loadSession() -> TccSession? {
+        lock.withLock { session }
+    }
+
+    public func saveSession(_ session: TccSession?) {
+        lock.withLock { self.session = session }
     }
 
     public func load() -> TccCredentials? {
@@ -73,6 +111,9 @@ public final class InMemoryTccCredentialStore: TccCredentialStoring, @unchecked 
     }
 
     public func clear() {
-        lock.withLock { stored = nil }
+        lock.withLock {
+            stored = nil
+            session = nil
+        }
     }
 }

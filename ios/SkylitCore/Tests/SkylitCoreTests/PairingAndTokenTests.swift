@@ -145,7 +145,7 @@ final class PairingFlowTests: XCTestCase {
     func testNameIsRequiredAndRemembered() async {
         let flow = makeFlow()
         XCTAssertEqual(flow.suggestedName, "Test phone")
-        for refused in ["", "   ", String(repeating: "n", count: 41), "Karan\u{202E}enohPi"] {
+        for refused in ["", "   ", String(repeating: "n", count: 41), "Maya\u{202E}enohPi"] {
             await flow.begin(name: refused)
             XCTAssertEqual(flow.step, .naming)
             XCTAssertEqual(flow.message, "Give this phone a name of 1 to 40 characters.")
@@ -544,15 +544,17 @@ final class TokenStoreTests: XCTestCase {
         XCTAssertFalse(store.removeLegacy())
     }
 
-    func testPairedFrameStorePersistsIdentityButNoAddressOrSecret() throws {
+    func testPairedFrameStorePersistsIdentityAndLastAddressButNoSecret() throws {
         let defaults = isolatedDefaults()
         let store = PairedFrameStore(defaults: defaults)
         XCTAssertNil(store.current)
         store.current = PairedFrame(frameId: "f1", name: "Kitchen")
         XCTAssertEqual(PairedFrameStore(defaults: defaults).current, PairedFrame(frameId: "f1", name: "Kitchen"))
+        store.current = PairedFrame(frameId: "f1", name: "Kitchen", address: testURL)
+        XCTAssertEqual(PairedFrameStore(defaults: defaults).current?.address, testURL)
         let saved = try XCTUnwrap(defaults.data(forKey: "skylit.pairedFrame"))
         let keys = try XCTUnwrap(JSONSerialization.jsonObject(with: saved) as? [String: Any]).keys.sorted()
-        XCTAssertEqual(keys, ["frameId", "name"])
+        XCTAssertEqual(keys, ["address", "frameId", "name"])
         store.current = nil
         XCTAssertNil(store.current)
     }

@@ -41,7 +41,7 @@ final class FrameSessionTests: XCTestCase {
     private var defaults: UserDefaults!
 
     private var kitchen: DiscoveredFrame { DiscoveredFrame(frameId: server.frameId, name: "Kitchen frame") }
-    private var savedFrame: PairedFrame { PairedFrame(frameId: server.frameId, name: "Kitchen frame") }
+    private var savedFrame: PairedFrame { PairedFrame(frameId: server.frameId, name: "Kitchen frame", address: DemoFrameServer.address) }
     private let evil = URL(string: "https://evil.local:8765")!
 
     override func setUp() async throws {
@@ -63,7 +63,7 @@ final class FrameSessionTests: XCTestCase {
 
     private func rememberPairing() {
         tokens.save(server.credential)
-        PairedFrameStore(defaults: defaults).current = savedFrame
+        PairedFrameStore(defaults: defaults).current = PairedFrame(frameId: server.frameId, name: "Kitchen frame")
     }
 
     private func assertNothingSecretReached(_ target: DemoFrameServer, file: StaticString = #filePath, line: UInt = #line) {
@@ -292,9 +292,9 @@ final class FrameSessionTests: XCTestCase {
         let session = makeSession()
         await session.receive(.services(["Evil"]))
         XCTAssertNil(session.store)
-        XCTAssertEqual(session.paired, savedFrame)
+        XCTAssertEqual(session.paired?.frameId, server.frameId)
         XCTAssertEqual(tokens.credential(for: server.frameId), server.credential)
-        XCTAssertEqual(PairedFrameStore(defaults: defaults).current, savedFrame)
+        XCTAssertEqual(PairedFrameStore(defaults: defaults).current?.frameId, server.frameId)
         XCTAssertEqual(session.warning, "Another device on this Wi-Fi is claiming to be Kitchen frame. Nothing was sent.")
         XCTAssertTrue(session.frames.isEmpty)
         XCTAssertEqual(impostor.requests.count, 1)
@@ -367,6 +367,33 @@ final class FrameSessionTests: XCTestCase {
         XCTAssertEqual(session.store?.link, .online)
         XCTAssertEqual(server.requests.last?.url.host, "10.0.0.5")
         XCTAssertNil(defaults.dictionaryRepresentation().values.first { "\($0)".contains("10.0.0.5") })
+    }
+
+    func testFramePairedByAddressIsFoundAgainAfterRelaunchWithoutBonjour() async {
+        let first = makeSession()
+        await first.receive(.permissionDenied)
+        tokens.save(server.credential)
+        await first.connect(manualAddress: "demo-frame.local:8765")
+        XCTAssertNotNil(first.store)
+        XCTAssertEqual(PairedFrameStore(defaults: defaults).current?.address, DemoFrameServer.address)
+
+        let relaunched = makeSession()
+        await relaunched.receive(.permissionDenied)
+        XCTAssertNil(relaunched.store)
+        XCTAssertNotNil(relaunched.paired)
+        await relaunched.reconnect()
+        XCTAssertNotNil(relaunched.store)
+        XCTAssertEqual(relaunched.store?.state?.rev, server.revision)
+    }
+
+    func testStoredAddressIsOnlyTriedWhenNoAdvertisedServiceMatches() async {
+        rememberPairing()
+        PairedFrameStore(defaults: defaults).current = PairedFrame(frameId: server.frameId, name: "Kitchen frame", address: evil)
+        let session = makeSession()
+        await session.receive(.services(["Skylit"]))
+        XCTAssertNotNil(session.store)
+        XCTAssertNil(session.warning)
+        assertNothingSecretReached(impostor)
     }
 
     func testManualAddressWithNoFrameBehindIt() async {

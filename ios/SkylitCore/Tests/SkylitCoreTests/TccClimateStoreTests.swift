@@ -235,6 +235,42 @@ final class TccClimateStoreTests: XCTestCase {
         XCTAssertEqual(server.loginCount, 1)
     }
 
+    func testRelaunchReusesTheSavedSessionInsteadOfSigningInAgain() async {
+        let first = await loaded()
+        XCTAssertEqual(first.phase, .ready)
+        XCTAssertEqual(server.loginCount, 1)
+        XCTAssertNotNil(saved.loadSession())
+        for _ in 0..<3 {
+            let again = await loaded()
+            XCTAssertEqual(again.phase, .ready)
+        }
+        XCTAssertEqual(server.loginCount, 1)
+    }
+
+    func testRelaunchWithADeadSessionSignsInOnceAfterTheThrottleWindow() async {
+        _ = await loaded()
+        server.expireSessions()
+        clock.advance(TccClient.reloginInterval + 1)
+        let again = await loaded()
+        XCTAssertEqual(again.phase, .ready)
+        XCTAssertEqual(server.loginCount, 2)
+    }
+
+    func testSignOutAndRejectedPasswordForgetTheSavedSession() async {
+        let store = await loaded()
+        await store.signOut()
+        XCTAssertNil(saved.loadSession())
+        saved.save(FakeTccServer.demoCredentials)
+        let again = await loaded()
+        XCTAssertEqual(server.loginCount, 2)
+        server.setPassword("changed")
+        server.expireSessions()
+        clock.advance(TccClient.reloginInterval + 1)
+        await again.refresh()
+        XCTAssertEqual(again.phase, .signedOut)
+        XCTAssertNil(saved.loadSession())
+    }
+
     func testSignOutClearsEverything() async {
         let store = await loaded()
         store.adjust(1001, by: 1)

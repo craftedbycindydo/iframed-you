@@ -112,6 +112,7 @@ public final class URLSessionTransport: FrameTransport, @unchecked Sendable {
         configuration.httpAdditionalHeaders = ["User-Agent": "iFramedYou"]
         configuration.tlsMinimumSupportedProtocolVersion = .TLSv12
         configuration.waitsForConnectivity = false
+        configuration.httpMaximumConnectionsPerHost = 2
         return configuration
     }
 

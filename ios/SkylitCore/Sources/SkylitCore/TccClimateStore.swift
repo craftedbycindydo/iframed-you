@@ -43,6 +43,7 @@ public final class ClimateStore {
     private var sends: [Int: Task<Void, Never>] = [:]
     private var refreshing: Task<Void, Never>?
     private var refreshAgain = false
+    private var savedSession: TccSession?
 
     public init(client: TccClient, credentials: TccCredentialStoring, debounce: Duration = .seconds(1), now: @escaping () -> Date = Date.init) {
         self.client = client
@@ -74,6 +75,10 @@ public final class ClimateStore {
         started = true
         if let saved = credentials.load() {
             await client.setCredentials(saved)
+            if let session = credentials.loadSession() {
+                await client.restore(session)
+                savedSession = session
+            }
             phase = .loading
         } else {
             phase = .signedOut
@@ -103,6 +108,7 @@ public final class ClimateStore {
         sends = [:]
         pending = [:]
         credentials.clear()
+        savedSession = nil
         await client.signOut()
         devices = []
         readings = []
@@ -151,6 +157,11 @@ public final class ClimateStore {
             trouble = nil
             failures = 0
             phase = .ready
+            let session = await client.session
+            if session != savedSession {
+                credentials.saveSession(session)
+                savedSession = session
+            }
         } catch {
             handle(error)
         }
@@ -162,6 +173,7 @@ public final class ClimateStore {
             break
         case .needsSignIn, .badCredentials:
             credentials.clear()
+            savedSession = nil
             readings = []
             devices = []
             signInError = "Honeywell no longer accepts the saved password. Sign in again."

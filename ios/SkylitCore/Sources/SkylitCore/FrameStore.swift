@@ -27,12 +27,15 @@ public final class FrameStore {
     public private(set) var link: Link = .connecting
     public private(set) var upload: UploadStatus?
     public var notice: String?
+    public var removedItem: ShoppingItem?
 
     public var onUnauthorized: (() -> Void)?
     public var relocate: (() async -> URL?)?
 
     private var api: FrameAPI
     private let now: () -> Date
+    private var inFlight = 0
+    private var needsFullState = false
 
     public init(frame: PairedFrame, api: FrameAPI, now: @escaping () -> Date = Date.init) {
         self.frame = frame
@@ -69,9 +72,10 @@ public final class FrameStore {
             api.baseURL = url
         }
         do {
-            if let fresh = try await api.state(since: rev) {
+            if let fresh = try await api.state(since: needsFullState ? nil : rev) {
                 state = fresh
             }
+            needsFullState = false
             link = .online
         } catch {
             handle(error)
@@ -101,6 +105,8 @@ public final class FrameStore {
         var eager = before
         optimistic(&eager)
         state = eager
+        inFlight += 1
+        defer { inFlight -= 1 }
         do {
             let result = try await call(api)
             link = .online
@@ -108,7 +114,7 @@ public final class FrameStore {
             let (expected, overflowed) = current.rev.addingReportingOverflow(1)
             if tempId == nil { optimistic(&current) }
             let settled = Self.settle(&current, result, tempId: tempId)
-            if settled, !overflowed, result.rev == expected {
+            if settled, !overflowed, result.rev == expected, !needsFullState {
                 current.rev = expected
                 state = current
             } else {
@@ -117,7 +123,8 @@ public final class FrameStore {
             }
             return true
         } catch {
-            state = before
+            needsFullState = true
+            if inFlight == 1 { state = before }
             if case .api = handle(error) { await refresh() }
             return false
         }
@@ -236,7 +243,15 @@ public final class FrameStore {
 
     @discardableResult
     public func deleteItem(id: String) async -> Bool {
-        await perform(optimistic: { $0.shopping.removeAll { $0.id == id } }) { try await $0.deleteItem(id: id) }
+        removedItem = state?.shopping.first { $0.id == id }
+        return await perform(optimistic: { $0.shopping.removeAll { $0.id == id } }) { try await $0.deleteItem(id: id) }
+    }
+
+    @discardableResult
+    public func undoRemove() -> Task<Bool, Never>? {
+        guard let item = removedItem else { return nil }
+        removedItem = nil
+        return Task { await addItem(ShoppingDraft(name: item.name, qty: item.qty, note: item.note)) }
     }
 
     @discardableResult

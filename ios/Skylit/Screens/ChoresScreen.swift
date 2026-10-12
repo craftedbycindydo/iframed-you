@@ -94,8 +94,8 @@ struct ChoresScreen: View {
 
     private func openEditor(_ chore: Chore) {
         save()
+        editField = nil
         draft = ChoreEditDraft(chore, people: people)
-        editField = .title
     }
 
     private func closeEditor() {
@@ -194,6 +194,8 @@ struct ChoresScreen: View {
             TextField("🙂", text: bind(\.emoji, ""))
                 .multilineTextAlignment(.center)
                 .frame(width: Size.glyph + Space.s)
+                .touchTarget()
+                .onTapGesture { editField = .emoji }
                 .focused($editField, equals: .emoji)
                 .onChange(of: draft?.emoji) { _, new in
                     if let new, Limits.cleanEmoji(new) != new { draft?.emoji = Limits.cleanEmoji(new) }
@@ -201,6 +203,8 @@ struct ChoresScreen: View {
                 .accessibilityLabel("Emoji")
             Divider()
             TextField("What needs doing", text: bind(\.title, ""))
+                .touchTarget()
+                .onTapGesture { editField = .title }
                 .focused($editField, equals: .title)
                 .submitLabel(.done)
                 .onSubmit(closeEditor)
@@ -217,6 +221,7 @@ struct ChoresScreen: View {
             }
         }
         .pickerStyle(.menu)
+        .touchTarget()
         .onChange(of: draft?.personId) { _, _ in save() }
         .inlineEditorRow()
         VStack(alignment: .leading, spacing: Space.s) {
@@ -231,6 +236,7 @@ struct ChoresScreen: View {
                     .buttonBorderShape(.circle)
                     .tint(isOn ? theme.tint : Theme.secondaryLabel)
                     .fontWeight(.semibold)
+                    .touchTarget(footprint: Size.capsule)
                     .frame(maxWidth: .infinity)
                     .accessibilityLabel(ChoreLogic.dayNames[day])
                     .accessibilityAddTraits(isOn ? .isSelected : [])
@@ -370,6 +376,8 @@ struct PersonEditor: View {
         ThemedList {
             Section {
                 TextField("Name", text: $name)
+                    .touchTarget()
+                    .onTapGesture { nameFocused = true }
                     .textContentType(.givenName)
                     .focused($nameFocused)
                     .submitLabel(.done)

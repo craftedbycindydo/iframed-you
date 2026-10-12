@@ -9,7 +9,9 @@ This file is the contract between the Android viewer, the dashboard and the iOS 
 - Bonjour/NSD service type `_skylit._tcp`, service name = frame name.
 - Port `8765`; if taken, any free port. Clients must use the advertised port.
 - TXT: `v=2`, `id=<frameId>`. Both are hints; identity is the certificate pin (see Transport security).
-- The frame's IP changes on every reboot, so clients store `frameId`, never an address.
+- The frame's IP changes on every reboot, so clients identify a frame by its pinned certificate,
+  never by an address. A client may remember the last address it used as a hint to try when no
+  advertised service matches the pin; the pin check still decides.
 
 ## Transport and errors
 

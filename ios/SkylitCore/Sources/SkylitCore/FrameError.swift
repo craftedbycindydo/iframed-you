@@ -39,6 +39,7 @@ public enum FrameError: Error, Equatable, Sendable {
             case "conflict", "pairing_busy": return "The frame can't do that right now."
             case "too_large": return "That is too large for the frame."
             case "rate_limited": return "Too many attempts. Wait a few minutes and try again."
+            case "internal": return "The frame couldn't save that. Try again in a moment."
             default: return "The frame refused that (\(status))."
             }
         }

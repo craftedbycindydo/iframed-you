@@ -80,6 +80,8 @@ enum Size {
     static let glyph: CGFloat = 28
     static let avatar: CGFloat = 28
     static let touch: CGFloat = 44
+    static let line: CGFloat = 20
+    static let capsule: CGFloat = 32
 }
 
 extension Font {
@@ -115,6 +117,23 @@ struct StateAnimation<Value: Equatable>: ViewModifier {
 extension View {
     func stateAnimation<Value: Equatable>(_ value: Value) -> some View {
         modifier(StateAnimation(value: value))
+    }
+}
+
+struct TouchTarget: ViewModifier {
+    let footprint: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .frame(minWidth: Size.touch, minHeight: Size.touch)
+            .contentShape(Rectangle())
+            .padding(.vertical, -max(0, Size.touch - footprint) / 2)
+    }
+}
+
+extension View {
+    func touchTarget(footprint: CGFloat = Size.control) -> some View {
+        modifier(TouchTarget(footprint: footprint))
     }
 }
 

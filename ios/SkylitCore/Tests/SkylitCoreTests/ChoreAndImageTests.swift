@@ -2,21 +2,21 @@ import XCTest
 @testable import SkylitCore
 
 final class ChoreLogicTests: XCTestCase {
-    private let calgary = TimeZone(identifier: "America/Edmonton")!
+    private let denver = TimeZone(identifier: "America/Denver")!
     private let sunday = fixedDate("2026-10-11T18:00:00Z")
 
     func testWeekdayNumbersStartAtSunday() {
-        XCTAssertEqual(ChoreLogic.weekday(sunday, timeZone: calgary), 0)
-        XCTAssertEqual(ChoreLogic.weekday(fixedDate("2026-10-12T18:00:00Z"), timeZone: calgary), 1)
-        XCTAssertEqual(ChoreLogic.weekday(fixedDate("2026-10-17T18:00:00Z"), timeZone: calgary), 6)
+        XCTAssertEqual(ChoreLogic.weekday(sunday, timeZone: denver), 0)
+        XCTAssertEqual(ChoreLogic.weekday(fixedDate("2026-10-12T18:00:00Z"), timeZone: denver), 1)
+        XCTAssertEqual(ChoreLogic.weekday(fixedDate("2026-10-17T18:00:00Z"), timeZone: denver), 6)
     }
 
     func testDateUsesFrameTimezoneNotUTC() {
         let lateEvening = fixedDate("2026-10-12T03:30:00Z")
-        XCTAssertEqual(ChoreLogic.dateString(lateEvening, timeZone: calgary), "2026-10-11")
+        XCTAssertEqual(ChoreLogic.dateString(lateEvening, timeZone: denver), "2026-10-11")
         XCTAssertEqual(ChoreLogic.dateString(lateEvening, timeZone: TimeZone(identifier: "UTC")!), "2026-10-12")
-        XCTAssertEqual(ChoreLogic.weekday(lateEvening, timeZone: calgary), 0)
-        XCTAssertEqual(ChoreLogic.dateString(fixedDate("2026-01-05T12:00:00Z"), timeZone: calgary), "2026-01-05")
+        XCTAssertEqual(ChoreLogic.weekday(lateEvening, timeZone: denver), 0)
+        XCTAssertEqual(ChoreLogic.dateString(fixedDate("2026-01-05T12:00:00Z"), timeZone: denver), "2026-01-05")
     }
 
     func testEmptyDaysMeansEveryDay() {
@@ -41,7 +41,7 @@ final class ChoreLogicTests: XCTestCase {
                 Chore(id: "c5", title: "Recycling", personId: nil),
                 Chore(id: "c6", title: "Orphan", personId: "gone"),
             ],
-            settings: FrameSettings(location: FrameLocation(name: "Calgary", latitude: 51, longitude: -114, timezone: "America/Edmonton")))
+            settings: FrameSettings(location: FrameLocation(name: "Denver", latitude: 39.74, longitude: -104.99, timezone: "America/Denver")))
         let today = ChoreLogic.today(state, now: sunday)
         XCTAssertEqual(today.date, "2026-10-11")
         XCTAssertEqual(today.groups.map(\.id), ["p1", "p2", "anyone"])

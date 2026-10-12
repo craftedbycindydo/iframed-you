@@ -74,7 +74,7 @@ final class FrameStoreTests: XCTestCase {
         XCTAssertEqual(store.link, .online)
         XCTAssertEqual(store.state?.rev, 42)
         XCTAssertEqual(store.state?.people.map(\.name), ["Maya", "Leo", "Sam"])
-        XCTAssertEqual(store.state?.settings.location?.name, "Calgary")
+        XCTAssertEqual(store.state?.settings.location?.name, "Denver")
         XCTAssertEqual(store.state?.photos.count, 6)
         XCTAssertNil(server.requests[0].query)
     }
@@ -179,6 +179,26 @@ final class FrameStoreTests: XCTestCase {
         XCTAssertEqual(store.link, .online)
     }
 
+    func testFullFrameStorageRevertsTheChangeAndSaysSo() async {
+        let store = await loaded()
+        let before = store.state
+        server.setStorageFull(true)
+        let ticked = await store.setItem(id: "s1", done: true)
+        XCTAssertFalse(ticked)
+        XCTAssertEqual(store.state, before)
+        XCTAssertEqual(store.notice, "The frame couldn't save that. Try again in a moment.")
+        XCTAssertEqual(store.link, .online)
+        let recoloured = await store.setAppearance(FrameAppearance(palette: "ocean", mode: "dark"))
+        XCTAssertFalse(recoloured)
+        XCTAssertEqual(store.state, before)
+        let requests = server.requests.count
+        server.setStorageFull(false)
+        await store.poll()
+        XCTAssertEqual(server.requests.count, requests + 1)
+        let again = await store.setItem(id: "s1", done: true)
+        XCTAssertTrue(again)
+    }
+
     func testOfflineMutationRollsBackAndMarksOffline() async {
         let store = await loaded()
         let before = store.state
@@ -188,6 +208,48 @@ final class FrameStoreTests: XCTestCase {
         XCTAssertEqual(store.state, before)
         XCTAssertEqual(store.link, .offline)
         XCTAssertNil(store.notice)
+    }
+
+    func testTwoFailingAddsLeaveNoGhostRowsOnceTheFrameIsBack() async {
+        let store = await loaded()
+        let count = store.state?.shopping.count ?? 0
+        server.setUnreachable(true)
+        async let first = store.addItem(ShoppingDraft(name: "Lemons"))
+        async let second = store.addItem(ShoppingDraft(name: "Limes"))
+        _ = await (first, second)
+        server.setUnreachable(false)
+        await store.poll()
+        XCTAssertEqual(store.state?.shopping.count, count)
+        XCTAssertFalse(store.state?.shopping.contains { $0.id.hasPrefix("local-") } ?? true)
+        XCTAssertEqual(store.state?.rev, server.revision)
+    }
+
+    func testTwoFailingTicksLeaveNoStaleStateOnceTheFrameIsBack() async {
+        let store = await loaded()
+        server.setUnreachable(true)
+        async let first = store.setItem(id: "s1", done: true)
+        async let second = store.setItem(id: "s2", done: true)
+        _ = await (first, second)
+        server.setUnreachable(false)
+        await store.poll()
+        XCTAssertEqual(store.state?.shopping.filter { $0.id == "s1" || $0.id == "s2" }.map(\.done), [false, false])
+    }
+
+    func testDeletingAnItemRemembersItForUndoAndUndoPutsItBack() async {
+        let store = await loaded()
+        await store.updateItem(id: "s1", ShoppingDraft(name: "Oat milk", qty: 3, note: "barista"))
+        await store.deleteItem(id: "s1")
+        XCTAssertEqual(store.removedItem?.name, "Oat milk")
+        XCTAssertNil(store.state?.shopping.first { $0.id == "s1" })
+        let restoring = store.undoRemove()
+        XCTAssertNil(store.removedItem)
+        XCTAssertNil(store.undoRemove())
+        _ = await restoring?.value
+        let restored = store.state?.shopping.first { $0.name == "Oat milk" }
+        XCTAssertEqual(restored?.qty, 3)
+        XCTAssertEqual(restored?.note, "barista")
+        XCTAssertEqual(restored?.done, false)
+        XCTAssertEqual(store.state?.rev, server.revision)
     }
 
     func testOfflineStoreRelocatesFrameBeforeNextRequest() async {
@@ -365,7 +427,7 @@ final class FrameStoreTests: XCTestCase {
     func testDevicesMarkThisPhoneAndOnlyItCanBeRemoved() async throws {
         let store = await loaded()
         await store.loadDevices()
-        XCTAssertEqual(store.devices.map(\.name), ["Karan's iPhone", "Hallway tablet"])
+        XCTAssertEqual(store.devices.map(\.name), ["Maya's iPhone", "Hallway tablet"])
         XCTAssertEqual(store.devices.map(\.isSelf), [true, false])
         XCTAssertEqual(store.thisDevice?.id, "d1")
         XCTAssertNotNil(store.thisDevice?.lastSeenDate)

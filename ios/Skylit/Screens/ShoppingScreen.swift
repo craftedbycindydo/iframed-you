@@ -7,12 +7,11 @@ struct ShoppingScreen: View {
     @State private var newName = ""
     @State private var draft: ItemDraft?
     @State private var confirmsClear = false
-    @State private var removed: ShoppingItem?
     @FocusState private var addFocused: Bool
     @FocusState private var editField: ItemDraft.Field?
 
     private var items: [ShoppingItem] { store.state?.shopping ?? [] }
-    private var open: [ShoppingItem] { items.filter { !$0.done } }
+    private var open: [ShoppingItem] { items.filter { !$0.done }.reversed() }
     private var ticked: [ShoppingItem] { items.filter(\.done) }
     private var isFull: Bool { items.count >= Limits.shoppingItems }
 
@@ -50,6 +49,7 @@ struct ShoppingScreen: View {
                     } header: {
                         SectionHeader("In the basket") {
                             Button("Clear completed") { confirmsClear = true }
+                                .touchTarget(footprint: Size.line)
                         }
                     }
                 }
@@ -64,15 +64,6 @@ struct ShoppingScreen: View {
                     Task { await store.clearDoneItems() }
                 }
             }
-        }
-        .overlay(alignment: .bottom) {
-            NoticeToast(notice: Binding(get: { removed.map { "Removed \($0.name)" } }, set: { if $0 == nil { removed = nil } }),
-                        actionLabel: "Undo") {
-                guard let item = removed else { return }
-                Task { await store.addItem(ShoppingDraft(name: item.name, qty: item.qty, note: item.note)) }
-            }
-            .padding(.bottom, Space.s)
-            .stateAnimation(removed)
         }
         .onAppear {
             #if DEBUG
@@ -91,7 +82,6 @@ struct ShoppingScreen: View {
 
     private func remove(_ item: ShoppingItem) {
         if draft?.id == item.id { draft = nil }
-        removed = item
         Task { await store.deleteItem(id: item.id) }
     }
 
@@ -166,6 +156,8 @@ struct ShoppingScreen: View {
     @ViewBuilder private var editor: some View {
         HStack(spacing: Space.m) {
             TextField("Item", text: bind(\.name, ""))
+                .touchTarget()
+                .onTapGesture { editField = .name }
                 .focused($editField, equals: .name)
                 .submitLabel(.done)
                 .onSubmit(closeEditor)
@@ -182,6 +174,8 @@ struct ShoppingScreen: View {
         .onChange(of: draft?.qty) { _, _ in save() }
         .inlineEditorRow()
         TextField("Note", text: bind(\.note, ""), prompt: Text("Brand, size, shop"))
+            .touchTarget()
+            .onTapGesture { editField = .note }
             .focused($editField, equals: .note)
             .submitLabel(.done)
             .onSubmit(closeEditor)

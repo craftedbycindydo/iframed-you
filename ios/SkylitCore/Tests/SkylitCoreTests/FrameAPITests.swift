@@ -26,9 +26,9 @@ final class FrameAPITests: XCTestCase {
     }
 
     func testPairingCallsCarryNoToken() async throws {
-        try await expect("POST", "/v2/pair/start", body: ["commit": "c", "tokenHash": "h", "deviceName": "Karan's iPhone"], authorized: false,
+        try await expect("POST", "/v2/pair/start", body: ["commit": "c", "tokenHash": "h", "deviceName": "Maya's iPhone"], authorized: false,
                          reply: ##"{"session":"s1","nF":"n1"}"##) {
-            let started = try await $0.pairStart(commit: "c", tokenHash: "h", deviceName: "Karan's iPhone")
+            let started = try await $0.pairStart(commit: "c", tokenHash: "h", deviceName: "Maya's iPhone")
             XCTAssertEqual(started, PairSession(session: "s1", nF: "n1"))
         }
         try await expect("POST", "/v2/pair/reveal", body: ["session": "s1", "nP": "p1"], authorized: false, reply: "", status: 204) {
@@ -130,8 +130,8 @@ final class FrameAPITests: XCTestCase {
     }
 
     func testSettings() async throws {
-        try await expect("PUT", "/v1/settings/location", body: ["name": "Calgary", "latitude": 51.05, "longitude": -114.07, "timezone": "America/Edmonton"]) {
-            _ = try await $0.setLocation(FrameLocation(name: "Calgary", latitude: 51.05, longitude: -114.07, timezone: "America/Edmonton"))
+        try await expect("PUT", "/v1/settings/location", body: ["name": "Denver", "latitude": 39.74, "longitude": -104.99, "timezone": "America/Denver"]) {
+            _ = try await $0.setLocation(FrameLocation(name: "Denver", latitude: 39.74, longitude: -104.99, timezone: "America/Denver"))
         }
         try await expect("PUT", "/v1/settings/location", body: ["name": "Pune", "latitude": 18.52, "longitude": 73.86]) {
             _ = try await $0.setLocation(FrameLocation(name: "Pune", latitude: 18.52, longitude: 73.86))

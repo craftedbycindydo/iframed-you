@@ -117,9 +117,16 @@ struct MainTabs: View {
                 .tag(MainTab.setup)
         }
         .overlay(alignment: .bottom) {
-            NoticeToast(notice: $store.notice)
-                .padding(.bottom, Space.xxl + Space.xl)
-                .stateAnimation(store.notice)
+            VStack(spacing: Space.s) {
+                NoticeToast(notice: $store.notice)
+                NoticeToast(notice: Binding(get: { store.removedItem.map { "Removed \($0.name)" } }, set: { if $0 == nil { store.removedItem = nil } }),
+                            actionLabel: "Undo") {
+                    store.undoRemove()
+                }
+            }
+            .padding(.bottom, Space.xxl + Space.xl)
+            .stateAnimation(store.notice)
+            .stateAnimation(store.removedItem)
         }
         .sensoryFeedback(.error, trigger: store.notice) { _, new in new != nil }
         .task(id: scenePhase) {
@@ -163,7 +170,7 @@ enum Demo {
         let server: DemoFrameServer
         if UserDefaults.standard.bool(forKey: "demoEmpty") {
             server = DemoFrameServer()
-            server.authorize(token: DemoFrameServer.demoToken, deviceName: "Karan's iPhone")
+            server.authorize(token: DemoFrameServer.demoToken, deviceName: "Maya's iPhone")
         } else {
             server = DemoFrameServer.sample()
         }
@@ -187,6 +194,12 @@ enum Demo {
                 server.setUnreachable(true)
             }
         }
+        if UserDefaults.standard.bool(forKey: "demoRevoke") {
+            Task {
+                try? await Task.sleep(for: .milliseconds(2500))
+                server.revokeAll()
+            }
+        }
         switch UserDefaults.standard.string(forKey: "demoICloud") {
         case "syncing": server.setICloudAlbum(name: "Family album", count: 0, lastSync: nil, syncing: true, error: nil)
         case "synced": server.setICloudAlbum(name: "Family album", count: 24, lastSync: ISO8601DateFormatter().string(from: Date(timeIntervalSinceNow: -720)), syncing: false, error: nil)
@@ -196,7 +209,13 @@ enum Demo {
         }
         let session = FrameSession(browser: StaticFrameBrowser(events: events, addresses: ["Skylit": DemoFrameServer.address]),
                                    connector: network, tokens: tokens, pairedStore: paired,
-                                   deviceNames: DeviceNameStore(defaults: defaults, fallback: "Karan's iPhone"))
+                                   deviceNames: DeviceNameStore(defaults: defaults, fallback: "Maya's iPhone"))
+        if let text = UserDefaults.standard.string(forKey: "demoNotice") {
+            Task {
+                while session.store?.removedItem == nil { try? await Task.sleep(for: .milliseconds(100)) }
+                session.store?.notice = text
+            }
+        }
         if screen == "pairing" {
             let stage = UserDefaults.standard.string(forKey: "demoPairing") ?? "name"
             server.openPairingWindow()
@@ -205,7 +224,7 @@ enum Demo {
                 try? await Task.sleep(for: .milliseconds(900))
                 await session.select(frame)
                 guard stage != "name" else { return }
-                await session.startPairing(name: "Karan's iPhone")
+                await session.startPairing(name: "Maya's iPhone")
                 guard stage != "code", let code = server.shownCode else { return }
                 await session.submit(code: code)
             }

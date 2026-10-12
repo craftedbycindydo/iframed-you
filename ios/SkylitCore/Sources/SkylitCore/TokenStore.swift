@@ -109,10 +109,12 @@ public final class InMemoryTokenStore: TokenStoring, @unchecked Sendable {
 public struct PairedFrame: Codable, Equatable, Sendable {
     public let frameId: String
     public var name: String
+    public var address: URL?
 
-    public init(frameId: String, name: String) {
+    public init(frameId: String, name: String, address: URL? = nil) {
         self.frameId = frameId
         self.name = name
+        self.address = address
     }
 }
 

@@ -383,6 +383,11 @@ final class TccClientTests: XCTestCase {
         reading.heatHold = .temporary
         reading.coolHold = .temporary
         XCTAssertNil(try reading.setpointChange(.cool, to: 74).statusCool)
+        reading.heatHold = .permanent
+        reading.coolHold = .schedule
+        XCTAssertEqual(try reading.setpointChange(.cool, to: 74).statusCool, 1)
+        reading.coolHold = nil
+        XCTAssertEqual(try reading.setpointChange(.cool, to: 74).statusCool, 1)
         reading.heatHold = .schedule
         reading.coolHold = .schedule
         let permanent = try reading.setpointChange(.cool, to: 74, hold: .permanent)
@@ -520,6 +525,24 @@ final class TccClientTests: XCTestCase {
         XCTAssertEqual(store.load(), secret)
         store.clear()
         XCTAssertNil(store.load())
+    }
+
+    func testKeychainStoreKeepsTheSessionNextToTheCredentialsAndClearsBothTogether() {
+        let store = TccCredentialStore(service: "skylit-tests-tcc-\(UUID().uuidString)")
+        let secret = TccCredentials(username: "owner@example.com", password: "hunter2-secret")
+        let session = TccSession(cookies: [TccClient.authCookie: "abc", "thlang": "en-US"], lastLogin: Date(timeIntervalSince1970: 1_791_741_600))
+        XCTAssertNil(store.loadSession())
+        store.save(secret)
+        store.saveSession(session)
+        XCTAssertEqual(store.load(), secret)
+        XCTAssertEqual(store.loadSession(), session)
+        store.saveSession(nil)
+        XCTAssertNil(store.loadSession())
+        XCTAssertEqual(store.load(), secret)
+        store.saveSession(session)
+        store.clear()
+        XCTAssertNil(store.load())
+        XCTAssertNil(store.loadSession())
     }
 
     func testErrorsCarryNoSecretsAndHaveMessages() {

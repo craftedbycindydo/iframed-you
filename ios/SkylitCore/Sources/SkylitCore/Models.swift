@@ -366,6 +366,20 @@ public enum Limits {
         scalar.properties.generalCategory == .control || directionMarks.contains(scalar.value)
     }
 
+    private static let invisibleScalars: Set<UInt32> = [0x034F, 0x115F, 0x1160, 0x3164, 0xFFA0, 0x2800]
+
+    private static func isInvisible(_ scalar: Unicode.Scalar) -> Bool {
+        let category = scalar.properties.generalCategory
+        let value = scalar.value
+        return category == .format || category == .spaceSeparator || category == .lineSeparator || category == .paragraphSeparator
+            || scalar.properties.isWhitespace || (0xFE00...0xFE0F).contains(value) || (0xE0100...0xE01EF).contains(value)
+            || invisibleScalars.contains(value)
+    }
+
+    public static func hasVisibleCharacter(_ text: String) -> Bool {
+        text.unicodeScalars.contains { !isInvisible($0) }
+    }
+
     public static let emojiLength = 16
 
     public static func clipped(_ text: String, to limit: Int) -> String {
@@ -379,7 +393,8 @@ public enum Limits {
 
     public static func cleanDeviceName(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (1...deviceNameLength).contains(trimmed.unicodeScalars.count), !trimmed.unicodeScalars.contains(where: isUnsafe) else { return nil }
+        guard (1...deviceNameLength).contains(trimmed.unicodeScalars.count), !trimmed.unicodeScalars.contains(where: isUnsafe),
+              hasVisibleCharacter(trimmed) else { return nil }
         return trimmed
     }
 
@@ -394,9 +409,16 @@ public enum Limits {
         return isPhoto ? photoResponseBytes : jsonResponseBytes
     }
 
-    public static func cleanName(_ text: String) -> String? {
+    public static func cleanName(_ text: String, limit: Int = nameLength) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (1...nameLength).contains(trimmed.unicodeScalars.count) ? trimmed : nil
+        guard (1...limit).contains(trimmed.unicodeScalars.count), !trimmed.unicodeScalars.contains(where: isUnsafe),
+              hasVisibleCharacter(trimmed) else { return nil }
+        return trimmed
+    }
+
+    public static func cleanCalendarName(_ text: String) -> String? {
+        guard let clean = cleanName(text, limit: calendarNameLength), clean.utf16.count <= calendarNameLength else { return nil }
+        return clean
     }
 
     public static func isHexColor(_ text: String) -> Bool {

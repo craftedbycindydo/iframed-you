@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 public final class FakeTccServer: TccTransport, @unchecked Sendable {
@@ -221,3 +222,4 @@ public final class FakeTccServer: TccTransport, @unchecked Sendable {
         return html(302, "", ["Location": "/portal/", "Set-Cookie": cookies])
     }
 }
+#endif

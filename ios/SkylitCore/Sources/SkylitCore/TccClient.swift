@@ -37,9 +37,18 @@ public actor TccClient {
 
     public var hasSession: Bool { cookies[Self.authCookie] != nil }
 
+    public var session: TccSession? {
+        hasSession ? TccSession(cookies: cookies, lastLogin: lastLogin) : nil
+    }
+
     public func setCredentials(_ value: TccCredentials?) {
         credentials = value
         cookies = [:]
+    }
+
+    public func restore(_ saved: TccSession) {
+        cookies = saved.cookies
+        lastLogin = saved.lastLogin
     }
 
     public func signIn(_ value: TccCredentials) async throws {

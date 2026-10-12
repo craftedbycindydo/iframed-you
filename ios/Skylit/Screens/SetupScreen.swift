@@ -128,7 +128,7 @@ struct SetupScreen: View {
 
     private var cleanLink: String { calendarLink.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var canAddCalendar: Bool {
-        Limits.cleanName(calendarName) != nil && cleanLink.lowercased().hasPrefix("https://") && !cleanLink.contains(" ")
+        Limits.cleanCalendarName(calendarName) != nil && cleanLink.lowercased().hasPrefix("https://") && !cleanLink.contains(" ")
     }
 
     private var calendarSection: some View {
@@ -161,6 +161,8 @@ struct SetupScreen: View {
             }
             if addsCalendar {
                 TextField("Name on the frame", text: $calendarName, prompt: Text("Family"))
+                    .touchTarget()
+                    .onTapGesture { calendarNameFocused = true }
                     .focused($calendarNameFocused)
                     .submitLabel(.next)
                     .onChange(of: calendarName) { _, new in
@@ -210,7 +212,7 @@ struct SetupScreen: View {
     }
 
     private func addCalendar() {
-        guard let clean = Limits.cleanName(calendarName), canAddCalendar else { return }
+        guard let clean = Limits.cleanCalendarName(calendarName), canAddCalendar else { return }
         let url = cleanLink
         calendarNameFocused = false
         addsCalendar = false
@@ -275,7 +277,7 @@ struct CitySearch: View {
                 if results.isEmpty {
                     Text("No city found with that name.").foregroundStyle(Theme.secondaryLabel)
                 }
-                ForEach(results, id: \.name) { result in
+                ForEach(Array(results.enumerated()), id: \.offset) { _, result in
                     Button {
                         Task { await store.setLocation(result) }
                         dismiss()
@@ -296,6 +298,9 @@ struct CitySearch: View {
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "City")
         .textContentType(.addressCity)
         .onSubmit(of: .search, search)
+        .onChange(of: query) { _, new in
+            if new.trimmingCharacters(in: .whitespaces).isEmpty { results = nil }
+        }
         .navigationTitle("Weather city")
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -57,6 +57,10 @@ final class PinTests: XCTestCase {
         XCTAssertEqual(pairing.fingerprint, Pin.fingerprint(ofCertificate: mine))
     }
 
+    func testLanSessionsKeepAtMostTwoConnectionsToTheFrame() {
+        XCTAssertEqual(URLSessionTransport.lanConfiguration.httpMaximumConnectionsPerHost, 2)
+    }
+
     func testResponseLimitsByRoute() {
         func limit(_ method: String, _ path: String) -> Int {
             var request = URLRequest(url: URL(string: "https://192.168.1.20:8765\(path)")!)

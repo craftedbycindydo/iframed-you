@@ -45,13 +45,14 @@ struct ClimateScreen: View {
                         Button("Refresh", systemImage: "arrow.clockwise") {
                             Task { await store.refresh() }
                         }
-                        Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                        Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.forward", role: .destructive) {
                             Task { await store.signOut() }
                         }
                     } label: {
                         Label("More", systemImage: "ellipsis")
                     }
                     .headerAction()
+                    .touchTarget(footprint: Size.touch)
                 }
             }
         }
@@ -95,6 +96,8 @@ struct ClimateScreen: View {
     @ViewBuilder private var signIn: some View {
         Section {
             TextField("Email", text: $email)
+                .touchTarget()
+                .onTapGesture { focus = .email }
                 .textContentType(.username)
                 .keyboardType(.emailAddress)
                 .textInputAutocapitalization(.never)
@@ -103,6 +106,8 @@ struct ClimateScreen: View {
                 .submitLabel(.next)
                 .onSubmit { focus = .password }
             SecureField("Password", text: $password)
+                .touchTarget()
+                .onTapGesture { focus = .password }
                 .textContentType(.password)
                 .focused($focus, equals: .password)
                 .submitLabel(.go)

@@ -9,6 +9,7 @@ struct ConnectScreen: View {
     @State private var manualAddress = ""
     @State private var isConnectingManually = false
     @State private var hasWaited = false
+    @FocusState private var addressFocused: Bool
 
     private var canConnectManually: Bool {
         FrameAddress.parse(manualAddress) != nil && !session.isBusy
@@ -62,7 +63,11 @@ struct ConnectScreen: View {
         .task(id: session.paired) {
             while !Task.isCancelled, session.paired != nil {
                 try? await Task.sleep(for: .seconds(3))
-                if let store = session.store, store.state == nil { await store.refresh() }
+                if let store = session.store {
+                    if store.state == nil { await store.refresh() }
+                } else {
+                    await session.reconnect()
+                }
             }
         }
     }
@@ -146,6 +151,9 @@ struct ConnectScreen: View {
         Section {
             HStack(spacing: Space.m) {
                 TextField("Address", text: $manualAddress, prompt: Text("192.168.1.20:8765"))
+                    .touchTarget()
+                    .onTapGesture { addressFocused = true }
+                    .focused($addressFocused)
                     .keyboardType(.numbersAndPunctuation)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -160,6 +168,7 @@ struct ConnectScreen: View {
                 }
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
+                .touchTarget(footprint: Size.capsule)
                 .disabled(!canConnectManually)
             }
         } header: {
@@ -187,6 +196,7 @@ struct PairingSheet: View {
     @Environment(FrameSession.self) private var session
     @Environment(\.theme) private var theme
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     let flow: PairingFlow
     @State private var code = ""
     @State private var name = ""
@@ -225,8 +235,10 @@ struct PairingSheet: View {
                             Text(title).font(.hero)
                             Text(guidance).font(.rowSubtitle).foregroundStyle(Theme.secondaryLabel)
                         }
-                        Spacer(minLength: 0)
-                        FrameHero(width: 96)
+                        if !typeSize.isAccessibilitySize {
+                            Spacer(minLength: 0)
+                            FrameHero(width: 96)
+                        }
                     }
                 }
                 .listRowBackground(Color.clear)
@@ -262,6 +274,8 @@ struct PairingSheet: View {
     private var naming: some View {
         Section {
             TextField("Name this phone", text: $name, prompt: Text("Maya's iPhone"))
+                .touchTarget()
+                .onTapGesture { nameFocused = true }
                 .focused($nameFocused)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()

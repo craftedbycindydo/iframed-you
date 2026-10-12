@@ -274,7 +274,8 @@ public struct TccThermostat: Equatable, Sendable, Identifiable {
             change.statusHeat = TccHoldStatus.permanent.rawValue
             change.statusCool = TccHoldStatus.permanent.rawValue
         case .untilNextPeriod:
-            if heatHold == .schedule, coolHold == .schedule {
+            let running = which == .heat ? heatHold : coolHold
+            if running == nil || running == .schedule {
                 change.statusHeat = TccHoldStatus.temporary.rawValue
                 change.statusCool = TccHoldStatus.temporary.rawValue
                 let period = which == .heat ? heatNextPeriod : coolNextPeriod

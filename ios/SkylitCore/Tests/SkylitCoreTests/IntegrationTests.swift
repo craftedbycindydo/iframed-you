@@ -90,11 +90,11 @@ final class IntegrationTests: XCTestCase {
         _ = try await api.deleteItem(id: second.id)
 
         _ = try await api.setAppearance(FrameAppearance(palette: "ocean", mode: "dark"))
-        _ = try await api.setLocation(FrameLocation(name: "Calgary", latitude: 51.05, longitude: -114.07, timezone: "America/Edmonton"))
+        _ = try await api.setLocation(FrameLocation(name: "Denver", latitude: 39.74, longitude: -104.99, timezone: "America/Denver"))
         let configuredReply = try await api.state()
         let configured = try XCTUnwrap(configuredReply)
         XCTAssertEqual(configured.settings.appearance, FrameAppearance(palette: "ocean", mode: "dark"))
-        XCTAssertEqual(configured.settings.location?.name, "Calgary")
+        XCTAssertEqual(configured.settings.location?.name, "Denver")
         _ = try await api.setAppearance(initial.settings.appearance)
         if let location = initial.settings.location { _ = try await api.setLocation(location) }
 

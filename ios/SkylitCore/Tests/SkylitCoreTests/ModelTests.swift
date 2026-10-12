@@ -33,24 +33,27 @@ final class ModelTests: XCTestCase {
     }
 
     func testDeviceNameRules() {
-        XCTAssertEqual(Limits.cleanDeviceName("  Karan's iPhone \n"), "Karan's iPhone")
+        XCTAssertEqual(Limits.cleanDeviceName("  Maya's iPhone \n"), "Maya's iPhone")
         XCTAssertEqual(Limits.cleanDeviceName(String(repeating: "n", count: 40))?.count, 40)
         XCTAssertEqual(Limits.cleanDeviceName("Maya 👩‍👧 phone"), "Maya 👩‍👧 phone")
-        for refused in ["", "   ", String(repeating: "n", count: 41), "Karan\u{202E}enohPi", "Tab\there", "Bell\u{7}", "Mark\u{200F}"] {
+        for refused in ["", "   ", String(repeating: "n", count: 41), "Maya\u{202E}enohPi", "Tab\there", "Bell\u{7}", "Mark\u{200F}"] {
             XCTAssertNil(Limits.cleanDeviceName(refused), refused.debugDescription)
         }
     }
 
     func testDevicesWithBothTimestampShapes() throws {
         let devices = try decode([PairedDevice].self, """
-            [{"id":"d1","name":"Karan's iPhone","pairedAt":"2026-10-11T19:26:00Z","lastSeen":"2026-10-11T19:30:00Z","self":true},
+            [{"id":"d1","name":"Maya's iPhone","pairedAt":"2026-10-11T19:26:00Z","lastSeen":"2026-10-11T19:30:00Z","self":true},
              {"id":"d2","name":"Tablet","pairedAt":"2026-10-11T19:26:00.123+00:00"},
-             {"id":"d3","name":"Odd","pairedAt":"yesterday"}]
+             {"id":"d3","name":"Odd","pairedAt":"yesterday"},
+             {"id":"d4","name":"Unset clock","pairedAt":null,"lastSeen":null,"self":false}]
             """)
-        XCTAssertEqual(devices.map(\.id), ["d1", "d2", "d3"])
+        XCTAssertEqual(devices.map(\.id), ["d1", "d2", "d3", "d4"])
         XCTAssertNotNil(devices[0].pairedDate)
         XCTAssertNotNil(devices[1].pairedDate)
         XCTAssertNil(devices[2].pairedDate)
+        XCTAssertNil(devices[3].pairedDate)
+        XCTAssertNil(devices[3].lastSeenDate)
     }
 
     func testContractStateExample() throws {
@@ -59,7 +62,7 @@ final class ModelTests: XCTestCase {
              "people": [{"id":"p1","name":"Maya","color":"#00A36C"}],
              "chores": [{"id":"c1","title":"Make bed","emoji":"🛏️","personId":"p1","days":[1,2,3,4,5],"done":["2026-10-11"]}],
              "shopping": [{"id":"s1","name":"Milk","qty":2,"note":"","done":false}],
-             "settings": {"location": {"name":"Calgary","latitude":51.05,"longitude":-114.07,"timezone":"America/Edmonton"},
+             "settings": {"location": {"name":"Denver","latitude":39.74,"longitude":-104.99,"timezone":"America/Denver"},
                           "appearance": {"palette":"linen","mode":"auto"}},
              "calendars": [{"id":"k1","name":"Family","color":"#2D5BFF"}],
              "photos": {"count": 12}}
@@ -68,7 +71,7 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(state.people, [Person(id: "p1", name: "Maya", color: "#00A36C")])
         XCTAssertEqual(state.chores, [Chore(id: "c1", title: "Make bed", emoji: "🛏️", personId: "p1", days: [1, 2, 3, 4, 5], done: ["2026-10-11"])])
         XCTAssertEqual(state.shopping, [ShoppingItem(id: "s1", name: "Milk", qty: 2, note: "", done: false)])
-        XCTAssertEqual(state.settings.location, FrameLocation(name: "Calgary", latitude: 51.05, longitude: -114.07, timezone: "America/Edmonton"))
+        XCTAssertEqual(state.settings.location, FrameLocation(name: "Denver", latitude: 39.74, longitude: -104.99, timezone: "America/Denver"))
         XCTAssertEqual(state.settings.appearance, FrameAppearance(palette: "linen", mode: "auto"))
         XCTAssertEqual(state.calendars, [CalendarFeed(id: "k1", name: "Family", color: "#2D5BFF")])
         XCTAssertEqual(state.photos.count, 12)
@@ -155,6 +158,19 @@ final class ModelTests: XCTestCase {
         XCTAssertNil(Limits.cleanDeviceName(String(repeating: "🇨🇦", count: 21)))
         XCTAssertNotNil(Limits.cleanDeviceName(String(repeating: "🇨🇦", count: 20)))
         XCTAssertEqual(Limits.cleanName("\u{00A0}Milk\u{3000}"), "Milk")
+        for invisible in ["\u{200B}", "\u{200D}\u{200D}", "\u{FE0F}", "\u{3164}", "\u{2800}", "\u{034F}", "\u{E0101}"] {
+            XCTAssertNil(Limits.cleanName(invisible), invisible.debugDescription)
+            XCTAssertNil(Limits.cleanDeviceName(invisible), invisible.debugDescription)
+        }
+        XCTAssertEqual(Limits.cleanName("👩‍👧"), "👩‍👧")
+        XCTAssertEqual(Limits.cleanName("نام\u{200C}ها"), "نام\u{200C}ها")
+        XCTAssertNil(Limits.cleanName("Mi\u{0007}lk"))
+        XCTAssertNil(Limits.cleanName("\u{202E}Milk"))
+        XCTAssertEqual(Limits.cleanCalendarName(" Family "), "Family")
+        XCTAssertNotNil(Limits.cleanCalendarName(String(repeating: "n", count: 60)))
+        XCTAssertNil(Limits.cleanCalendarName(String(repeating: "n", count: 61)))
+        XCTAssertNotNil(Limits.cleanCalendarName(String(repeating: "📅", count: 30)))
+        XCTAssertNil(Limits.cleanCalendarName(String(repeating: "📅", count: 31)))
         XCTAssertEqual(Limits.emojiLength, 16)
         XCTAssertEqual(Limits.cleanEmoji("ab🛏️"), "🛏️")
         XCTAssertEqual(Limits.cleanEmoji("👨‍👩‍👧‍👦"), "👨‍👩‍👧‍👦")
