@@ -149,7 +149,6 @@ public actor TccClient {
             if text.contains("The email or password provided is incorrect") || text.contains("The email address is not in the correct format") {
                 throw TccError.badCredentials
             }
-            if text.contains("will not operate without Cookies") { throw TccError.loginFailed }
             sawEmptyAuthCookie = false
             let (_, confirmed) = try await follow(try request("GET", "/portal"), body: nil)
             if sawEmptyAuthCookie { throw TccError.loginFailed }

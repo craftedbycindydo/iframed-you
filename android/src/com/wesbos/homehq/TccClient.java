@@ -200,6 +200,8 @@ final class TccClient {
   private String username;
   private String password;
   private boolean emptyAuthCookie;
+  private final List<String> steps = new ArrayList<>();
+  private boolean tracing;
   private long lastLogin;
   private long counter;
   private int failures;
@@ -428,6 +430,10 @@ final class TccClient {
     if (automatic && lastLogin != 0 && up - lastLogin < RELOGIN_MILLIS) throw new Problem("session_expired", now + lastLogin + RELOGIN_MILLIS - up);
     lastLogin = up;
     cookies.clear();
+    synchronized (steps) {
+      steps.clear();
+    }
+    tracing = true;
     try {
       follow("GET", "/portal", "application/json", null);
       String form = "timeOffset=" + (-TimeZone.getDefault().getOffset(now) / 60000) + "&UserName=" + encode(username) + "&Password=" + encode(password)
@@ -435,7 +441,6 @@ final class TccClient {
       Reply posted = follow("POST", "/portal", "application/x-www-form-urlencoded", form);
       if (posted.status == 401) throw new Problem("bad_credentials");
       if (posted.status != 200) throw new Problem("unavailable");
-      if (posted.body.contains("will not operate without Cookies")) throw new Problem("login_failed");
       if (posted.body.contains("The email or password provided is incorrect") || posted.body.contains("The email address is not in the correct format")) {
         throw new Problem("bad_credentials");
       }
@@ -454,6 +459,14 @@ final class TccClient {
       }
       if ("bad_credentials".equals(problem.code) || "login_failed".equals(problem.code)) fail(0);
       throw problem;
+    } finally {
+      tracing = false;
+    }
+  }
+
+  String steps() {
+    synchronized (steps) {
+      return steps.toString();
     }
   }
 
@@ -533,6 +546,20 @@ final class TccClient {
         if (AUTH_COOKIE.equals(name)) emptyAuthCookie = true;
       } else {
         cookies.put(name, value);
+      }
+    }
+    if (tracing) {
+      StringBuilder step = new StringBuilder(method).append(' ').append(path.split("\\?", 2)[0]).append(' ').append(reply.status);
+      if (reply.location != null) step.append(" to ").append(reply.location.split("\\?", 2)[0]);
+      for (String cookie : reply.cookies) {
+        String[] pair = cookie.split(";", 2)[0].trim().split("=", 2);
+        step.append(pair.length == 2 && pair[1].isEmpty() ? " -" : " +").append(pair[0]);
+      }
+      java.util.regex.Matcher title = java.util.regex.Pattern.compile("<title>\\s*([^<]{0,60})").matcher(reply.body == null ? "" : reply.body);
+      if (title.find()) step.append(" title ").append(title.group(1).trim());
+      if (reply.body != null && reply.body.contains("validation-summary-errors")) step.append(" refused");
+      synchronized (steps) {
+        steps.add(step.toString());
       }
     }
     return reply;

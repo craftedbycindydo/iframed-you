@@ -20,10 +20,12 @@ final class ThermostatBridge {
   private String shown;
   private String noted;
   private final TccSync.Secrets stored;
+  private final TccClient client;
 
   ThermostatBridge(TccClient client, final TccSync.Secrets secrets, FrameTime.Clock clock, FrameTime.Uptime uptime, TccSync.Runner runner, TccSync.Timer timer, Output output) {
     this.runner = runner;
     this.output = output;
+    this.client = client;
     stored = secrets;
     TccSync.Secrets remembering = new TccSync.Secrets() {
       @Override public String[] load() {
@@ -152,6 +154,7 @@ final class ThermostatBridge {
           result = Json.object("ok", false, "code", "unexpected", "error", message("unexpected"), "retryAt", null);
           output.note("Thermostat sign-in failed: " + unexpected.getClass().getSimpleName());
         }
+        output.note("Thermostat sign-in steps: " + client.steps());
         synchronized (ThermostatBridge.this) {
           signIn = result;
           problems.clear();
