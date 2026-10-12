@@ -158,6 +158,7 @@ public final class TccTest {
         sessions.clear();
         return html(200, "", null);
       }
+      if (call.headers.get("X-Requested-With") == null) return html(302, "", "/portal/Error");
       if (!glitches.isEmpty()) {
         Object glitch = glitches.remove(0);
         if (glitch instanceof Integer) return html((Integer) glitch, "<html>Error</html>", null);
@@ -207,6 +208,7 @@ public final class TccTest {
       if ("unauthorized".equals(login)) return html(401, "", null);
       if ("redirect".equals(login)) return html(302, "", redirect);
       if ("emptyCookie".equals(login)) return html(200, "<html>Sign in</html>", null);
+      if (call.headers.get("X-Requested-With") != null) return json(Json.object("Redirect", "https://mytotalconnectcomfort.com/portal/"));
       String jar = call.headers.get("Cookie");
       if (jar == null || !jar.contains("ASP.NET_SessionId=") || !jar.contains("TrueHomeCheckCookie=")) {
         return html(200, "<html>This site will not operate without Cookies enabled.</html>", null);
@@ -283,7 +285,7 @@ public final class TccTest {
     same("POST", post.method, "login is a POST");
     same("/portal", post.path, "login path carries no query");
     same("application/x-www-form-urlencoded", post.headers.get("Content-Type"), "form content type");
-    same("XMLHttpRequest", post.headers.get("X-Requested-With"), "ajax header");
+    check(post.headers.get("X-Requested-With") == null && server.calls.get(0).headers.get("X-Requested-With") == null, "sign-in is sent like a browser");
     same("ASP.NET_SessionId=visit; TrueHomeCheckCookie=", post.headers.get("Cookie"), "visit cookies sent with login");
     check(post.body.contains("UserName=frame%40example.com") && post.body.contains("Password=frame-password") && post.body.contains("RememberMe=false")
         && post.body.startsWith("timeOffset="), "form fields");
@@ -294,6 +296,7 @@ public final class TccTest {
     client.read(device(1001));
     same(1, server.logins(), "one login for many calls");
     same("ASP.NET_SessionId=abc1; TrueHomeCheckCookie=; .ASPXAUTH_TRUEHOME=SESSION1", server.last().headers.get("Cookie"), "cookie sent on data calls");
+    same("XMLHttpRequest", server.last().headers.get("X-Requested-With"), "data calls carry the ajax header");
 
     fresh();
     for (int attempt = 1; attempt <= 3; attempt++) {

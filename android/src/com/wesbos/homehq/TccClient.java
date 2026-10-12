@@ -517,7 +517,7 @@ final class TccClient {
 
   private Reply exchange(String method, String path, String contentType, String body) throws Problem {
     Map<String, String> headers = new LinkedHashMap<>();
-    headers.put("X-Requested-With", "XMLHttpRequest");
+    if (!tracing) headers.put("X-Requested-With", "XMLHttpRequest");
     headers.put("Accept", "*/*");
     headers.put("Content-Type", contentType);
     if (!cookies.isEmpty()) {

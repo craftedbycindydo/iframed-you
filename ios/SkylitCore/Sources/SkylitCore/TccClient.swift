@@ -185,6 +185,7 @@ public actor TccClient {
         var request = first
         var body = body
         for _ in 0...Self.maxRedirects {
+            request.setValue(nil, forHTTPHeaderField: "X-Requested-With")
             let (data, response) = try await send(request, body: body)
             guard (300..<400).contains(response.statusCode) else { return (data, response) }
             guard let location = response.value(forHTTPHeaderField: "Location"),

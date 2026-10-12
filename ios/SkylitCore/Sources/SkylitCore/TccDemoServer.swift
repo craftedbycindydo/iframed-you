@@ -165,6 +165,7 @@ public final class FakeTccServer: TccTransport, @unchecked Sendable {
             sessions = []
             return html(200, "")
         }
+        if call.headers["X-Requested-With"] == nil { return html(302, "", ["Location": "/portal/Error"]) }
         if !glitches.isEmpty {
             switch glitches.removeFirst() {
             case .status(let status): return html(status, "<html>Error</html>")
@@ -214,6 +215,7 @@ public final class FakeTccServer: TccTransport, @unchecked Sendable {
         case .emptyCookie: return html(200, "<html>Sign in</html>")
         case .normal: break
         }
+        if call.headers["X-Requested-With"] != nil { return json(["Redirect": "https://mytotalconnectcomfort.com/portal/"]) }
         let sent = (call.headers["Cookie"] ?? "").components(separatedBy: "; ")
         guard sent.contains(where: { $0.hasPrefix("ASP.NET_SessionId=") }), sent.contains("TrueHomeCheckCookie=") else {
             return html(200, "<html>This site will not operate without Cookies enabled.</html>")

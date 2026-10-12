@@ -61,7 +61,8 @@ final class TccClientTests: XCTestCase {
         XCTAssertEqual(calls[1].method, "POST")
         XCTAssertEqual(calls[1].url.absoluteString, "https://mytotalconnectcomfort.com/portal")
         XCTAssertEqual(calls[1].headers["Content-Type"], "application/x-www-form-urlencoded")
-        XCTAssertEqual(calls[1].headers["X-Requested-With"], "XMLHttpRequest")
+        XCTAssertNil(calls[0].headers["X-Requested-With"])
+        XCTAssertNil(calls[1].headers["X-Requested-With"])
         XCTAssertEqual(calls[1].headers["Cookie"], "ASP.NET_SessionId=visit; TrueHomeCheckCookie=")
         XCTAssertTrue(calls[1].text.contains("UserName=home%40example.com"))
         XCTAssertTrue(calls[1].text.contains("Password=demo-password"))
@@ -75,6 +76,7 @@ final class TccClientTests: XCTestCase {
         XCTAssertTrue(hasSession)
         _ = try await client.thermostat(device())
         XCTAssertEqual(server.loginCount, 1)
+        XCTAssertEqual(server.calls.last?.headers["X-Requested-With"], "XMLHttpRequest")
         XCTAssertEqual(server.calls.last?.headers["Cookie"], ".ASPXAUTH_TRUEHOME=SESSION1; ASP.NET_SessionId=abc1; TrueHomeCheckCookie=; thlang=en-US")
         XCTAssertTrue(server.calls.allSatisfy { $0.url.scheme == "https" && $0.url.host == "mytotalconnectcomfort.com" })
     }
